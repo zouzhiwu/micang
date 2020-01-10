@@ -1,0 +1,55 @@
+package com.game.entity.vo;
+
+public class AccountInfoVo {
+	
+	private Long friendId;
+	
+	private String logo;
+	
+	private String nickName;
+	
+	private Short leve;
+	/**是否有未阅读消息**/
+	private Boolean Start;
+
+	public Long getFriendId() {
+		return friendId;
+	}
+
+	public void setFriendId(Long friendId) {
+		this.friendId = friendId;
+	}
+
+	public String getLogo() {
+		return logo;
+	}
+
+	public void setLogo(String logo) {
+		this.logo = logo;
+	}
+
+	public String getNickName() {
+		return nickName;
+	}
+
+	public void setNickName(String nickName) {
+		this.nickName = nickName;
+	}
+
+	public Short getLeve() {
+		return leve;
+	}
+
+	public void setLeve(Short leve) {
+		this.leve = leve;
+	}
+
+	public Boolean getStart() {
+		return Start;
+	}
+
+	public void setStart(Boolean start) {
+		Start = start;
+	}
+	
+}

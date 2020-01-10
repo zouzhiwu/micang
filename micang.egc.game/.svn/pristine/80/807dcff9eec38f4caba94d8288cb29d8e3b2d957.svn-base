@@ -1,0 +1,437 @@
+package com.game.job;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+import org.quartz.Job;
+import org.quartz.JobBuilder;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.SchedulerFactory;
+import org.quartz.SimpleScheduleBuilder;
+import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
+import org.quartz.impl.StdSchedulerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.constant.HeroConstant;
+import com.common.entity.Buff;
+import com.common.entity.Location;
+import com.common.entity.Hero;
+import com.common.entity.Room;
+import com.common.enumerate.BuffStatus;
+import com.common.enumerate.SelfSkill;
+import com.common.helper.TimeHelper;
+import com.common.template.SkillTemplate;
+import com.game.config.AppConfig;
+import com.game.helper.MsgHelper;
+import com.game.job.buff.BlindBuffJob;
+import com.game.job.buff.ClearBuffJob;
+import com.game.job.buff.DizzyBuffJob;
+import com.game.job.buff.DotBuffJob;
+import com.game.job.buff.HurtBuffJob;
+import com.game.job.buff.LinkBuffJob;
+import com.game.job.buff.NearBuffJob;
+import com.game.job.buff.PushBuffJob;
+import com.game.job.buff.RecoversBuffJob;
+import com.game.job.buff.ShieldBuffJob;
+import com.game.job.buff.SilentBuffJob;
+import com.game.job.buff.SpeedBuffJob;
+import com.game.job.buff.StopBuffJob;
+import com.game.job.buff.TreatBuffJob;
+import com.game.job.self.SelfUnmatchJob;
+import com.game.job.self.SelfRunJob;
+import com.game.job.self.SelfTreatJob;
+import com.game.job.self.SelfUnmagicJob;
+import com.game.util.GameUtil;
+
+public class JobManager {
+	private final static Logger logger = LoggerFactory.getLogger(JobManager.class);
+	public final static int interval = 50;
+	private static SchedulerFactory schedulerFactory;
+	public final static int max_count = 0;
+	
+	public static void init() {
+		String configPath = AppConfig.getConfigPath();
+		String quartzConfigPath = String.format("%s/quartz.properties", configPath);
+		Properties properties = new Properties();
+		try {
+			properties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream(quartzConfigPath));
+			schedulerFactory = new StdSchedulerFactory(properties);
+		} catch (IOException e) {
+			logger.error(e.toString());
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+	/**
+	 * 创建作业
+	 * @param jobName		作业名
+	 * @param delayMilliseconds			延迟时间，毫秒
+	 * @param IntervalInMilliseconds	间隔时间，毫秒
+	 * @param count			循环次数
+	 * @param dataMap		参数集合
+	 * @param jobClass		作业类
+	 */
+	public static void createJob(JobKey jobKey, long delayMilliseconds, long IntervalInMilliseconds, int count
+			, Map<String, Object> dataMap, Class <? extends Job> jobClass) {
+		long firstTime = TimeHelper.getMilliTime() + delayMilliseconds;
+		try {
+			Scheduler scheduler = schedulerFactory.getScheduler();
+			JobDetail jobDetail = JobBuilder.newJob(jobClass)
+					.withIdentity(jobKey.getName(), jobKey.getGroup())
+					.build();
+	        Trigger trigger = TriggerBuilder.newTrigger()
+	        		.withIdentity(jobKey.getName(), jobKey.getGroup())
+	                .withSchedule(SimpleScheduleBuilder.simpleSchedule().withIntervalInMilliseconds(IntervalInMilliseconds).withRepeatCount(count - 1))
+	                .startAt(new Date(firstTime))
+	                .build();
+	        JobDataMap jobDataMap = jobDetail.getJobDataMap();
+			jobDataMap.putAll(dataMap);
+	        scheduler.scheduleJob(jobDetail, trigger);
+			scheduler.start();
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+	/**
+	 * 创建减速Job
+	 */
+	public static void createSpeedJob(JobKey jobKey, Hero beAttHero, SkillTemplate skillTemplate) {
+		Buff buff = beAttHero.buffSpeed;
+		long delayMilliseconds = buff.length;
+		long IntervalInMilliseconds = buff.length;
+		long stopTime = buff.begin + buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, SpeedBuffJob.class);
+		MsgHelper.broadcastSpeedStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始减速 speed=%s 持续%s毫秒", beAttHero.accountId, beAttHero.speed, IntervalInMilliseconds));
+	}
+	
+	/**
+	 * 创建致盲Job
+	 */
+	public static void createBlindJob(JobKey jobKey, Hero beAttHero, SkillTemplate skillTemplate) {
+		Buff buff = beAttHero.buffBlind;
+		long delayMilliseconds = buff.length;
+		long IntervalInMilliseconds = buff.length;
+		long stopTime = buff.begin + buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, BlindBuffJob.class);
+		MsgHelper.broadcastBlindStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始致盲 持续%s毫秒", beAttHero.accountId, IntervalInMilliseconds));
+	}
+	
+	/**
+	 * 创建沉默Job
+	 */
+	public static void createSilentJob(JobKey jobKey, Hero beAttHero, SkillTemplate skillTemplate) {
+		Buff buff = beAttHero.buffSilent;
+		long delayMilliseconds = buff.length;
+		long IntervalInMilliseconds = buff.length;
+		long stopTime = buff.begin + buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, SilentBuffJob.class);
+		MsgHelper.broadcastSilentStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始沉默 持续%s毫秒", beAttHero.accountId, IntervalInMilliseconds));
+	}
+	
+	/**
+	 * 创建禁步Job
+	 */
+	public static void createStopJob(JobKey jobKey, Hero beAttHero, SkillTemplate skillTemplate) {
+		Buff buff = beAttHero.buffStop;
+		long delayMilliseconds = buff.length;
+		long IntervalInMilliseconds = buff.length;
+		long stopTime = buff.begin + buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, StopBuffJob.class);
+		MsgHelper.broadcastStopStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始禁步 持续%s毫秒", beAttHero.accountId, IntervalInMilliseconds));
+	}
+	
+	/**
+	 * 创建晕眩Job
+	 */
+	public static void createDizzyJob(JobKey jobKey, Hero beAttHero, SkillTemplate skillTemplate) {
+		Buff buff = beAttHero.buffDizzy;
+		long delayMilliseconds = buff.length;
+		long IntervalInMilliseconds = buff.length;
+		long stopTime = buff.begin + buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, DizzyBuffJob.class);
+		MsgHelper.broadcastDizzyStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始晕眩 持续%s毫秒", beAttHero.accountId, IntervalInMilliseconds));
+	}
+	
+	/**
+	 * 创建剧毒Job
+	 */
+	public static void createDotJob(JobKey jobKey, Room room, Hero attHero, Hero beAttHero, SkillTemplate skillTemplate, Integer cycleHurt) {
+		Buff buff = beAttHero.buffDot;
+		long delayMilliseconds = skillTemplate.getHurtcycle();
+		long IntervalInMilliseconds = skillTemplate.getHurtcycle();
+		long stopTime = buff.begin + buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		dataMap.put("preValue", skillTemplate.getValue());
+		dataMap.put("index", 0);
+		dataMap.put("cycleHurt", cycleHurt);
+		int count = skillTemplate.getEffcontime() / skillTemplate.getHurtcycle();
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, count, dataMap, DotBuffJob.class);
+		MsgHelper.broadcastDotStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始剧毒 持续次数%s", beAttHero.accountId, count));
+	}
+	
+	/**
+	 * 创建伤害加深Job
+	 */
+	public static void createHurtJob(JobKey jobKey, Hero beAttHero, SkillTemplate skillTemplate) {
+		Buff buff = beAttHero.buffHurt;
+		long delayMilliseconds = buff.length;
+		long IntervalInMilliseconds = buff.length;
+		long stopTime = buff.begin + buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, HurtBuffJob.class);
+		MsgHelper.broadcastHurtStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始伤害加深 持续时间%s毫秒", beAttHero.accountId, buff.length));
+	}
+	
+	/**
+	 * 创建净化Job
+	 */
+	public static void createClearJob(JobKey jobKey, Hero beAttHero, SkillTemplate skillTemplate) {
+		Buff buff = beAttHero.buffClear;
+		long delayMilliseconds = buff.length;
+		long IntervalInMilliseconds = buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("beAttHero", beAttHero);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, ClearBuffJob.class);
+		MsgHelper.broadcastClearStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始净化", beAttHero.accountId));
+	}
+	
+	/**
+	 * 创建回复Job
+	 */
+	public static void createRecoversJob(JobKey jobKey, Room room, Hero attHero, Hero beAttHero, SkillTemplate skillTemplate, Integer cycleHurt) {
+		Buff buff = beAttHero.buffRecovers;
+		long delayMilliseconds = 300;
+		long IntervalInMilliseconds = skillTemplate.getHurtcycle();
+		// 技能装备血量加成
+		cycleHurt += beAttHero.addHp;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		long stopTime = buff.begin + buff.length;
+		dataMap.put("room", room);
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		dataMap.put("preValue", skillTemplate.getValue());
+		dataMap.put("index", 0);
+		dataMap.put("cycleHurt", cycleHurt);
+		int count = skillTemplate.getEffcontime() / skillTemplate.getHurtcycle();
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, count, dataMap, RecoversBuffJob.class);
+		logger.info(String.format("玩家%s开始回复", beAttHero.accountId));
+	}
+	
+	/**
+	 * 创建护盾Job
+	 */
+	public static void createShieldJob(JobKey jobKey, Hero beAttHero, SkillTemplate skillTemplate) {
+		Buff buff = beAttHero.buffShield;
+		long delayMilliseconds = buff.length;
+		long IntervalInMilliseconds = buff.length;
+		long stopTime = buff.begin + buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, ShieldBuffJob.class);
+		MsgHelper.broadcastShieldStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始护盾", beAttHero.accountId));
+	}
+	
+	/**
+	 * 创建治疗Job
+	 */
+	public static void createTreatJob(JobKey jobKey, Hero attHero, Hero beAttHero, SkillTemplate skillTemplate) {
+		Buff buff = beAttHero.buffTreat;
+		long delayMilliseconds = 300;
+		long IntervalInMilliseconds = 300;
+		long stopTime = buff.begin + buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, TreatBuffJob.class);
+		MsgHelper.broadcastTreatStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始治疗", beAttHero.accountId));
+	}
+	
+	/**
+	 * 创建链接Job
+	 */
+	public static void createLinkJob(JobKey jobKey, Hero beAttHero, SkillTemplate skillTemplate) {
+		Buff buff = beAttHero.buffLink;
+		long delayMilliseconds = buff.length;
+		long IntervalInMilliseconds = buff.length;
+		long stopTime = buff.begin + buff.length;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("stopTime", stopTime);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, LinkBuffJob.class);
+		MsgHelper.broadcastLinkStatus(beAttHero, BuffStatus.Start);
+		logger.info(String.format("玩家%s开启链接", beAttHero.accountId));
+	}
+	
+	public static List<Location> getBeMovePath(Location beginLocation, Location endLocation, int speed) {
+		double radians = GameUtil.angle(beginLocation, endLocation);
+		float cycleDistance = speed * interval / 1000.0f;
+		double distance = GameUtil.distance(beginLocation, endLocation);
+		int count = (int)Math.ceil(distance / cycleDistance);
+		float addx = (float)(cycleDistance * Math.cos(radians));
+		float addz = (float)(cycleDistance * Math.sin(radians));
+		List<Location> path = new ArrayList<Location>(count);
+		// 前面n-1个节点逐一移动
+		for (int i = 1; i < count; i++) {
+			Location future = new Location(beginLocation.x + addx * i, beginLocation.y, beginLocation.z + addz * i);
+			path.add(future);
+		}
+		// 最后一个点即是终点
+		path.add(endLocation);
+		logger.info(String.format("beginLocation=%s endLocation=%s", beginLocation, endLocation));
+		logger.info(String.format("path=%s", path));
+		return path;
+	}
+	
+	/**
+	 * 创建牵引Job
+	 */
+	public static void createNearJob(JobKey jobKey, Room room, Hero attHero, Hero beAttHero, SkillTemplate skillTemplate, Location skillLocation) {
+		
+		List<Location> path = getBeMovePath(beAttHero.location, skillLocation, skillTemplate.getValue());
+		int count = path.size();
+		Buff buff = beAttHero.buffNear;
+		long delayMilliseconds = 0;
+		long IntervalInMilliseconds = interval;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("path", path);
+		dataMap.put("index", 0);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, count, dataMap, NearBuffJob.class);
+		MsgHelper.broadcastNearStatus(beAttHero, buff.effectId, BuffStatus.Start);
+	}
+	
+	/**
+	 * 创建抗拒Job
+	 */
+	public static void createPushJob(JobKey jobKey, Room room, Hero attHoer, Hero beAttHero, SkillTemplate skillTemplate, Location skillLocation) {
+		int speed = skillTemplate.getValue();
+		double distance = speed * skillTemplate.getEffcontime() / 1000.0;
+		double radians = GameUtil.angle(skillLocation, beAttHero.location);
+		float distancex = (float)(distance * Math.cos(radians));
+		float distancez = (float)(distance * Math.sin(radians));
+		Location endLocation = new Location(beAttHero.location.x + distancex, beAttHero.location.y, beAttHero.location.z + distancez);
+		List<Location> path = getBeMovePath(beAttHero.location, endLocation, skillTemplate.getValue());
+		int count = path.size();
+		long delayMilliseconds = 0;
+		long IntervalInMilliseconds = interval;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("path", path);
+		dataMap.put("index", 0);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, count, dataMap, PushBuffJob.class);
+		MsgHelper.broadcastPushStatus(beAttHero, BuffStatus.Start);
+	}
+	
+	/**
+	 * 创建自身治疗Job
+	 */
+	public static void createSelfTreatJob(Hero currHero, SelfSkill selfSkill) {
+		long delayMilliseconds = HeroConstant.self_treat_hurtcycle * 1000;
+		long IntervalInMilliseconds = HeroConstant.self_treat_hurtcycle * 1000;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("currHero", currHero);
+		dataMap.put("index", 0);
+		JobKey jobKey = JobScheduler.generateJobKey(currHero, selfSkill);
+		int count = HeroConstant.self_treat_effcontime / HeroConstant.self_treat_hurtcycle;
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, count, dataMap, SelfTreatJob.class);
+		MsgHelper.broadcastSelfSkillStatus(currHero, SelfSkill.Treat, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始自身治疗", currHero.accountId));
+	}
+	
+	/**
+	 * 创建无敌Job
+	 */
+	public static void createSelfUnmatchJob(Hero currHero, SelfSkill selfSkill) {
+		long delayMilliseconds = HeroConstant.self_unmatch_effcontime * 1000;
+		long IntervalInMilliseconds = HeroConstant.self_unmatch_effcontime * 1000;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("currHero", currHero);
+		currHero.flag = false;
+		JobKey jobKey = JobScheduler.generateJobKey(currHero, selfSkill);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, SelfUnmatchJob.class);
+		MsgHelper.broadcastSelfSkillStatus(currHero, SelfSkill.Unmatch, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始无敌", currHero.accountId));
+	}
+	
+	/**
+	 * 创建魔免Job
+	 */
+	public static void createSelfUnmagicJob(Hero currHero, SelfSkill selfSkill) {
+		long delayMilliseconds = HeroConstant.self_unmagic_effcontime * 1000;
+		long IntervalInMilliseconds = HeroConstant.self_unmagic_effcontime * 1000;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("currHero", currHero);
+		JobKey jobKey = JobScheduler.generateJobKey(currHero, selfSkill);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, SelfUnmagicJob.class);
+		MsgHelper.broadcastSelfSkillStatus(currHero, SelfSkill.Unmagic, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始魔免", currHero.accountId));
+		
+	}
+	
+	/**
+	 * 创建疾跑Job
+	 */
+	public static void createSelfRunJob(Hero currHero, SelfSkill selfSkill) {
+		// 如果玩家当前没有处于疾跑状态，则加速度
+		if (!JobScheduler.isHasJob(currHero, SelfSkill.Run)) {
+			// 计算加速度
+			currHero.speed += HeroConstant.default_speed * HeroConstant.self_run_add_speed * 1.0f / 100;
+		}
+		long delayMilliseconds = HeroConstant.self_run_effcontime * 1000;
+		long IntervalInMilliseconds = HeroConstant.self_run_effcontime * 1000;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("currHero", currHero);
+		JobKey jobKey = JobScheduler.generateJobKey(currHero, selfSkill);
+		createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, SelfRunJob.class);
+		MsgHelper.broadcastSelfSkillStatus(currHero, SelfSkill.Run, BuffStatus.Start);
+		logger.info(String.format("玩家%s开始疾跑 speed=%s", currHero.accountId, currHero.speed));
+		
+	}
+	
+}

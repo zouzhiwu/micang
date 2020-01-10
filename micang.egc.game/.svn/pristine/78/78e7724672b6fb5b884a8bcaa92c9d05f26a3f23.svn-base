@@ -1,0 +1,26 @@
+package com.game.job.fight;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+
+import com.game.entity.Room;
+import com.game.node.AbsAttackNode;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class UpdateVisionJob implements Job {
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Short vr = (Short)jobDataMap.get("vr");
+		AbsAttackNode node = (AbsAttackNode)jobDataMap.get("node");
+		Room room = (Room)jobDataMap.get("room");
+		node.updateVision(room, vr);
+	}
+}

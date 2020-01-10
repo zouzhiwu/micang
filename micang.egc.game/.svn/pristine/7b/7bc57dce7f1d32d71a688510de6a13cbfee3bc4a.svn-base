@@ -1,0 +1,172 @@
+package com.game.common;
+
+public class MessageCode {
+
+	public final static short msg_account_login = 1001; // 登录服务器
+	public final static short msg_account_heartbeat = 1002; // 心跳请求
+	public final static short msg_account_logout = 1003; // 下线通知
+	public final static short msg_account_extend = 1004; // 扩充背包
+	
+	public final static short msg_room_ready = 1101; // 准备游戏
+	public final static short msg_room_ready_notice = 1102; // 小队成员点击准备，消息推送给队长通知成员准备了
+	public final static short msg_room_enter_notice = 1103; // 确认开始游戏，服务器端给客户端发送确认通知
+	public final static short msg_room_enter_game = 1104; // 确认开始游戏，客户端发给服务器端
+	public final static short msg_room_set_birthplace = 1105; // 设置出生地
+	public final static short msg_room_set_self_skill = 1106; // 设置自身技能
+	public final static short msg_room_back_notice = 1107; // 通知未确认的玩家，回到游戏主界面
+	public final static short msg_room_into_seting = 1108; // 进入设置界面
+	public final static short msg_room_get_my_info = 1109; // 获取我的信息
+	public final static short msg_room_vision_box = 1110; // 推送宝箱列表
+	public final static short msg_room_continue_again = 1111; // 玩家设置重新游戏或继续游戏
+	public final static short msg_room_box_list = 1112; // 获取所有宝箱列表
+	public final static short msg_room_load_finish = 1113; // 加载完成
+	public final static short msg_room_vision_book = 1114; // 推送技能书列表
+	public final static short msg_room_online_list = 1115; // 获取在线玩家列表
+	public final static short msg_room_back = 1116; // 一局游戏结束后，返回大厅
+	public final static short msg_room_score_info = 1117; // 获取战绩信息
+	public final static short msg_room_connect = 1118; // 连接游戏服务器
+	public final static short msg_room_broadcast = 1119; // 全局广播通知
+	public final static short msg_room_kick = 1120; // 通知退出当前游戏服务器
+	
+	public final static short msg_game_move = 1201; // 走动
+	public final static short msg_game_be_move = 1202; // 强制位移，B技能靠近或远离导致的位移
+//	public final static short msg_game_pickup_skill_test = 1203; // 捡技能，测试用
+//	public final static short msg_game_link_discon = 1204; // 断链通知
+	public final static short msg_game_broadcast_trap_effect = 1205; // 广播陷阱特效，技能攻击
+//	public final static short msg_game_hit_trap = 1206; // 中了陷阱
+	public final static short msg_game_hurt_notice = 1207; // 伤害通知
+	public final static short msg_game_set_skill = 1208; // 设置技能
+	public final static short msg_game_vision_role = 1209; // 视野范围的玩家列表
+//	public final static short msg_game_del_skill = 1210; // 丢掉技能
+	public final static short msg_game_buff_speed = 1211; // 受到减速 buff攻击
+	public final static short msg_game_buff_dot = 1212; // 受到dot buff攻击
+	public final static short msg_game_buff_near = 1213; // 受到靠近 buff攻击
+	public final static short msg_game_buff_push = 1214; // 受到远离 buff攻击
+	public final static short msg_game_buff_blind = 1215; // 受到致盲 buff攻击
+	public final static short msg_game_buff_hurt = 1216; // 受到伤害加深 buff攻击
+//	public final static short msg_game_buff_val = 1217; // 受到狂暴 buff攻击
+	public final static short msg_game_buff_silent = 1218; // 受到沉默 buff攻击
+	public final static short msg_game_buff_stop = 1219; // 受到禁步 buff攻击
+	public final static short msg_game_buff_dizzy = 1220; // 受到晕眩 buff攻击
+	public final static short msg_game_buff_treat = 1221; // 受到治疗 buff攻击
+//	public final static short msg_game_buff_recovers = 1222; // 受到回复 buff攻击
+	public final static short msg_game_buff_shield = 1223; // 受到护盾 buff攻击
+	public final static short msg_game_buff_clear = 1224; // 受到净化 buff攻击
+	public final static short msg_game_buff_link = 1225; // 受到链接 buff攻击
+	public final static short msg_game_broadcast_effect = 1226; // 广播特效，技能攻击
+	public final static short msg_game_broadcast_effect_finish = 1227; // 广播特效消失
+	public final static short msg_game_attack_box = 1228; // 广播攻击宝箱伤害
+	public final static short msg_game_generate_book = 1229; // 生成技能书
+	public final static short msg_game_pickup_book = 1230; // 捡技能书
+	public final static short msg_game_start_self_skill = 1233; // 开启自身技能
+	public final static short msg_game_self_flash = 1234; // 开启闪现
+	public final static short msg_game_circle_hurt_notice = 1235; // 毒圈伤害通知
+	public final static short msg_game_circle_notice = 1236; // 毒圈圆点坐标和半径通知
+//	public final static short msg_game_robot_location_notice = 1237; // 通知机器人行走位置
+//	public final static short msg_game_self_run = 1238; // 疾跑
+	public final static short msg_game_attack_general = 1239; // 普攻特效
+	public final static short msg_game_death_notice = 1240; // 阵亡通知
+//	public final static short msg_game_npc_attack_skill_role = 1241; // NPC技能攻击玩家
+	public final static short msg_game_tcp_npc_move = 1242; // NPC走动
+	public final static short msg_game_stop_move = 1243; // 真实玩家停止移动
+	public final static short msg_game_stop_resing = 1244; // 终止预吟唱
+	public final static short msg_game_toss = 1245; // 施放小小丢技能
+	public final static short msg_game_leblanc = 1246; // 施放乐芙兰技能
+	public final static short msg_game_yasuo = 1247; // 施放亚索技能
+	public final static short msg_game_swordsman = 1248; // 施放剑魔技能
+	public final static short msg_game_pantheon = 1249; // 施放潘森技能
+	public final static short msg_game_rammus = 1250; // 施放龙龟技能
+	
+	public final static short msg_friend_get_list = 1301; // 获取好友列表
+	public final static short msg_friend_request = 1302; // 邀请加好友
+	public final static short msg_friend_response = 1303; // 响应邀请
+	public final static short msg_friend_request_push = 1304; // 推送邀请消息
+	public final static short msg_friend_request_list = 1305; // 邀请列表
+	public final static short msg_friend_update_alias = 1306; // 设置好友别名
+	public final static short msg_friend_delete = 1307; // 删除好友
+	
+	public final static short msg_team_create = 1401; // 创建小队
+	public final static short msg_team_request = 1402; // 申请加入小队
+	public final static short msg_team_request_notice = 1403; // 申请通知队长，等待队长审批
+	public final static short msg_team_response = 1404; // 审批申请
+	public final static short msg_team_delete = 1405; // 踢出小队
+	public final static short msg_team_out = 1406; // 退出小队
+//	public final static short msg_team_drop = 1407; // 解散小队
+	public final static short msg_team_request_list = 1408; // 获取小队的申请列表
+	public final static short msg_team_write_invite = 1409; // 发起邀请
+	public final static short msg_team_notice_invite = 1410; // 邀请通知队长
+	public final static short msg_team_approve_invite = 1411; // 审批邀请
+	public final static short msg_team_approve_notice = 1412; // 审批通知，拒绝时通知申请人或邀请人
+	public final static short msg_team_send_invite = 1413; // 审批通知，同意时通知被邀请人
+	public final static short msg_team_reply_invite = 1414; // 回复邀请
+	public final static short msg_team_reply_notice = 1415; // 回复通知
+	public final static short msg_team_broadcast_in_member = 1416; // 广播新成员加入
+	public final static short msg_team_broadcast_out_member = 1417; // 广播新成员退出
+	public final static short msg_team_get_member_list = 1418; // 获取小队成员列表
+	
+	public final static short msg_chat_group_create = 1501; // 创建聊天群
+	public final static short msg_chat_group_get_list = 1502; // 获取聊天群列表
+	public final static short msg_chat_group_member_add = 1503; // 添加群成员
+	public final static short msg_chat_group_member_delete = 1504; // 删除群成员
+	public final static short msg_chat_group_delete = 1505; // 删除群
+	public final static short msg_chat_group_member_list = 1506; // 获取群成员信息
+	
+	public final static short msg_guild_create = 1601; // 创建工会
+	public final static short msg_guild_upgrade = 1602; // 升级工会
+	public final static short msg_guild_query = 1603; // 根据名称查询工会
+	public final static short msg_guild_list = 1604; // 获取前10名工会列表信息
+	public final static short msg_guild_account_list = 1605; // 获取我的工会信息
+	public final static short msg_guild_request = 1606; // 申请加入工会
+	public final static short msg_guild_response = 1607; // 审批加入工会
+	public final static short msg_guild_kick = 1608; // 工会踢人
+	public final static short msg_guild_out = 1609; // 退出工会
+	public final static short msg_guild_change_leader = 1610; // 更好工会长
+	public final static short msg_guild_get_log = 1611; // 获取工会日志
+	public final static short msg_guild_update_role = 1612; // 变更角色
+	public final static short msg_guild_get_request_list = 1613; // 获取申请列表
+	public final static short msg_guild_set_notices = 1614; // 获取申请列表
+	public final static short msg_guild_sell_item = 1615; // 出售道具
+	public final static short msg_guild_buy_item = 1616; // 出售道具
+	public final static short msg_guild_item_list = 1617; // 工会仓库道具列表
+	
+	public final static short msg_goods_list = 1701;	// 获取商品列表
+	public final static short msg_goods_buy = 1702;	// 购买商品
+	
+	public final static short msg_mail_list = 1801; // 获取邮件列表
+	public final static short msg_mail_open = 1802; // 打开邮件
+	public final static short msg_mail_open_attachment = 1803; // 打开附件
+	public final static short msg_mail_delete = 1804; // 删除邮件
+	
+	public final static short msg_role_list = 1901;	// 获取角色列表
+	public final static short msg_role_set = 1902;	// 设置默认角色
+	
+	public final static short msg_item_depository_list = 2001;	// 获取个人仓库道具
+	public final static short msg_item_equip_list = 2002;	// 获取场外背包的装备
+	public final static short msg_item_prop_list = 2003;	// 获取场内背包的物品
+	public final static short msg_item_store_to_bag = 2004;	// 把物品从个人仓库移动到背包（场内或场外）
+	public final static short msg_item_bag_to_store = 2005;	// 把道具从背包（场内背包或场外背包）移入到个人仓库
+	public final static short msg_item_compose = 2006;	// 装备或卷轴合成
+	public final static short msg_item_open_scroll = 2007;	// 打开卷轴
+	public final static short msg_item_use_skin = 2008;	// 使用皮肤产生角色
+	
+	public final static short msg_auction_list = 2101;	// 获取拍卖行商品列表
+	public final static short msg_auction_list_accountId = 2102;	// 获取我的在售道具列表
+	public final static short msg_auction_sell = 2103;	// 出售商品
+	public final static short msg_auction_bidding = 2104;	// 竞拍
+	
+	public final static short msg_trade_invite = 2201;	// 邀请交易
+	public final static short msg_trade_invite_notices = 2202;	// 邀请通知
+	public final static short msg_trade_approve = 2203;	// 审批邀请
+	public final static short msg_trade_stop = 2204;	// 停止交易
+	public final static short msg_trade_operation = 2205;	// 交易操作
+	public final static short msg_trade_lock = 2206;	// 锁定交易
+	public final static short msg_trade_enter_notices = 2207;	// 推送确认消息
+	public final static short msg_trade_enter = 2208;	// 确认交易
+	public final static short msg_trade_cancel = 2209;	// 取消交易
+	
+	public final static short msg_status_success = 0;
+	public final static short msg_status_warning = 1;
+	public final static short msg_status_failed = 2;//失败(房间创建超过十个为失败)
+	public final static short msg_status_error = -1;
+	
+}

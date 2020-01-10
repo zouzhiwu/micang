@@ -1,0 +1,117 @@
+package com.game.servlet;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.common.constant.RoomConstant;
+import com.game.common.ZookeeperClient;
+import com.game.job.JobScheduler;
+import com.game.service.RoomService;
+
+@Service
+public class GameServlet extends HttpServlet{
+	private static final long serialVersionUID = 1L;
+	@Autowired
+	private RoomService roomService;
+	
+	@Override
+	protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+		doPost(req, resp);
+	}
+
+	@Override
+	protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+		String token = req.getParameter("token");
+		resp.setCharacterEncoding("UTF-8");
+		resp.setContentType("text/html;charset=UTF-8");
+		if (RoomConstant.servlet_token.equals(token)) {
+			Map<String, String> map = getParameterStringMap(req);
+			int result = assignmentAction(map);
+			resp.getWriter().print(result);
+		} else {
+			int result = -1;
+			resp.getWriter().print(result);
+		}
+	}
+	
+	private Map<String, String> getParameterStringMap(HttpServletRequest request) {
+		Map<String, String[]> properties = request.getParameterMap();
+		Map<String, String> returnMap = new HashMap<String, String>();
+		String name = "";
+		String value = "";
+		for (Map.Entry<String, String[]> entry : properties.entrySet()) {
+			name = entry.getKey();
+			String[] values = entry.getValue();
+			if (null == values) {
+				value = "";
+			} else if (values.length > 1) {
+				for (int i = 0; i < values.length; i++) {
+					value = values[i] + ",";
+				}
+				value = value.substring(0, value.length() - 1);
+			} else {
+				value = values[0];
+			}
+			returnMap.put(name, value);
+		}
+		return returnMap;
+	}
+	
+	private int assignmentAction(Map<String, String> map) {
+		String actionName = map.get("actionName");
+		if ("createRoom".equals(actionName)) {
+			String strRoomId = map.get("roomId");
+			String strTeamType = map.get("teamType");
+			Integer teamType = Integer.valueOf(strTeamType);
+			Integer roomId = Integer.valueOf(strRoomId);
+			return createRoom(roomId, teamType);
+		} else if ("shutdown".equals(actionName)) {
+			String content = map.get("content");
+			return shutdown(content);
+		} else if ("connectRoom".equals(actionName)) {
+			String strMemberId = map.get("accountId");
+			String strRoomId = map.get("roomId");
+			Long accountId = Long.parseLong(strMemberId);
+			Integer roomId = Integer.parseInt(strRoomId);
+			return connectRoom(accountId, roomId);
+		} else {
+			return -1;
+		}
+	}
+	
+	/**
+	 * 创建房间
+	 */
+	private int createRoom(Integer roomId, int teamType) {
+		roomService.createRoom(roomId, teamType);
+		return 0;
+	}
+	
+	/**
+	 * 关闭服务器
+	 */
+	private int shutdown(String content) {
+		// 关闭登录接口
+		ZookeeperClient.getInstance().delete();
+		// 给玩家推送消息，通知即将关闭服务器
+		JobScheduler.createShutdownJob(content);
+		return 0;
+	}
+	
+	/**
+	 * 链接房间
+	 */
+	private int connectRoom(Long accountId, Integer roomId) {
+		roomService.connectRoom(accountId, roomId);
+		return 0;
+	}
+}

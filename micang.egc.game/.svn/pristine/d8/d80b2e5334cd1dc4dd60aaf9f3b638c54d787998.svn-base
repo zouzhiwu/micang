@@ -1,0 +1,249 @@
+package com.game.action;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Action;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.GuildInfo;
+import com.common.entity.GuildLog;
+import com.common.entity.RequestGuild;
+import com.common.entity.RequestGuildInfo;
+import com.game.common.MessageCode;
+import com.game.service.GuildService;
+
+import io.netty.channel.Channel;
+
+@Service
+public class GuildAction {
+
+	private static final Logger logger = LoggerFactory.getLogger(GuildAction.class);
+
+	@Autowired
+	private GuildService guildService;
+	
+	/**
+	 * 创建工会
+	 */
+	@Action(MessageCode.msg_guild_create)
+	public void createGuild(Message message, Channel channel) throws Exception {
+		Long accountId = message.getAccountId();
+		String guildName = message.getString();
+		Integer toLevel = message.getInt();
+		logger.info(String.format("RESV %d from accountId=%s guildName=%d toLevel=%s", message.getMsgcd(), message.getAccountId(), guildName, toLevel));
+		guildService.createGuild(accountId, guildName, toLevel);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 升级工会
+	 */
+	@Action(MessageCode.msg_guild_upgrade)
+	public void upgradeGuild(Message message, Channel channel) throws Exception {
+		Long accountId = message.getAccountId();
+		Integer guildId = message.getInt();
+		Integer toLevel = message.getInt();
+		logger.info(String.format("RESV %d from accountId=%s guildId=%d toLevel=%s", message.getMsgcd(), message.getAccountId(), guildId, toLevel));
+		guildService.upgradeGuild(accountId, guildId, toLevel);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 根据名称查询工会
+	 */
+	@Action(MessageCode.msg_guild_query)
+	public void getByName(Message message, Channel channel) throws Exception {
+		String name = message.getString();
+		logger.info(String.format("RESV %d from accountId=%s name=%s", message.getMsgcd(), message.getAccountId(), name));
+		List<GuildInfo> guildInfoList = guildService.getByName(name);
+		Message msg = new Message(message);
+		msg.putShort(guildInfoList.size());			// 工会数量
+		for (GuildInfo guildInfo : guildInfoList) {
+			msg.putInt(guildInfo.getId());			// 工会Id
+			msg.putString(guildInfo.getName());		// 工会名
+			msg.putInt(guildInfo.getLevel());		// 工会等级
+			msg.putString(guildInfo.getNick());		// 工会长昵称
+			msg.putInt(guildInfo.getCount());		// 工会实际人数
+			msg.putInt(guildInfo.getSize());		// 工会上限人数
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 获取前10名工会列表信息
+	 */
+	@Action(MessageCode.msg_guild_list)
+	public void getGuildInfoList(Message message, Channel channel) throws Exception {
+		String name = message.getString();
+		logger.info(String.format("RESV %d from accountId=%s name=%s", message.getMsgcd(), message.getAccountId(), name));
+		List<GuildInfo> guildInfoList = guildService.getGuildInfoList();
+		Message msg = new Message(message);
+		msg.putShort(guildInfoList.size());			// 工会数量
+		for (GuildInfo guildInfo : guildInfoList) {
+			msg.putInt(guildInfo.getId());			// 工会Id
+			msg.putString(guildInfo.getName());		// 工会名
+			msg.putInt(guildInfo.getLevel());		// 工会等级
+			msg.putString(guildInfo.getNick());		// 工会长昵称
+			msg.putInt(guildInfo.getCount());		// 工会实际人数
+			msg.putInt(guildInfo.getSize());		// 工会上限人数
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 获取我的工会信息
+	 */
+	@Action(MessageCode.msg_guild_account_list)
+	public void getMyGuild(Message message, Channel channel) throws Exception {
+		guildService.getMyGuild(message.getAccountId());
+	}
+	
+	/**
+	 * 申请加入工会
+	 */
+	@Action(MessageCode.msg_guild_request)
+	public void request(Message message, Channel channel) throws Exception {
+		Integer guildId = message.getInt();
+		RequestGuild requestGuild = guildService.request(message.getAccountId(), guildId);
+		Message msg = new Message(message);
+		msg.putInt(requestGuild.getId());
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 审批加入工会
+	 */
+	@Action(MessageCode.msg_guild_response)
+	public void response(Message message, Channel channel) throws Exception {
+		Integer requestId = message.getInt();
+		Boolean isAgree = message.getBoolean();
+		guildService.response(message.getAccountId(), requestId, isAgree);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 踢出工会
+	 */
+	@Action(MessageCode.msg_guild_kick)
+	public void kick(Message message, Channel channel) throws Exception {
+		Long beMemberId = message.getLong();
+		guildService.kick(message.getAccountId(), beMemberId);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 退出工会
+	 */
+	@Action(MessageCode.msg_guild_out)
+	public void out(Message message, Channel channel) throws Exception {
+		guildService.out(message.getAccountId());
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 变更会长
+	 */
+	@Action(MessageCode.msg_guild_change_leader)
+	public void changeLeader(Message message, Channel channel) throws Exception {
+		Long beMemberId = message.getLong();
+		guildService.changeLeader(message.getAccountId(), beMemberId);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 获取工会日志
+	 */
+	@Action(MessageCode.msg_guild_get_log)
+	public void getLogByGuildId(Message message, Channel channel) throws Exception {
+		Integer guildId = message.getInt();
+		List<GuildLog> guildLogList = guildService.getLogByGuildId(guildId);
+		Message msg = new Message(message);
+		msg.putShort(guildLogList.size());
+		for (GuildLog guildLog : guildLogList) {
+			msg.putString(guildLog.getContent());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 变更工会角色
+	 */
+	@Action(MessageCode.msg_guild_update_role)
+	public void updateGuildHero(Message message, Channel channel) {
+		Integer guildId = message.getInt();
+		Long beMemberId = message.getLong();
+		Byte roleIndex = message.getByte();
+		guildService.updateGuildHero(message.getAccountId(), guildId, beMemberId, roleIndex);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 审批前获取申请列表
+	 */
+	@Action(MessageCode.msg_guild_get_request_list)
+	public void getRequestList(Message message, Channel channel) throws Exception {
+		List<RequestGuildInfo> requestInfoList = guildService.getRequestInfoList(message.getAccountId());
+		Message msg = new Message(message);
+		msg.putShort(requestInfoList.size());
+		for (RequestGuildInfo requestGuildInfo : requestInfoList) {
+			msg.putInt(requestGuildInfo.getId());
+			msg.putLong(requestGuildInfo.getAccountId());
+			msg.putString(requestGuildInfo.getNick());
+			msg.putInt(requestGuildInfo.getCreateTime());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 设置公告
+	 */
+	@Action(MessageCode.msg_guild_set_notices)
+	public void setNotices(Message message, Channel channel) throws Exception {
+		Integer guildId = message.getInt();
+		String notices = message.getString();
+		guildService.setNotices(message.getAccountId(), guildId, notices);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 出售道具
+	 */
+	@Action(MessageCode.msg_guild_sell_item)
+	public void sellItem(Message message, Channel channel) throws Exception {
+		Long itemId = message.getLong();
+		guildService.sellItem(message.getAccountId(), itemId);
+	}
+	
+	/**
+	 * 购买道具
+	 */
+	@Action(MessageCode.msg_guild_buy_item)
+	public void buyItem(Message message, Channel channel) throws Exception {
+		Long guildItemId = message.getLong();
+		guildService.buyItem(message.getAccountId(), guildItemId);
+	}
+	
+	/**
+	 * 工会仓库道具列表
+	 */
+	@Action(MessageCode.msg_guild_item_list)
+	public void getGuildItemList(Message message, Channel channel) throws Exception {
+		Integer guildId = message.getInt();
+		Integer pageIndex = message.getInt();
+		Integer pageSize = message.getInt();
+		guildService.getGuildItemList(guildId, pageIndex, pageSize);
+	}
+}

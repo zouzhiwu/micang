@@ -1,0 +1,35 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
+import com.common.entity.Location;
+import com.common.entity.Node;
+import com.common.enumerate.MapNodeType;
+import com.game.config.MapConfig;
+
+@Service
+public class MapService {
+//	private static final Logger logger = LoggerFactory.getLogger(MapService.class);	
+	
+	public static List<Location> searchWay(short startx, short starty, short endx, short endy, MapNodeType mapNodeType) {
+		if (mapNodeType == MapNodeType.White) {
+			return searchWay(startx, starty, endx, endy, MapConfig.whiteMap);
+		} else {
+			return searchWay(startx, starty, endx, endy, MapConfig.grayMap);
+		}
+	}
+
+	public static List<Location> searchWay(short startx, short starty, short endx, short endy, byte[][] map) {
+		List<Node> nodeList = AStarService.searchWay(startx, starty, endx, endy, map);
+		List<Location> locationList = new ArrayList<Location>();
+		for (int i = 0; i < nodeList.size(); i++) {
+			Node node = nodeList.get(i);
+			Location location = new Location((short)(node.coord.x), (short)(node.coord.y));
+			locationList.add(location);
+		}
+		return locationList;
+	}
+}

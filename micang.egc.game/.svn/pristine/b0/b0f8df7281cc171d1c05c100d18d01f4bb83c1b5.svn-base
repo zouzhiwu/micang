@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.GuildLogDao">	
+	
+	<insert id="create" parameterType="com.common.entity.GuildLog" useGeneratedKeys="true" keyProperty="id">
+		insert into guild_log ( id
+			<if test="null != guildId">
+				, guildId
+			</if>
+			<if test="null != content">
+				, content
+			</if>
+			<if test="null != createTime">
+				, createTime
+			</if>
+		) values ( #{id}
+			<if test="null != guildId">
+				, #{guildId}
+			</if>
+			<if test="null != content">
+				, #{content}
+			</if>
+			<if test="null != createTime">
+				, #{createTime}
+			</if>
+		)
+	</insert>
+	
+	<select id="getById" parameterType="Integer" resultType="com.common.entity.Guild">
+		select * from guild_log where id = #{id}
+	</select>
+	
+	<select id="getByGuildId" parameterType="Integer" resultType="com.common.entity.GuildLog">
+		select * from guild_log where guildId = #{guildId} order by createTime desc limit 20;
+	</select>
+	
+	<delete id="delete" parameterType="Integer">
+		delete from guild_log where createTime &lt; #{time}
+	</delete>
+	
+	<update id="update" parameterType="com.common.entity.Guild">
+		update guild_log 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != guildId">
+				, guildId = #{guildId}
+			</if>
+			<if test="null != content">
+				, content = #{content}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+</mapper>  

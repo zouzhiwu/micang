@@ -1,0 +1,205 @@
+package com.game.util;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.alibaba.fastjson.JSONObject;
+import com.common.template.ItemTemplate;
+import com.common.template.MemberTemplate;
+import com.game.config.CheckPointConfig;
+import com.game.config.ItemConfig;
+import com.game.config.MemberConfig;
+import com.game.entity.LikeHeroDaoBean;
+import com.game.entity.PointsDaoBean;
+
+public class CommonUtil {
+
+	public static int[] stringToInt(String[] arrs) {
+		int[] ints = new int[arrs.length];
+		for (int i = 0; i < arrs.length; i++) {
+			ints[i] = Integer.parseInt(arrs[i]);
+		}
+		return ints;
+	}
+
+	//正数转负数
+	public static int[] IntToMinus(int[] arrs) {
+		int[] ints = new int[arrs.length];
+		for (int i = 0; i < arrs.length; i++) {
+			ints[i] = -arrs[i];
+		}
+		return ints;
+	}
+
+	
+	/**
+	 * 查找熟练度位置上的英雄
+	 * 
+	 * @param LikeHeros
+	 * @param seat
+	 * @return
+	 */
+	public static LikeHeroDaoBean getLikeHeroBeanBySeat(String likeHeros, int seat) {
+		List<LikeHeroDaoBean> list = JSONObject.parseArray(likeHeros, LikeHeroDaoBean.class);
+		LikeHeroDaoBean likeHeroBean = null;
+		if (list != null) {
+			for (LikeHeroDaoBean lhBean : list) {
+				if (lhBean.getSeat().intValue() == seat) {
+					likeHeroBean = lhBean;
+					break;
+				}
+			}
+		}
+		return likeHeroBean;
+	}
+
+	public static LikeHeroDaoBean getLikeHeroBeanByTemplateId(List<LikeHeroDaoBean> list, int heroTemplateId) {
+		LikeHeroDaoBean likeHeroBean = null;
+		if (list != null) {
+			for (LikeHeroDaoBean lhBean : list) {
+				if (lhBean.getHeroTemplateId() == heroTemplateId) {
+					likeHeroBean = lhBean;
+					break;
+				}
+			}
+		}
+		return likeHeroBean;
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+	// 通过调节查询item
+	public static ItemTemplate getItemTemplate(Byte type, Integer preMemberId) {
+		List<ItemTemplate> tempList = new ArrayList<ItemTemplate>();
+		ItemTemplate tempItemTemplate = null;
+		ItemConfig.map.forEach((key, value) -> {
+			if (value.getType().byteValue() == type.byteValue()
+					&& value.getAssociated().intValue() == preMemberId.intValue()) {
+				tempList.add(value);
+			}
+		});
+		if (tempList.size() == 1) {
+			tempItemTemplate = tempList.get(0);
+		}
+		return tempItemTemplate;
+	}
+
+	/**
+	 * 通过段位获取位置开启数量
+	 * 
+	 * @param memberTemplate 队员模板
+	 * @param stage          队员当前段位
+	 * @return
+	 */
+	public static Integer getOpenSeatCount(MemberTemplate memberTemplate, Byte stage) {
+		String[] unlockArr = memberTemplate.getUnlock().split(Params.fenge);
+		int seat = 1;
+		for (int i = 0; i < unlockArr.length; i++) {
+			if (stage.byteValue() >= Byte.valueOf(unlockArr[i]).byteValue()) {
+				if (i == (unlockArr.length - 1)) {
+					seat = unlockArr.length;
+				} else {
+					continue;
+				}
+
+			} else {
+				seat = i;
+				break;
+			}
+		}
+
+		return seat;
+	}
+
+	/**
+	 * 获取章节中有多少关卡
+	 * 
+	 * @param chapterId
+	 * @return
+	 */
+	public static Integer getPointCountByChapter(Integer chapterId) {
+		return CheckPointConfig.map.get(chapterId).size();
+	}
+
+	/**
+	 * 当前章节获得星星总数
+	 */
+	public static Integer getPointsStarSum(List<PointsDaoBean> list) {
+		int count = 0;
+		if (list != null) {
+			for (PointsDaoBean pointBean : list) {
+				count += pointBean.getStarCount();
+			}
+		}
+
+		return count;
+	}
+
+	/**
+	 * 
+	 * @param points
+	 * @return
+	 */
+	public static List<PointsDaoBean> getPointList(String points) {
+		List<PointsDaoBean> list = JSONObject.parseArray(points, PointsDaoBean.class);
+		if (list == null) {
+			list = new ArrayList<PointsDaoBean>();
+		}
+		return list;
+	}
+
+	// 星星最大等级
+	public static Integer getStarMaxLevel(Integer templateId) {
+		int count = 0;
+		for (MemberTemplate memberTemplate : MemberConfig.list) {
+			if (memberIdToCut2(memberTemplate.getId()).equals(memberIdToCut2(templateId))) {
+				++count;
+			}
+		}
+		return count;
+	}
+
+	// 队员获取星级
+	public static Byte getStar(Integer templateId) {
+		return MemberConfig.map.get(templateId).getStars().byteValue();
+	}
+
+	// 队员升星后的template
+	public static Integer nextStartemplateId(Integer templateId) {
+		return ++templateId;
+	}
+
+	public static String memberIdToCut2(Integer templateId) {
+		String str = String.valueOf(templateId);
+		return String.valueOf(str).substring(0, str.length() - 2);
+	}
+
+	public static void main(String[] args) {
+
+//		Byte stage = 8;
+//		String str = "1|5|8|10|15";
+//		String[] unlockArr = str.split(Params.fenge);
+//		int seat = 1;
+//		for (int i = 0; i < unlockArr.length; i++) {
+//			if (stage.byteValue() >= Byte.valueOf(unlockArr[i]).byteValue()) {
+//				if (i == (unlockArr.length - 1)) {
+//					seat = unlockArr.length;
+//				} else {
+//					continue;
+//				}
+//
+//			} else {
+//				seat = i;
+//				break;
+//			}
+//		}
+//
+//		System.out.println(seat);
+	}
+
+}

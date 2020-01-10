@@ -1,0 +1,35 @@
+package com.game.entity;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.job.FightJobManager;
+
+public class Monster extends BaseNode {
+	public Monster(short nodeId, Room room, NodeTemplate template) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = CampType.Neutral;
+		setEnemyCamp();
+	}
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Monster;
+	}
+	
+	public Room room;
+	public NodeTemplate template;
+	
+	public void createJob() {
+		FightJobManager.createAttackJob(this, template.getAoe());
+	}
+
+	@Override
+	public void die(BaseNode node) {
+		// TODO 把这个节点从所有节点视野中删除，从Room列表删除
+	}
+}

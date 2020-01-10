@@ -1,0 +1,80 @@
+package com.game.vision;
+
+import java.util.List;
+import java.util.Map;
+
+import com.common.entity.Book;
+import com.common.entity.Box;
+import com.common.entity.Location;
+import com.common.entity.Hero;
+
+public class VisionAdapter {
+	private final static VisionList<Box> boxListTool = new VisionList<Box>();
+	private final static VisionList<Book> bookListTool = new VisionList<Book>();
+	private final static VisionList<Hero> heroListTool = new VisionList<Hero>();
+	private final static VisionMap<Short, Box> boxMapTool = new VisionMap<Short, Box>();
+	private final static VisionMap<Integer, Book> bookMapTool = new VisionMap<Integer, Book>();
+	private final static VisionMap<Long, Hero> heroMapTool = new VisionMap<Long, Hero>();
+	
+	public static List<Hero> getVisionList(Location location, Map<Long, Hero> map, float vision) {
+		return heroMapTool.getVisionList(location, map, vision);
+	}
+	
+	public static List<Hero> getVisionHeroList(Hero currHero, Map<Long, Hero> map, float vision) {
+		List<Hero> visionHeroList = heroMapTool.getVisionList(currHero.location, map, vision);
+		visionHeroList.remove(currHero);
+		return visionHeroList;
+	}
+	
+	public static List<Hero> getVisionHeroList(Book book, Map<Long, Hero> map, float vision) {
+		return heroMapTool.getVisionList(book.location, map, vision);
+	}
+	
+	public static List<Box> getVisionBoxList(Hero currHero, Map<Short, Box> map, float vision) {
+		return boxMapTool.getVisionList(currHero.location, map, vision);
+	}
+	
+	public static List<Book> getVisionBookList(Hero currHero, Map<Integer, Book> map, float vision) {
+		return bookMapTool.getVisionList(currHero.location, map, vision);
+	}
+	
+	public static List<Hero> getInHeroList(List<Hero> oldList, List<Hero> newList) {
+		return heroListTool.getInList(oldList, newList);
+	}
+	
+	public static List<Hero> getOutHeroList(List<Hero> oldList, List<Hero> newList) {
+		return heroListTool.getOutList(oldList, newList);
+	}
+	
+	public static List<Box> getInBoxList(List<Box> oldList, List<Box> newList) {
+		return boxListTool.getInList(oldList, newList);
+	}
+	
+	public static List<Box> getOutBoxList(List<Box> oldList, List<Box> newList) {
+		return boxListTool.getOutList(oldList, newList);
+	}
+	
+	public static List<Book> getInBookList(List<Book> oldList, List<Book> newList) {
+		return bookListTool.getInList(oldList, newList);
+	}
+	
+	public static List<Book> getOutBookList(List<Book> oldList, List<Book> newList) {
+		return bookListTool.getOutList(oldList, newList);
+	}
+	
+	public static Hero getMinDistanceHero(List<Hero> roleList, Location location) {
+		return heroListTool.getMinDistanceEntity(roleList, location);
+	}
+	
+	public static Box getMinDistanceBox(List<Box> boxList, Location location) {
+		return boxListTool.getMinDistanceEntity(boxList, location);
+	}
+	
+	public static Book getMinDistanceBook(List<Book> bookList, Location location) {
+		return bookListTool.getMinDistanceEntity(bookList, location);
+	}
+	
+	public static Book getMinDistanceBook(Map<Integer, Book> map, Location location) {
+		return bookMapTool.getMinDistanceEntity(location, map);
+	}
+}

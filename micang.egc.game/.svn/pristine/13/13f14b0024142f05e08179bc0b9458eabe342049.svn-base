@@ -1,0 +1,82 @@
+package com.game.node;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.ArmsType;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.WayType;
+import com.common.template.NodeTemplate;
+import com.common.util.GameUtil;
+import com.game.entity.Room;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+
+public class TroopsNode extends AbsMoveNode {
+	private static final Logger logger = LoggerFactory.getLogger(TroopsNode.class);
+	public TroopsNode(short nodeId, Room room, NodeTemplate template, CampType camp, WayType wayType) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = camp;
+		setEnemyCamp();
+		this.hp = template.getHp();
+		this.wayType = wayType;
+		// 根据wayType获取通向对方基地的路径
+		this.way = GameUtil.getWayList(camp, wayType);
+		// 则对方基地作为目标，否则把蓝方基地作为目标
+		HomeNode enemyHomeNode = room.getHomeNode(enemyCamp);
+		this.target = new Target(enemyHomeNode);
+		this.vr = template.getVr();
+		this.ats = template.getAts();
+		this.aoe = template.getAoe();
+		this.mvs = template.getMvs();
+		logger.info(String.format("创建 nodeId=%d %s %s %s", nodeId, this.selfCamp.getName(), this.getNodeType().getName(), ArmsType.getType(template.getArmsType()).getName(), location));
+	}
+	
+	public WayType wayType;
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Troops;
+	}
+	
+	@Override
+	public void die(BaseNode attackNode) {
+    	// TODO 把这个节点从所有节点视野中删除，从Room列表删除
+		logger.info(String.format("nodeId=%d阵亡", this.nodeId));
+		// 删除节点
+    	room.remove(nodeId);
+    	stopAttack();
+    	stopMove();
+    	startUpdateVision();
+		refreshAllNodeVision();
+    }
+
+	@Override
+	public void startUpdateVision() {
+		FightJobManager.createUpdateVisionJob(room, this, template.getVr());
+	}
+
+	@Override
+	public void stopUpdateVision() {
+		if (JobScheduler.isHasJob(updateVisionJobKey)) {
+			JobScheduler.stopJob(updateVisionJobKey);
+		}
+	}
+
+	@Override
+	public void startAttack() {
+		FightJobManager.createAttackJob(room, this, template.getAts(), template.getPa());
+	}
+
+	@Override
+	public void stopAttack() {
+		if (JobScheduler.isHasJob(attackJobKey)) {
+			JobScheduler.stopJob(this.attackJobKey);
+		}
+	}
+}

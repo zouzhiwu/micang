@@ -1,0 +1,58 @@
+package com.game.config;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.template.ItemTemplate;
+import com.game.util.PoiUtil;
+
+public class ItemConfig {
+	private final static String sheetName = "item";
+	private static final Logger logger = LoggerFactory.getLogger(ItemConfig.class);
+	public static Map<Integer, ItemTemplate> map = new HashMap<Integer, ItemTemplate>();
+	public static Map<Integer, List<ItemTemplate>> gradeMap = new HashMap<Integer, List<ItemTemplate>>();
+	
+	public static void init() {
+		InputStream in = ItemConfig.class.getClassLoader().getResourceAsStream("template/item.xlsx");
+		try {
+			XSSFWorkbook workBook = new XSSFWorkbook(in);
+			XSSFSheet sheet = workBook.getSheet(sheetName);
+			int i = 0;
+			for (Iterator<Row> iterator = sheet.rowIterator(); iterator.hasNext();) {
+				XSSFRow row = (XSSFRow) iterator.next();
+				if (i >= 2) {
+					int index = 0;
+					Integer id = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					String name = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					String desc = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					Integer jb = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer gb = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer cb = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer grade = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					ItemTemplate itemTemplate = new ItemTemplate(id, name, desc, jb, gb, cb, grade);
+					map.put(itemTemplate.getId(), itemTemplate);
+				}
+				i++;
+			}
+			gradeMap = map.values().stream().collect(Collectors.groupingBy(ItemTemplate::getGrade));
+			logger.info(String.format("level config loaded record %d", i - 2));
+			workBook.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+}

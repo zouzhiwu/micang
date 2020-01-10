@@ -1,0 +1,157 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.util.CBUtils;
+import com.common.enumerate.ProfileType;
+import com.common.util.AssertUtil;
+import com.game.config.AppConfig;
+import com.game.dao.ItemDao;
+import com.game.entity.Bag;
+import com.game.entity.Item;
+
+@Service
+public class ItemService {
+
+	@Autowired
+	private ItemDao itemDao;
+	
+//	private static final Logger logger = LoggerFactory.getLogger(ItemService.class);
+	/** 初始化背包 **/
+	public void init(Long accountId) {
+		Bag bag = new Bag();
+		bag.setId(accountId);
+		Map<Integer, Item> itenMap = new HashMap<Integer, Item>();
+		if (AppConfig.getProfile() != ProfileType.Production) {
+			itenMap.put(1000, new Item(1000, 1000, 12, false));
+			itenMap.put(2000, new Item(2000, 2000, 12, false));
+			itenMap.put(3000, new Item(3000, 3000, 12, false));
+			itenMap.put(4000, new Item(4000, 4000, 180, false));
+			bag.setItemBytes(CBUtils.getBytesFromObject(itenMap));
+		} 
+		itemDao.create(bag);
+	}
+	
+	
+	/**
+	 * 查询用户背包
+	 */
+	public Bag getItemList(Long accountId) {
+		return  itemDao.findById(accountId);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public Item useItem(Integer templateId, Integer count, Long accountId) {
+		AssertUtil.asWarnTrue(null != templateId, "道具id不能为空");
+		AssertUtil.asWarnTrue(null != count && count > 0, "道具使用数量不能为小于1");
+		Bag bag = itemDao.findById(accountId);
+		AssertUtil.asWarnTrue(null != bag, "背包为空");
+		Map<Integer, Item> itemMap = (Map<Integer, Item>) CBUtils.getObjectFromBytes(bag.getItemBytes());
+		AssertUtil.asWarnTrue(itemMap.containsKey(templateId), "背包没有指定道具");
+		Item item = itemMap.get(templateId);
+		AssertUtil.asWarnTrue(item.getCount() >= count, "道具要使用的数量大于拥有的数量！");
+		int num = item.getCount() - count;
+		item.setCount(num);
+		if (num == 0) {
+			itemMap.remove(templateId);
+		} else {
+			itemMap.put(templateId, item);
+		}
+		bag.setItemBytes(CBUtils.getBytesFromObject(itemMap));
+		itemDao.update(bag);
+		return item;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<Item> settlementItem(Long accountId, List<Item> itemList) {
+		Bag bag = itemDao.findById(accountId);
+		List<Item> list = new ArrayList<Item>();
+		if (bag == null) {
+			//玩家第一次放入道具，背包初始化
+			bag = new Bag();
+			bag.setId(accountId);
+			Map<Integer, Item> itemMap= new HashMap<Integer, Item>();
+			itemList.stream().forEach(item -> {
+				itemMap.put(item.getTemplateId(), item);
+				list.add(item);
+			});
+			bag.setItemBytes(CBUtils.getBytesFromObject(itemMap));
+			itemDao.create(bag);
+		} else {
+			//判断道具原来是否有，没有则新增，有则增加数量
+			Map<Integer, Item> itemMap = (Map<Integer, Item>) CBUtils.getObjectFromBytes(bag.getItemBytes());
+			itemList.stream().forEach(item -> { 
+				if (itemMap.containsKey(item.getTemplateId())) {
+					Item itemTemp = itemMap.get(item.getTemplateId());
+					itemTemp.setCount(itemTemp.getCount()+item.getCount());
+					itemMap.put(item.getTemplateId(), itemTemp);
+					list.add(item);
+				} else {
+					item.setBoxId(item.getTemplateId());
+					item.setIntensify(false);
+					itemMap.put(item.getTemplateId(), item);
+					list.add(item);
+				} 
+			});
+			bag.setItemBytes(CBUtils.getBytesFromObject(itemMap));
+			itemDao.update(bag);
+		}	
+		return list;
+	}
+	
+	/**查询多个道具详情**/
+	@SuppressWarnings("unchecked")
+	public Map<Integer, Item> itemsInfo(Long accountId, List<Integer> itemIdList) {
+		Bag bag = itemDao.findById(accountId);
+		Map<Integer, Item> itenInfoMap = new HashMap<Integer, Item>();
+		if (bag == null) {
+			itemIdList.stream().forEach(itemId -> {
+				itenInfoMap.put(itemId, new Item(itemId, 0));
+			});
+		} else {
+			Map<Integer, Item> itemMap = (Map<Integer, Item>)CBUtils.getObjectFromBytes(bag.getItemBytes());
+			itemIdList.stream().forEach(itemId -> {
+				if (itemMap.containsKey(itemId)) {
+					itenInfoMap.put(itemId, itemMap.get(itemId));
+				} else {
+					itenInfoMap.put(itemId, new Item(itemId, 0));
+				}
+			});
+		}
+		return itenInfoMap;
+	}
+	
+	/**多个道具使用**/
+	@SuppressWarnings("unchecked")
+	public void useItems(Long accountId, List<Item> itemList) {
+		Bag bag = itemDao.findById(accountId);
+		Map<Integer, Item> itemMap = (Map<Integer, Item>)CBUtils.getObjectFromBytes(bag.getItemBytes());
+		itemList.stream().forEach(item -> {
+			Item tempItem = itemMap.get(item.getTemplateId());
+			AssertUtil.asWarnTrue(null != tempItem, "背包没有指定道具");
+			Integer num =tempItem.getCount() - item.getCount();
+			AssertUtil.asWarnTrue(num >= 0, "道具要使用的数量大于拥有的数量！");
+			if (num == 0) {
+				itemMap.remove(item.getTemplateId());
+			} else {
+				tempItem.setCount(num);
+				itemMap.put(item.getTemplateId(), tempItem);
+			}
+		});
+		bag.setItemBytes(CBUtils.getBytesFromObject(itemMap));
+		itemDao.update(bag);
+	}
+
+
+	public Item itemAdd(Integer templateId, Integer count, Long accountId) {
+		List<Item> list = new ArrayList<Item>();
+		list.add(new Item(templateId,count));
+		return settlementItem(accountId,list).get(0);
+	}
+}

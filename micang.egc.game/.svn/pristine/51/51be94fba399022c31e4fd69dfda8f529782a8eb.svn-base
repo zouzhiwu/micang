@@ -1,0 +1,117 @@
+package com.game.listener;
+
+import java.lang.reflect.Method;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.action.MethodClazz;
+import com.cb.cache.ChannelCache;
+import com.cb.lisener.AbsLisener;
+import com.cb.msg.Action;
+import com.cb.util.Constant;
+import com.cb.util.PackageUtil;
+import com.common.entity.Account;
+import com.common.entity.Hero;
+import com.common.entity.Room;
+import com.common.enumerate.AccountState;
+import com.common.util.AssertUtil;
+import com.game.dao.AccountDao;
+import com.game.factory.Context;
+import com.game.model.Model;
+import com.game.service.GameService;
+
+import io.netty.channel.Channel;
+
+@Service
+public class Listener extends AbsLisener {
+	private static final Logger logger = LoggerFactory.getLogger(Listener.class);
+	@Autowired
+	private GameService gameService;
+	@Autowired
+	private AccountDao accountDao;
+	
+	public boolean testToken(Long accountId, Integer tokenDirty) {
+		/*if (serverConfig.isTest()) {
+			return true;
+		}
+		if (accountId == 0) {
+			return false;
+		}
+		if (tokenDirty == null) {
+			return false;
+		}
+		String token = accountService.filterDirty(tokenDirty);
+		Channel channel = ChannelCache.getChannel(accountId);
+		String strToken = ChannelCache.getToken(channel);
+		boolean result = StringUtils.equals(strToken, token);
+		if (!result) {
+			logger.error(String.format("test token=%s strToken=%s fail", token, strToken));
+		}
+		return result;*/
+		return true;
+	}
+	
+	public void channelInactive(Channel currChannel) {
+		Long accountId = currChannel.attr(Constant.accountId).get();
+		Channel channel = ChannelCache.getChannel(accountId);
+		if (accountId != null) {
+			String currChannelRemoteAddress = StringUtils.EMPTY;
+			String channelRemoteAddress = StringUtils.EMPTY;
+			if (currChannel != null) {
+				currChannelRemoteAddress = currChannel.remoteAddress().toString();
+			}
+			if (channel != null) {
+				channelRemoteAddress = channel.remoteAddress().toString();
+			}
+			// 如果切换设备，则踢下线
+			if (StringUtils.equals(currChannelRemoteAddress, channelRemoteAddress)) {
+//				accountService.onLineStateNotice(accountId, Player.onlineState_off);
+			}
+			Hero currHero = Model.getInstance().heroMap.get(accountId);
+			if (currHero != null) {
+				currHero.isExit = true;
+				/*for (Hero hero : currHero.visionHeroList) {
+					role.visionHeroList.remove(currHero);
+				}*/
+				Room room = Model.getInstance().roomMap.get(currHero.roomId);
+				if (currHero.hp > 0) {
+					currHero.isDeserter = true;
+					int teamCount = room.heroMap.values().stream().collect(Collectors.groupingBy(Hero::getTeamId)).size();
+					currHero.rank = teamCount + 1;
+				}
+//				room.roleMap.remove(currHero.id);
+//				Model.getInstance().roleMap.remove(currHero.id);
+				gameService.stopRoomJob(room, false, 2);
+				logger.info(String.format("玩家%s 下线 isExit=%s", currHero.accountId, currHero.isExit));
+				Account account = Model.getInstance().accountMap.get(currHero.accountId);
+		    	// 设置玩家为离线状态
+		    	account.setState(AccountState.Offline.getIndex());
+		    	accountDao.update(account);
+			}
+		}
+	}
+
+    public void scan() {
+		Set<Class<?>> clazzSet = PackageUtil.getClasses("com.game.action");
+		for (Class<?> clazz : clazzSet) {
+			Method[] methods = clazz.getMethods();
+			for (Method method : methods) {
+				Action[] actions = method.getAnnotationsByType(Action.class);
+				for (Action action : actions) {
+					if (method.isAnnotationPresent(Action.class)) {
+						Object instance = Context.getBean(clazz);
+						AssertUtil.asErrorTrue(!actionMap.containsKey(action.value()), String.format("Action=%s重复", action.value()));
+						actionMap.put(action.value(), new MethodClazz(method, instance));
+					}
+				}
+			}
+		}
+    }
+
+}

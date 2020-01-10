@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.PublicMailDao">	
+	
+	<insert id="create" parameterType="com.game.entity.PublicMail" useGeneratedKeys="true" keyProperty="id">
+		insert into public_mail ( id
+			<if test="null != title">
+				, title
+			</if>
+			<if test="null != name">
+				, name
+			</if>
+			<if test="null != content">
+				, content
+			</if>
+			<if test="null != itemList">
+				, itemList
+			</if>
+			<if test="null != createTime">
+				, createTime
+			</if>
+		) values ( #{id}
+			<if test="null != title">
+				, #{title}
+			</if>
+			<if test="null != name">
+				, #{name}
+			</if>
+			<if test="null != content">
+				, #{content}
+			</if>
+			<if test="null != itemList">
+				, #{itemList}
+			</if>
+			<if test="null != createTime">
+				, #{createTime}
+			</if>
+		)
+	</insert>
+	
+	<select id="findById" parameterType="Long" resultType="com.game.entity.PublicMail">
+		select * from public_mail where id = #{id}
+	</select>
+	
+	<select id="findByCreateTime" parameterType="Integer" resultType="com.game.entity.PublicMail">
+		select * from public_mail where createTime <![CDATA[< ]]> #{createTime}
+	</select>
+	
+	<select id="findByAccountId" parameterType="Long" resultType="com.game.entity.PublicMail">
+		select pm.* from public_mail pm where pm.id not in(
+			select mailId FROM public_mail_account pma WHERE pma.accountId = #{accountId})
+	</select>
+	
+	<update id="update" parameterType="com.game.entity.PublicMail">
+		update public_mail 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != title">
+				, title = #{title}
+			</if>
+			<if test="null != name">
+				, name = #{name}
+			</if>
+			<if test="null != content">
+				, content = #{content}
+			</if>
+			<if test="null != itemList">
+				, itemList = #{itemList}
+			</if>
+			<if test="null != createTime">
+				, createTime = #{createTime}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<delete id="delById" parameterType="Long">
+		delete from public_mail where id = #{id}
+	</delete>
+</mapper>  

@@ -1,0 +1,368 @@
+package com.game.service;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.InviteTeam;
+import com.common.entity.Account;
+import com.common.entity.RequestTeam;
+import com.common.entity.RequestTeamAccountInfo;
+import com.common.entity.Hero;
+import com.common.entity.Team;
+import com.common.entity.TeamAccount;
+import com.common.entity.TeamAccountInfo;
+import com.common.enumerate.AccountState;
+import com.common.enumerate.RequestStatus;
+import com.common.enumerate.TeamRole;
+import com.common.helper.TimeHelper;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.dao.InviteTeamDao;
+import com.game.dao.RequestTeamDao;
+import com.game.dao.TeamDao;
+import com.game.dao.TeamAccountDao;
+import com.game.helper.MsgHelper;
+import com.game.model.Model;
+
+@Service
+public class TeamService {
+	private static final Logger logger = LoggerFactory.getLogger(TeamService.class);
+	private final static int team_member_count = 5;		// 小队成员数量上限
+	
+	@Autowired
+	private TeamDao teamDao;
+	@Autowired
+	private TeamAccountDao teamAccountDao;
+	@Autowired
+	private RequestTeamDao requestTeamDao;
+	@Autowired
+	private InviteTeamDao inviteTeamDao;
+	@Autowired
+	private ChatService chatService;
+	
+	@Transactional
+	public void createTeam(Long accountId) {
+		Map<?, ?> map = chatService.createGroup(accountId, "小队", "team");
+		Integer code = (Integer)map.get("code");
+		AssertUtil.asErrorTrue(code == 200, "生成聊天群异常");
+		String tid = (String)map.get("tid");
+		TeamAccount teamAccount = teamAccountDao.getTeamAccount(accountId);
+		AssertUtil.asWarnTrue(teamAccount == null, String.format("玩家%s已经加入了小队，不能创建小队", accountId));
+		Team team = new Team();
+		team.setCreateTime(TimeHelper.getTime());
+		team.setTid(tid);
+		teamDao.create(team);
+		AssertUtil.asWarnTrue(team.getId() > 0, "创建小队失败");
+		teamAccount = new TeamAccount();
+		teamAccount.setTeamId(team.getId());
+		teamAccount.setAccountId(accountId);
+		teamAccount.setCreateTime(TimeHelper.getTime());
+		teamAccount.setRoleId(TeamRole.Leader.getIndex());
+		teamAccountDao.add(teamAccount);
+		code = chatService.addGroupAccount(accountId, tid, accountId);
+		AssertUtil.asErrorTrue(code == 200, "添加聊天群成员错误");
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_team_create);
+		msg.putLong(team.getId());			// 小队Id
+		msg.putLong(teamAccount.getId());	// 小队成员Id
+		msg.putString(team.getTid());		// 网易云信聊天群Id
+		MsgSender.sendMsg(msg, accountId);
+	}
+	
+	public Team getTeam(Long accountId) {
+		Team team = teamDao.getById(accountId);
+		return team;
+	}
+	
+	/**
+	 * 申请加入小队，等待队长审批
+	 */
+	public RequestTeam request(Long accountId, Long teamId) {
+		AssertUtil.asWarnTrue(teamId != null && teamId > 0, "被要求的玩家Id不正确");
+		Team team = teamDao.getById(teamId);
+		AssertUtil.asWarnTrue(team != null, "小队不存在");
+		List<TeamAccount> teamAccountList = teamAccountDao.getTeamAccountList(teamId);
+		AssertUtil.asWarnTrue(teamAccountList.size() < team_member_count, "小队已满员");
+		boolean isExist = teamAccountList.stream().anyMatch(m -> accountId.longValue() == m.getAccountId());
+		AssertUtil.asWarnTrue(!isExist, "你已经是该小队成员了");
+		AssertUtil.asWarnTrue(teamAccountList.size() < team_member_count, "小队已满员");
+		Optional<TeamAccount> op = teamAccountList.stream().filter(tm -> TeamRole.getType(tm.getRoleId()) == TeamRole.Leader).findFirst();
+		AssertUtil.asErrorTrue(op.isPresent(), "没找到队长");
+		TeamAccount leader = op.get();
+		RequestTeam rt = new RequestTeam();
+		rt.setAccountId(accountId);
+		rt.setTeamId(team.getId());
+		rt.setIsAgree(RequestStatus.Nothing.getIndex());
+		RequestTeam requestRecord = requestTeamDao.get(rt);
+		AssertUtil.asWarnTrue(requestRecord == null, "你已经申请该小队了，请等待审批");
+		RequestTeam requestTeam = new RequestTeam();
+		requestTeam.setAccountId(accountId);
+		requestTeam.setTeamId(team.getId());
+		requestTeam.setCreateTime(TimeHelper.getTime());
+		requestTeamDao.add(requestTeam);
+		Account account = Model.getInstance().accountMap.get(accountId);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_team_request_notice);
+		msg.putLong(requestTeam.getId());	// 申请Id
+		msg.putString(String.format("玩家%s申请加入小队", account.getNick()));
+		MsgSender.sendMsg(msg, leader.getAccountId());
+		return requestTeam;
+	}
+	
+	/**
+	 * 队长审批申请
+	 */
+	@Transactional
+	public synchronized void response(Long leaderId, Long requestId, Boolean isAgree) {
+		AssertUtil.asWarnTrue(leaderId != null && leaderId > 0, "我的Id参数错误");
+		AssertUtil.asWarnTrue(requestId != null && requestId > 0, "申请Id参数错误");
+		RequestTeam requestTeam = requestTeamDao.getById(requestId);
+		AssertUtil.asWarnTrue(requestTeam != null, "申请记录不存在");
+		AssertUtil.asWarnTrue(RequestStatus.getType(requestTeam.getIsAgree()) == RequestStatus.Nothing, "该记录已经应答过了");
+		TeamAccount leader = teamAccountDao.getTeamAccount(leaderId);
+		AssertUtil.asWarnTrue(TeamRole.getType(leader.getRoleId()) == TeamRole.Leader, "只有管理员才能变更角色");
+		if (isAgree) {
+			TeamAccount tm = teamAccountDao.getTeamAccount(requestTeam.getAccountId());
+			AssertUtil.asWarnTrue(tm == null, "对方已经加入了小队");
+			List<TeamAccount> teamAccountList = teamAccountDao.getTeamAccountList(requestTeam.getTeamId());
+			AssertUtil.asWarnTrue(teamAccountList.size() < team_member_count, "小队已满员");
+			// 创建成员对象
+			TeamAccount teamAccount = new TeamAccount();
+			teamAccount.setTeamId(requestTeam.getTeamId());
+			teamAccount.setAccountId(requestTeam.getAccountId());
+			teamAccount.setRoleId(TeamRole.Member.getIndex());
+			teamAccount.setCreateTime(TimeHelper.getTime());
+			teamAccountDao.add(teamAccount);
+			Team team = teamDao.getById(teamAccount.getTeamId());
+			chatService.addGroupAccount(leaderId, team.getTid(), requestId);
+			// 设置申请记录为同意
+			requestTeam.setIsAgree(RequestStatus.Agree.getIndex());
+			requestTeam.setUpdateTime(TimeHelper.getTime());
+			requestTeamDao.update(requestTeam);
+			List<Long> roleIdList = teamAccountList.stream().map(TeamAccount::getAccountId).collect(Collectors.toList());
+			Account account = Model.getInstance().accountMap.get(requestTeam.getAccountId());
+			// 通知小队所有成员，有新成员加入小队
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_team_broadcast_in_member);
+			msg.putLong(account.getId());			// 玩家Id
+			msg.putString(account.getNick());		// 玩家昵称
+			MsgHelper.sendBroadcast(msg, roleIdList);
+		} else {
+			// 设置申请记录为拒绝
+			requestTeam.setIsAgree(RequestStatus.Refuse.getIndex());
+			requestTeam.setUpdateTime(TimeHelper.getTime());
+			requestTeamDao.update(requestTeam);
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_team_approve_notice);
+			msg.putString("队长拒绝申请");	
+			MsgSender.sendMsg(msg, requestTeam.getAccountId());
+		}
+	}
+	
+	/**
+	 * 踢出小队
+	 */
+	public void deleteTeamAccount(Long leaderId, Long beAccountId) {
+		TeamAccount leader = teamAccountDao.getTeamAccount(leaderId);
+		AssertUtil.asWarnTrue(leader != null, "该管理员不存在");
+		TeamAccount teamAccount = teamAccountDao.getTeamAccount(beAccountId);
+		AssertUtil.asWarnTrue(teamAccount != null, "该小队成员不存在");
+		AssertUtil.asWarnTrue(TeamRole.getType(leader.getRoleId()) == TeamRole.Leader, "权限不够");
+		logger.info(String.format("踢出小队成员%s", beAccountId));
+		teamAccountDao.delete(teamAccount.getId());
+		Team team = teamDao.getById(teamAccount.getTeamId());
+		Integer code = chatService.deleteGroupAccount(leaderId, team.getTid(), beAccountId);
+		AssertUtil.asErrorTrue(code == 200, "退出聊天群失败");
+		List<TeamAccount> teamAccountList = teamAccountDao.getTeamAccountList(teamAccount.getTeamId());
+		List<Long> roleIdList = teamAccountList.stream().map(TeamAccount::getAccountId).collect(Collectors.toList());
+		Account account = Model.getInstance().accountMap.get(teamAccount.getAccountId());
+		// 通知小队所有成员，玩家被踢出
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_team_broadcast_out_member);
+		msg.putLong(account.getId());
+		msg.putString(account.getNick());
+		MsgHelper.sendBroadcast(msg, roleIdList);
+	}
+	
+	/**
+	 * 退出小队
+	 */
+	@Transactional
+	public synchronized void outTeam(Long accountId) {
+		TeamAccount teamAccount = teamAccountDao.getTeamAccount(accountId);
+		AssertUtil.asWarnTrue(teamAccount != null, "该小队成员不存在");
+		teamAccountDao.delete(teamAccount.getId());
+		List<TeamAccount> teamAccountList = teamAccountDao.getTeamAccountList(teamAccount.getTeamId());
+		Optional<TeamAccount> op = teamAccountList.stream().filter(tm -> TeamRole.getType(tm.getRoleId()) == TeamRole.Leader).findFirst();
+		AssertUtil.asErrorTrue(op.isPresent(), "没找到队长");
+		TeamAccount leader = op.get();
+		Team team = teamDao.getById(teamAccount.getTeamId());
+		Integer code = chatService.deleteGroupAccount(leader.getId(), team.getTid(), teamAccount.getAccountId());
+		AssertUtil.asErrorTrue(code == 200, "退出聊天群失败");
+		if (CollectionUtils.isNotEmpty(teamAccountList)) {
+			List<Long> roleIdList = teamAccountList.stream().map(TeamAccount::getAccountId).collect(Collectors.toList());
+			Account account = Model.getInstance().accountMap.get(teamAccount.getAccountId());
+			// 通知小队所有成员，玩家被踢出
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_team_broadcast_out_member);
+			msg.putLong(account.getId());
+			msg.putString(account.getNick());
+			MsgHelper.sendBroadcast(msg, roleIdList);
+			if (TeamRole.getType(teamAccount.getRoleId()) == TeamRole.Leader) {
+				for (TeamAccount tm : teamAccountList) {
+					Hero role = Model.getInstance().heroMap.get(tm.getId());
+					// 如果玩家在线，则分配玩家为队长
+					if (role != null) {
+						tm.setRoleId(TeamRole.Leader.getIndex());
+						tm.setUpdateTime(TimeHelper.getTime());
+						teamAccountDao.update(tm);
+						break;
+					}
+				}
+			}
+		} else {
+			teamDao.delete(teamAccount.getTeamId());
+			chatService.deleteGroup(leader.getId(), team.getTid());
+		}
+	}
+	
+	public List<TeamAccountInfo> getTeamAccountInfoList(Long accountId) {
+		TeamAccount teamAccount = teamAccountDao.getTeamAccount(accountId);
+		AssertUtil.asWarnTrue(teamAccount != null, "该小队成员不存在");
+		List<TeamAccountInfo> teamAccountInfoList = teamAccountDao.getTeamAccountInfoList(teamAccount.getTeamId());
+		return teamAccountInfoList;
+	}
+	
+	/**
+	 * 队长或副队长获取申请列表
+	 */
+	public List<RequestTeamAccountInfo> getRequestInfoList(Long accountId) {
+		TeamAccount teamMember = teamAccountDao.getTeamAccount(accountId);
+		AssertUtil.asWarnTrue(teamMember != null, "该小队成员不存在");
+		AssertUtil.asWarnTrue(TeamRole.getType(teamMember.getRoleId()) == TeamRole.Member, "必须管理员才有权限查看");
+		return requestTeamDao.getRequestInfoList(teamMember.getTeamId());
+	}
+	
+	/**
+	 * 玩家A邀请玩家B加入小队，等待队长审批
+	 */
+	public void writeInvite(Long accountId, Long beAccountId) {
+		Account beMember = Model.getInstance().accountMap.get(beAccountId);
+		AssertUtil.asWarnTrue(beMember != null && beMember.getState() == AccountState.Online.getIndex(), "对方不在线，不能邀请");
+		Account account = Model.getInstance().accountMap.get(accountId);
+		AssertUtil.asWarnTrue(account != null, "账户不存在");
+		TeamAccount teamMember = teamAccountDao.getTeamAccount(accountId);
+		AssertUtil.asWarnTrue(teamMember != null, "该小队成员不存在");
+		List<TeamAccount> teamMemberList = teamAccountDao.getTeamAccountList(teamMember.getTeamId());
+		AssertUtil.asWarnTrue(teamMemberList.size() < team_member_count, "小队已满员");
+		Optional<TeamAccount> op = teamMemberList.stream().filter(tm -> TeamRole.getType(tm.getRoleId()) == TeamRole.Leader).findFirst();
+		AssertUtil.asErrorTrue(op.isPresent(), "没找到队长");
+		TeamAccount leader = op.get();
+		TeamAccount beTeamMember = teamAccountDao.getTeamAccount(beAccountId);
+		AssertUtil.asWarnTrue(beTeamMember == null, "邀请的成员已经加入了小队");
+		InviteTeam inviteTeam = new InviteTeam();
+		inviteTeam.setAccountId(accountId);
+		inviteTeam.setBeAccountId(beAccountId);
+		inviteTeam.setTeamId(teamMember.getTeamId());
+		inviteTeam.setCreateTime(TimeHelper.getTime());
+		inviteTeamDao.add(inviteTeam);
+		// 消息通知队长，玩家A邀请玩家B加入小队，等待队长审批
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_team_notice_invite);
+		msg.putLong(inviteTeam.getId());
+		msg.putString(String.format("队友%s发起邀请玩家%s", account.getNick(), beMember.getNick()));
+		MsgSender.sendMsg(msg, leader.getAccountId());
+	}
+	
+	/**
+	 * 队长审批邀请
+	 */
+	@Transactional
+	public void approveInvite(Long accountId, Long inviteId, Boolean isAgree) {
+		AssertUtil.asWarnTrue(inviteId != null && inviteId > 0, "申请Id参数错误");
+		InviteTeam inviteTeam = inviteTeamDao.getById(inviteId);
+		AssertUtil.asWarnTrue(inviteTeam != null, "申请记录不存在");
+		AssertUtil.asWarnTrue(RequestStatus.getType(inviteTeam.getStatus()) == RequestStatus.Nothing, "该记录已经应答过了");
+		inviteTeam.setStatus(isAgree ? RequestStatus.Agree.getIndex() : RequestStatus.Refuse.getIndex());
+		inviteTeam.setUpdateTime(TimeHelper.getTime());
+		inviteTeamDao.update(inviteTeam);
+		if (isAgree) {
+			RequestTeam requestTeam = request(inviteTeam.getBeAccountId(), inviteTeam.getTeamId());
+			Account account = Model.getInstance().accountMap.get(inviteTeam.getAccountId());
+			// 消息通知被邀请人同意
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_team_send_invite);
+			msg.putLong(requestTeam.getId());
+			msg.putString(String.format("玩家%s邀请您加入小队", account.getNick()));
+			MsgSender.sendMsg(msg, inviteTeam.getBeAccountId());
+		} else {
+			Account beMember = Model.getInstance().accountMap.get(inviteTeam.getBeAccountId());
+			// 消息通知邀请人拒绝
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_team_approve_notice);
+			msg.putString(String.format("队长拒绝邀请%s", beMember.getNick()));
+			MsgSender.sendMsg(msg, inviteTeam.getAccountId());
+		}
+	}
+	
+	/**
+	 * 玩家B回复邀请
+	 */
+	@Transactional
+	public void replyInvite(Long accountId, Long requestId, Boolean isAgree) {
+		AssertUtil.asWarnTrue(requestId != null && requestId > 0, "申请Id参数错误");
+		RequestTeam requestTeam = requestTeamDao.getById(requestId);
+		AssertUtil.asWarnTrue(requestTeam != null, "申请记录不存在");
+		AssertUtil.asErrorTrue(requestTeam.getAccountId().longValue() == accountId, "请求Id错误");
+		AssertUtil.asWarnTrue(RequestStatus.getType(requestTeam.getIsAgree()) == RequestStatus.Nothing, "该记录已经应答过了");
+		requestTeam.setIsAgree(isAgree ? RequestStatus.Agree.getIndex() : RequestStatus.Refuse.getIndex());
+		requestTeam.setUpdateTime(TimeHelper.getTime());
+		requestTeamDao.update(requestTeam);
+		// 创建成员对象
+		TeamAccount teamAccount = new TeamAccount();
+		teamAccount.setTeamId(requestTeam.getTeamId());
+		teamAccount.setAccountId(requestTeam.getAccountId());
+		teamAccount.setRoleId(TeamRole.Member.getIndex());
+		teamAccount.setCreateTime(TimeHelper.getTime());
+		teamAccountDao.add(teamAccount);
+		List<TeamAccount> teamAccountList = teamAccountDao.getTeamAccountList(teamAccount.getTeamId());
+		Account account = Model.getInstance().accountMap.get(requestTeam.getAccountId());
+		if (isAgree) {
+			List<Long> roleIdList = teamAccountList.stream().map(TeamAccount::getAccountId).collect(Collectors.toList());
+			// 通知小队所有成员，有新成员加入小队
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_team_broadcast_in_member);
+			msg.putLong(account.getId());			// 玩家Id
+			msg.putString(account.getNick());		// 玩家昵称
+			MsgHelper.sendBroadcast(msg, roleIdList);
+		} else {
+			Optional<TeamAccount> op = teamAccountList.stream().filter(tm -> TeamRole.getType(tm.getRoleId()) == TeamRole.Leader).findFirst();
+			AssertUtil.asErrorTrue(op.isPresent(), "没找到队长");
+			// 通知队长拒绝邀请
+			TeamAccount leader = op.get();
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_team_reply_notice);
+			msg.putString(String.format("玩家%拒绝邀请", account.getNick()));
+			MsgSender.sendMsg(msg, leader.getId());
+		}
+	}
+	
+	public void clearHistoricalRecord() {
+		int requestTime = TimeHelper.getTime() - TimeHelper.DAY_S;
+		logger.info(String.format("requestTime=%s", requestTime));
+		requestTeamDao.clearHistoricalRecord(requestTime);
+		int inviteTime = TimeHelper.getTime() - TimeHelper.DAY_S;
+		inviteTeamDao.clearHistoricalRecord(inviteTime);
+	}
+}

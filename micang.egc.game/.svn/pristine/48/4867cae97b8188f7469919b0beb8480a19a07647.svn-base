@@ -1,0 +1,271 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.constant.TemplateConstant;
+import com.common.entity.Item;
+import com.common.entity.Trade;
+import com.common.entity.WrapItem;
+import com.common.helper.TimeHelper;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.dao.ItemDao;
+import com.game.dao.TradeDao;
+import com.game.helper.JsonMapper;
+import com.game.job.JobScheduler;
+
+@Service
+public class TradeService {
+	
+	@Autowired
+	private TradeDao tradeDao;
+	@Autowired
+	private ItemDao itemDao;
+	@Autowired
+	private AccountService accountService;
+	@Autowired
+	private ItemService itemService;
+	
+	private static final Logger logger = LoggerFactory.getLogger(TradeService.class);
+	
+	public void invite(Long accountId, Long beAccountId) {
+		logger.info(String.format("玩家%s邀请玩家%s交易", accountId, beAccountId));
+		AssertUtil.asWarnTrue(!accountId.equals(beAccountId), "不能和自己交易");
+		// 创建邀请交易job
+		JobKey jobKey = JobScheduler.generaterInviteTradeJobKey(accountId, beAccountId);
+		List<JobKey> jobKeyList = JobScheduler.getJobKeyByGroup(jobKey.getName());
+		AssertUtil.asWarnTrue(CollectionUtils.isEmpty(jobKeyList), "每个玩家只能发起一次邀请");
+		JobScheduler.createInviteTradeJob(jobKey, accountId, beAccountId);
+		// 对方正在交易中
+		Integer tradingCount = tradeDao.getTradingCount(beAccountId);
+		AssertUtil.asWarnTrue(tradingCount == 0, "对方正在交易中，不能邀请他");
+		// 服务器响应申请
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_trade_invite);
+		MsgSender.sendMsg(msg, accountId);
+		// 通知被邀请的玩家
+		msg = new Message();
+		msg.setMsgcd(MessageCode.msg_trade_invite_notices);
+		msg.putString(jobKey.getName());
+		msg.putString(jobKey.getGroup());
+		MsgSender.sendMsg(msg, beAccountId);
+	}
+	
+	public void approveInvite(Long myAccountId, Boolean isAgree, String jobName, String jobGroup) {
+		JobKey jobKey = new JobKey(jobName, jobGroup);
+		AssertUtil.asWarnTrue(JobScheduler.isHasJob(jobKey), "没有找到job");
+		if (isAgree) {
+			// 对方正在交易中
+			Integer tradingCount = tradeDao.getTradingCount(myAccountId);
+			AssertUtil.asWarnTrue(tradingCount == 0, "你不能同时进行两次交易");
+			JobDetail jobDetail = JobScheduler.getJobDetail(jobKey);
+			JobDataMap jobDataMap = jobDetail.getJobDataMap();
+			Long accountId = jobDataMap.getLong("accountId");
+			Long beAccountId = jobDataMap.getLong("beAccountId");
+			AssertUtil.asWarnTrue(beAccountId.equals(myAccountId), "对应的账户不正确");
+			// 创建交易
+			Trade trade = new Trade();
+			trade.setAccountId(accountId);
+			trade.setBeAccountId(beAccountId);
+			tradeDao.create(trade);
+			// 通知两个玩家审批结果
+			List<Long> accountList = new ArrayList<Long>(2);
+			accountList.add(trade.getAccountId());
+			accountList.add(trade.getBeAccountId());
+			// 创建检测job
+			JobKey testJobKey = JobScheduler.generaterTestOperationTradeJob(trade.getId());
+			Map<Long, Integer> accountMap = new HashMap<Long, Integer>();
+			Integer time = TimeHelper.getTime();
+			accountMap.put(accountId, time);
+			accountMap.put(beAccountId, time);
+			JobScheduler.createTestOperationTradeJob(testJobKey, trade.getId(), accountMap);
+			// 广播同意交易
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_trade_approve);
+			msg.putBoolean(isAgree);
+			msg.putLong(trade.getId());
+			MsgSender.sendBroadcast(msg, accountList);
+		}
+		JobScheduler.stopJob(jobKey);
+	}
+	
+	public void operationTrade(Long myAccountId, Long tradeId) {
+		JobKey testJobKey = JobScheduler.generaterTestOperationTradeJob(tradeId);
+		JobDetail jobDetail = JobScheduler.getJobDetail(testJobKey);
+		if (jobDetail != null) {
+			JobDataMap jobDataMap = jobDetail.getJobDataMap();
+			@SuppressWarnings("unchecked")
+			Map<Long, Integer> accountMap = (Map<Long, Integer>)jobDataMap.get("accountMap");
+			// 记录玩家的操作时间
+			accountMap.put(myAccountId, TimeHelper.getTime());
+			jobDataMap.put("accountMap", accountMap);
+		}
+	}
+	
+	@Transactional
+	public void cancelTrade(Long myAccountId, Long tradeId) {
+		JobKey testJobKey = JobScheduler.generaterTestOperationTradeJob(tradeId);
+		if (JobScheduler.isHasJob(testJobKey)) {
+			JobScheduler.stopJob(testJobKey);
+		}
+		// 退还锁定的道具
+		Trade trade = tradeDao.getById(tradeId);
+		if (StringUtils.isNotBlank(trade.getItems())) {
+			@SuppressWarnings("unchecked")
+			List<WrapItem> wrapItemList = JsonMapper.getInstance().fromJson(trade.getItems(), List.class);
+			receiveItems(trade.getAccountId(), wrapItemList, "返还交易商品");
+		}
+		if (StringUtils.isNotBlank(trade.getBeItems())) {
+			@SuppressWarnings("unchecked")
+			List<WrapItem> beWrapItemList = JsonMapper.getInstance().fromJson(trade.getBeItems(), List.class);
+			receiveItems(trade.getBeAccountId(), beWrapItemList, "返还交易商品");
+		}
+		tradeDao.delete(tradeId);
+		// 通知双方交易结束
+		List<Long> accountList = new ArrayList<Long>(2);
+		accountList.add(trade.getAccountId());
+		accountList.add(trade.getBeAccountId());
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_trade_cancel);
+		MsgSender.sendBroadcast(msg, accountList);
+	}
+	
+	@Transactional
+	public void stopTrade(Long tradeId) {
+		// 退还锁定的道具
+		Trade trade = tradeDao.getById(tradeId);
+		if (StringUtils.isNotBlank(trade.getItems())) {
+			@SuppressWarnings("unchecked")
+			List<WrapItem> wrapItemList = JsonMapper.getInstance().fromJson(trade.getItems(), List.class);
+			receiveItems(trade.getAccountId(), wrapItemList, "返还交易商品");
+		}
+		if (StringUtils.isNotBlank(trade.getBeItems())) {
+			@SuppressWarnings("unchecked")
+			List<WrapItem> beWrapItemList = JsonMapper.getInstance().fromJson(trade.getBeItems(), List.class);
+			receiveItems(trade.getBeAccountId(), beWrapItemList, "返还交易商品");
+		}
+		// 删除交易记录
+		tradeDao.delete(tradeId);
+		// 通知双方交易结束
+		List<Long> accountList = new ArrayList<Long>(2);
+		accountList.add(trade.getAccountId());
+		accountList.add(trade.getBeAccountId());
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_trade_stop);
+		MsgSender.sendBroadcast(msg, accountList);
+	}
+	
+	private void receiveItems(Long accountId, List<WrapItem> wrapItemList, String remark) {
+		for (WrapItem wrapItem : wrapItemList) {
+			if (wrapItem.getTemplateId().equals(TemplateConstant.jb)) {
+				accountService.updateJb(accountId, wrapItem.getCount(), remark);
+			} else if (wrapItem.getTemplateId().equals(TemplateConstant.gb)) {
+				accountService.updateGb(accountId, wrapItem.getCount(), remark);
+			} else {
+				itemService.createItem2Depo(accountId, wrapItem.getTemplateId(), wrapItem.getUseCount());
+			}
+		}
+	}
+	
+	@Transactional
+	public void lockTrade(Long myAccountId, Long tradeId, Long[] itemIds, Long jb, Long gb) {
+		JobKey testJobKey = JobScheduler.generaterTestOperationTradeJob(tradeId);
+		if (JobScheduler.isHasJob(testJobKey)) {
+			List<WrapItem> wrapItemList = new ArrayList<WrapItem>();
+			for (int i = 0; i < itemIds.length; i++) {
+				Long itemId = itemIds[i];
+				Item item = itemDao.getById(itemId);
+				WrapItem wrapItem = new WrapItem();
+				wrapItem.setTemplateId(item.getTemplateId());
+				wrapItem.setCount(1L);
+				wrapItem.setUseCount(item.getUseCount());
+				wrapItemList.add(wrapItem);
+				itemDao.delete(itemId);
+			}
+			if (jb > 0) {
+				WrapItem wrapItem = new WrapItem();
+				wrapItem.setTemplateId(TemplateConstant.jb);
+				wrapItem.setCount(jb);
+				wrapItem.setUseCount(0);
+				wrapItemList.add(wrapItem);
+				accountService.updateJb(myAccountId, -jb, "自由交易锁定");
+			}
+			if (gb > 0) {
+				WrapItem wrapItem = new WrapItem();
+				wrapItem.setTemplateId(TemplateConstant.gb);
+				wrapItem.setCount(gb);
+				wrapItem.setUseCount(0);
+				wrapItemList.add(wrapItem);
+				accountService.updateGb(myAccountId, -gb, "自由交易锁定");
+			}
+			String str = JsonMapper.getInstance().toJson(wrapItemList);
+			Trade trade = tradeDao.getById(tradeId);
+			if (trade.getAccountId().equals(myAccountId)) {
+				trade.setIsLock(1);
+				trade.setItems(str);
+			} else {
+				trade.setIsBeLock(1);
+				trade.setBeItems(str);
+			}
+			tradeDao.update(trade);
+			JobScheduler.stopJob(testJobKey);
+			// 如果双方都锁定，则推送确认消息
+			if (trade.getIsLock() == 1 && trade.getIsBeLock() == 1) {
+				List<Long> accountList = new ArrayList<Long>(2);
+				accountList.add(trade.getAccountId());
+				accountList.add(trade.getBeAccountId());
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_trade_enter_notices);
+				MsgSender.sendBroadcast(msg, accountList);
+				// 创建确认job
+				JobKey jobKey = JobScheduler.generaterTestEnterTradeJob(tradeId);
+				JobScheduler.createTestEnterTradeJob(jobKey, tradeId);
+			}
+		}
+	}
+	
+	public void enterTrade(Long myAccountId, Long tradeId) {
+		Trade trade = tradeDao.getById(tradeId);
+		if (trade.getAccountId().equals(myAccountId)) {
+			trade.setIsEnter(1);
+		} else {
+			trade.setIsBeEnter(1);
+		}
+		tradeDao.update(trade);
+		// 如果双方都确认，则交换商品
+		if (trade.getIsEnter() == 1 && trade.getIsEnter() == 1) {
+			// 关闭确认job
+			JobKey enterJobKey = JobScheduler.generaterTestEnterTradeJob(tradeId);
+			if (JobScheduler.isHasJob(enterJobKey)) {
+				JobScheduler.stopJob(enterJobKey);
+			}
+			if (StringUtils.isNotBlank(trade.getItems())) {
+				@SuppressWarnings("unchecked")
+				List<WrapItem> wrapItemList = JsonMapper.getInstance().fromJson(trade.getItems(), List.class);
+				receiveItems(trade.getBeAccountId(), wrapItemList, "交易商品");
+			}
+			if (StringUtils.isNotBlank(trade.getBeItems())) {
+				@SuppressWarnings("unchecked")
+				List<WrapItem> beWrapItemList = JsonMapper.getInstance().fromJson(trade.getBeItems(), List.class);
+				receiveItems(trade.getAccountId(), beWrapItemList, "交易商品");
+			}
+			tradeDao.delete(tradeId);
+		}
+	}
+}

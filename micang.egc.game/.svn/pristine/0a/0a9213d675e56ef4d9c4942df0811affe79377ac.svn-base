@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.TeamAccountDao">	
+	
+	<insert id="add" parameterType="com.common.entity.TeamAccount" useGeneratedKeys="true" keyProperty="id">
+		insert into team_account (id
+			<if test="null != teamId">
+				, teamId
+			</if>
+			<if test="null != accountId">
+				, accountId
+			</if>
+			<if test="null != roleId">
+				, roleId
+			</if>
+			<if test="null != createTime">
+				, createTime
+			</if>
+			<if test="null != updateTime">
+				, updateTime
+			</if>
+		) values ( #{id}
+			<if test="null != teamId">
+				, #{teamId}
+			</if>
+			<if test="null != accountId">
+				, #{accountId}
+			</if>
+			<if test="null != roleId">
+				, #{roleId}
+			</if>
+			<if test="null != createTime">
+				, #{createTime}
+			</if>
+			<if test="null != updateTime">
+				, #{updateTime}
+			</if>
+		)
+	</insert>
+	
+	<update id="update" parameterType="com.common.entity.TeamAccount">
+		update team_account 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != name">
+				, name = #{name}
+			</if>
+			<if test="null != roleId">
+				, roleId = #{roleId}
+			</if>
+			<if test="null != updateTime">
+				, updateTime = #{updateTime}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<delete id="delete" parameterType="Long">
+		delete from team_account where id = #{id}
+	</delete>
+	
+	<select id="getTeamAccountList" parameterType="Long" resultType="com.common.entity.TeamAccount">
+		select * from team_account where teamId = #{teamId}
+	</select>
+	
+	<select id="getTeamAccount" parameterType="Long" resultType="com.common.entity.TeamAccount">
+		select * from team_account where accountId = #{accountId}
+	</select>
+	
+	<select id="getTeamAccountInfoList" parameterType="Long" resultType="com.common.entity.TeamAccount">
+		select tm.id as id
+			, tm.accountId as accountId
+			, m.nick as nick
+			, tm.roleId as roleId
+			, tm.createTime as createTime
+			, tm.updateTime as updateTime
+		from team_account tm left join account m
+			on tm.accountId = m.id
+		where tm.teamId = #{teamId}
+	</select>
+	
+</mapper>  

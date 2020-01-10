@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.SysMailDao">	
+	
+	<insert id="create" parameterType="com.game.entity.SysMail" useGeneratedKeys="true" keyProperty="id">
+		insert into sys_mail ( id
+			<if test="null != title">
+				, title
+			</if>
+			<if test="null != context">
+				, context
+			</if>
+			<if test="null != templateId">
+				, templateId
+			</if>
+			<if test="null != attachment">
+				, attachment
+			</if>
+			<if test="null != nowTime">
+				, nowTime
+			</if>
+		) values ( #{id}
+			<if test="null != title">
+				, #{title}
+			</if>
+			<if test="null != context">
+				, #{context}
+			</if>
+			<if test="null != templateId">
+				, #{templateId}
+			</if>
+			<if test="null != attachment">
+				, #{attachment}
+			</if>
+			<if test="null != nowTime">
+				, #{nowTime}
+			</if>
+		)
+	</insert>
+	
+	<select id="findById" parameterType="Long" resultType="com.game.entity.SysMail">
+		select * from sys_mail where id = #{id}
+	</select>
+	
+	<select id="findTopOne" resultType="com.game.entity.SysMail">
+		select * from sys_mail order by id desc LIMIT 1
+	</select>
+	
+	<select id="findByStart" resultType="com.game.entity.SysMail">
+		select * from sys_mail where id >= #{id}
+	</select>
+	
+	<update id="update" parameterType="com.game.entity.SysMail">
+		update sys_mail 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != title">
+				, title = #{title}
+			</if>
+			<if test="null != context">
+				, context = #{context}
+			</if>
+			<if test="null != templateId">
+				, templateId = #{templateId}
+			</if>
+			<if test="null != attachment">
+				, attachment = #{attachment}
+			</if>
+			<if test="null != nowTime">
+				, nowTime = #{nowTime}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<delete id="delById" parameterType="Long">
+		delete from sys_mail where id = #{id}
+	</delete>
+</mapper>  

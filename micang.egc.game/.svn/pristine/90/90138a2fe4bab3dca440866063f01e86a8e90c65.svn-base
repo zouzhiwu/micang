@@ -1,0 +1,27 @@
+package com.game.dao;
+
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
+import com.common.entity.Guild;
+import com.common.entity.GuildInfo;
+
+public interface GuildDao {
+
+	public void create(Guild guild);
+
+	public void update(Guild guild);
+	
+	public void delete(Integer id);
+	
+	public Guild getById(@Param("id")Integer id, @Param("time")Integer time);
+	
+	public List<GuildInfo> getByName(String name);
+	
+	public Guild getByAccountId(Long accountId);
+	
+	public Integer isHasGuild(Long accountId);
+	
+	public List<GuildInfo> getInfoList(Integer time);
+}

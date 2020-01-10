@@ -1,0 +1,93 @@
+package com.game.config;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.template.MemberTemplate;
+import com.game.util.PoiUtil;
+
+public class MemberConfig {
+	private final static String sheetName = "Member";
+	private static final Logger logger = LoggerFactory.getLogger(MemberConfig.class);
+	public static Map<Integer, MemberTemplate> map = new HashMap<Integer, MemberTemplate>();
+	
+	public static List<MemberTemplate> list = new ArrayList<MemberTemplate>();
+	
+	public static void init() {
+		InputStream in = MemberConfig.class.getClassLoader().getResourceAsStream("template/Member.xlsx");
+		try {
+			XSSFWorkbook workBook = new XSSFWorkbook(in);
+			XSSFSheet sheet = workBook.getSheet(sheetName);
+			int i = 0;
+			for (Iterator<Row> iterator = sheet.rowIterator(); iterator.hasNext();) {
+				XSSFRow row = (XSSFRow) iterator.next();
+				if (i >= 2) {
+					int index = 0;
+					Integer id = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					
+					Integer preMemberId = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Short stars = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					
+					String name = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					String bigIcon = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					String smallIcon = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					String image = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					
+					String awata = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					Byte quality = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte route = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					
+					Integer dynamic = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer operation = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer focus = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer tough = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer potential = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					
+					Integer growthDynamic = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthOperation = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthFocus = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthTough = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthPotential = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					
+					Integer stageId = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					String likeHeros = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					Integer masterSkillId = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					String slaveSkillIds = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					String unlock = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					Short fragmentCount = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					
+					Integer characterGroupId = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					String desc = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					
+					MemberTemplate memberTemplate = new MemberTemplate(id, preMemberId, stars, name, bigIcon, smallIcon, image, awata, quality, route, 
+							dynamic, operation, focus, tough, potential,
+							growthDynamic, growthOperation, growthFocus, growthTough, growthPotential,
+							stageId, likeHeros, masterSkillId, slaveSkillIds, unlock, fragmentCount, characterGroupId, desc);
+
+					
+					map.put(memberTemplate.getId(), memberTemplate);
+					list.add(memberTemplate);
+				}
+				i++;
+			}
+			logger.info(String.format("member config loaded record %d", i - 2));
+			workBook.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+}

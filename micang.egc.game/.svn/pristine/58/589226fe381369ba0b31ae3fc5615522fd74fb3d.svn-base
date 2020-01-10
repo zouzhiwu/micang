@@ -1,0 +1,11 @@
+package com.game.dao;
+
+import com.game.entity.PublicMailAccount;
+
+public interface PublicMailAccountDao {
+	/***添加邮件和玩家关系*/
+	public void create(PublicMailAccount publicMailAccount);
+	
+	/**删除邮件和玩家关系**/
+	public void delById(PublicMailAccount publicMailAccount);
+}

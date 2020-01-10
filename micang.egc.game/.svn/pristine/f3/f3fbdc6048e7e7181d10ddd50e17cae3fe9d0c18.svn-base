@@ -1,0 +1,48 @@
+package com.game.job;
+
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.SchedulerFactory;
+import org.quartz.Trigger;
+import org.quartz.TriggerKey;
+import org.quartz.impl.StdSchedulerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class JobScheduler {
+	private final static Logger logger = LoggerFactory.getLogger(JobScheduler.class);
+	public static SchedulerFactory factory = new StdSchedulerFactory();
+	
+	public static JobDetail getJobDetail(JobKey jobKey) {
+		JobDetail jobDetail = null;
+		try {
+			jobDetail = factory.getScheduler().getJobDetail(jobKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return jobDetail;
+	}
+	
+	public static Trigger getTrigger(TriggerKey triggerKey) {
+		Trigger trigger = null;
+		try {
+			trigger = factory.getScheduler().getTrigger(triggerKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return trigger;
+	}
+	
+	public static Scheduler getScheduler() {
+		Scheduler scheduler = null;
+		try {
+			scheduler = factory.getScheduler();
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return scheduler;
+	}
+	
+}

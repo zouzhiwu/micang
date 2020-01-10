@@ -1,0 +1,51 @@
+package com.game.util;
+
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.lang3.RandomUtils;
+ 
+
+/**
+ * 根据概率选取集合中的一条数据
+ * @gf
+ *
+ */
+public final class ProbabilityExtract {
+   
+	private int [] indexList;
+	private int count;
+ 
+   public ProbabilityExtract(List<Integer> list) {
+   	indexList = new int[list.size()];
+   	for (int i = 0; i < indexList.length; i++) {
+   		if (i > 0) {
+   			indexList[i] =  list.get(i) + indexList[i - 1];
+   		}else {
+   			indexList[i] =  list.get(i);
+			}
+   		count = count + list.get(i);
+		}
+	}
+	public int next() {
+       int nextInt = RandomUtils.nextInt(0, count);
+       int index = 0;
+       for (int i = 0; i < indexList.length; i++) {
+			if (indexList[i] > nextInt) {
+				index = i;
+				break;
+			}
+		}
+		return index;
+   }
+   public static Integer outPrize(Map<Integer, Integer> map){
+   	List<Integer> list = new ArrayList<Integer>(map.values());
+       List<Integer> gifts = new ArrayList<Integer>(map.keySet());
+       ProbabilityExtract method = new ProbabilityExtract(list);
+       Integer integer = gifts.get(method.next());
+       return integer;
+   }
+
+}

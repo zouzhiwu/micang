@@ -1,0 +1,72 @@
+package com.game.util;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.alibaba.fastjson.JSONObject;
+import com.common.template.MemberTemplate;
+import com.game.config.CheckPointConfig;
+import com.game.config.MemberConfig;
+import com.game.entity.PointsBean;
+
+public class CommonUtil {
+
+	/**
+	 * 获取章节中有多少关卡
+	 * 
+	 * @param chapterId
+	 * @return
+	 */
+	public static Integer getPointCountByChapter(Integer chapterId) {
+		return CheckPointConfig.map.get(chapterId).size();
+	}
+
+	/**
+	 * 当前章节获得星星总数
+	 */
+	public static Integer getPointsStarSum(List<PointsBean> list) {
+		int count = 0;
+		if (list != null) {
+			for (PointsBean pointBean : list) {
+				count += pointBean.getStarCount();
+			}
+		}
+
+		return count;
+	}
+
+	public static List<PointsBean> getPointList(String points) {
+		List<PointsBean> list = JSONObject.parseArray(points, PointsBean.class);
+		if(list == null) {
+			list = new ArrayList<PointsBean>();
+		}
+		return list;
+	}
+
+	// 星星最大等级
+	public static Integer getStarMaxLevel(Integer templateId) {
+		int count = 0;
+		for (MemberTemplate memberTemplate : MemberConfig.list) {
+			if (memberIdToCut2(memberTemplate.getId()).equals(memberIdToCut2(templateId))) {
+				++count;
+			}
+		}
+		return count;
+	}
+
+	// 队员获取星级
+	public static Byte getStar(Integer templateId) {
+		return MemberConfig.map.get(templateId).getStars().byteValue();
+	}
+
+	// 队员升星后的template
+	public static Integer nextStartemplateId(Integer templateId) {
+		return ++templateId;
+	}
+
+	public static String memberIdToCut2(Integer templateId) {
+		String str = String.valueOf(templateId);
+		return String.valueOf(str).substring(0, str.length() - 2);
+	}
+
+}

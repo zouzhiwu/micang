@@ -1,0 +1,471 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.apache.commons.lang3.RandomUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.common.constant.ParameterIdConstant;
+import com.common.constant.UserRedisKeyPrefix;
+import com.common.entity.Account;
+import com.common.entity.Role;
+import com.common.enumerate.ApplyAddFriendType;
+import com.common.enumerate.FriendRelationType;
+import com.common.helper.TimeHelper;
+import com.common.template.ParameterTemplate;
+import com.common.util.AssertUtil;
+import com.game.common.RedisClient;
+import com.game.config.ParameterConfig;
+import com.game.dao.AccountDao;
+import com.game.dao.FriendRelationDao;
+import com.game.dao.RoleDao;
+import com.game.entity.FriendRelation;
+import com.game.entity.vo.ApplyAddFriendVO;
+import com.game.entity.vo.Friend;
+import com.game.entity.vo.UserRecord;
+import com.game.model.Model;
+import com.game.util.NumberUtils;
+
+@Service
+public class FriendService {
+	@Autowired
+	private FriendRelationDao friendDao;
+	
+	@Autowired
+	private RoleDao roleDao;
+	
+	@Autowired
+	private RedisClient<UserRecord> redisClient;
+	
+	@Autowired
+	private AccountDao accountDao;
+	
+	/**1801.查看好友列表**/
+	public List<Friend> getFriendList(Long acountId) {
+		List<Friend> list = new ArrayList<Friend>(); 
+		flshTiliCount(acountId);
+		//查询我的好友
+		List<FriendRelation> friends = friendDao.findFriendByRelation(acountId, FriendRelationType.friends.getIndex());
+		//封装返回对象
+		friends.stream().forEach(friend -> {
+			Friend friendVo = getFriendVO(acountId, friend);
+			list.add(friendVo);
+		});
+		return list;
+	}
+	
+	/**判断刷新今天的体力收送次数**/
+	private void flshTiliCount(Long acountId) {
+		//判断刷新今天的体力收送次数
+		if(!redisClient.getRedisTemplate().hasKey(UserRedisKeyPrefix.recordPrefix + acountId)) {
+			//没有记录，创建记录
+			UserRecord userRecord = new UserRecord();
+			userRecord.setOutPhysical(new Byte(ParameterConfig.map.get(ParameterIdConstant.index650).getValue()));
+			userRecord.setPutPhysical(new Byte(ParameterConfig.map.get(ParameterIdConstant.index650).getValue()));
+			userRecord.setOutPhysicalTime(TimeHelper.getTime());
+			userRecord.setPutPhysicalTime(TimeHelper.getTime());
+			redisClient.add(UserRedisKeyPrefix.recordPrefix + acountId, userRecord);
+		} else {
+			//有记录，判断记录时效，过期刷新
+			UserRecord userRecord = redisClient.getValue(UserRedisKeyPrefix.recordPrefix + acountId);
+			if (userRecord.getOutPhysicalTime() < TimeHelper.getZeroTime()) {
+				userRecord.setOutPhysical(new Byte(ParameterConfig.map.get(ParameterIdConstant.index650).getValue()));
+			}
+			if(userRecord.getPutPhysicalTime() < TimeHelper.getZeroTime()) {
+				userRecord.setPutPhysical(new Byte(ParameterConfig.map.get(ParameterIdConstant.index650).getValue()));
+			}
+			redisClient.add(UserRedisKeyPrefix.recordPrefix + acountId, userRecord);
+		};
+	}
+	/**
+	 * 把好友对象封装成好友详情
+	 * @param acountId
+	 * @param friend
+	 * @return
+	 */
+	private Friend getFriendVO(Long acountId, FriendRelation friend) {
+		Friend friendVo = new Friend();
+		Role role = null;
+		Account account = null;
+		//如
+		if (friend.getAccountId1().equals(acountId)) {
+			role = roleDao.getById(friend.getAccountId2());
+			account = accountDao.getById(friend.getAccountId2());
+			Boolean bool = null;
+			if (friend.getRelation() == FriendRelationType.aGivingB.getIndex().intValue() || friend.getRelation() == FriendRelationType.eachGiving.getIndex().intValue()) {
+				bool = true;
+			} else {
+				bool = false;
+			};
+			friendVo.setPhysicalGet(bool);
+			friendVo.setPhysicalGive(bool);
+		} else {
+			role = roleDao.getById(friend.getAccountId1());
+			account = accountDao.getById(friend.getAccountId1());
+			Boolean bool = null;
+			if (friend.getRelation() == FriendRelationType.bGivingA.getIndex().intValue() || friend.getRelation() == FriendRelationType.eachGiving.getIndex().intValue()) {
+				bool = true;
+			} else {
+				bool = false;
+			};
+			friendVo.setPhysicalGet(bool);
+			friendVo.setPhysicalGive(bool);
+		}
+		AssertUtil.asWarnTrue(null != role, "好友不存在！");
+		friendVo.setAccountId(role.getAccountId());
+		friendVo.setFighting(0);
+		friendVo.setLoge("");
+		friendVo.setLve((byte)0);
+		friendVo.setNickName(account.getNick());
+		List<Long> onlineIdList = Model.getInstance().accountMap.keySet().stream().collect(Collectors.toList());
+		if (onlineIdList.indexOf(role.getAccountId()) != -1) {
+			friendVo.setStart(true);
+			friendVo.setOutTime(0L);
+		} else {
+			friendVo.setStart(false);
+			friendVo.setOutTime(role.getOutTime().longValue());
+		}
+		return friendVo;
+	}
+	
+	private Friend getFriendVO(Account account) {
+		Friend friendVo = new Friend();
+		Role role = roleDao.getById(account.getId());
+		friendVo.setAccountId(account.getId());
+		friendVo.setFighting(0);
+		friendVo.setLoge("");
+		friendVo.setLve((byte)0);
+		friendVo.setNickName(account.getNick());
+		List<Long> onlineIdList = Model.getInstance().accountMap.keySet().stream().collect(Collectors.toList());
+		if (onlineIdList.indexOf(account.getId()) == -1) {
+			friendVo.setStart(true);
+			friendVo.setOutTime(0L);
+		} else {
+			friendVo.setStart(false);
+			friendVo.setOutTime(role.getOutTime().longValue());
+		}
+		return friendVo;
+	}
+	
+	/**1802.批赠送体力**/
+	public Boolean setPhysicals(Long accountId, List<Long> friendsId) {
+		//查询我的全部好友
+		List<FriendRelation> friends = friendDao.findFriendByRelation(accountId, FriendRelationType.friends.getIndex());
+		UserRecord userRecord = redisClient.getValue(UserRedisKeyPrefix.recordPrefix + accountId);
+		Integer bGivingA = FriendRelationType.bGivingA.getIndex();
+		Integer aGivingB = FriendRelationType.aGivingB.getIndex();
+		Integer eachGiving = FriendRelationType.eachGiving.getIndex().intValue();
+		//封装返回对象
+		friends.stream().forEach(friend -> {
+			AssertUtil.asWarnTrue(null != friend, "没有好友存在，无法赠送体力！");
+			if (friend.getAccountId1().equals(accountId) && friendsId.indexOf(friend.getAccountId2()) != -1) {
+				//1.我是a 他是b
+				if (userRecord.getOutPhysical() > 0) {
+					if(bGivingA == friend.getGiving()) {
+						friend.setGiving(eachGiving);
+					} else {
+						friend.setGiving(aGivingB);
+					};
+					friendDao.update(friend);
+					userRecord.setOutPhysical((byte)(userRecord.getOutPhysical()-1));
+				}
+			} else if(friend.getAccountId2().equals(accountId) && friendsId.indexOf(friend.getAccountId1()) != -1){
+				if (userRecord.getOutPhysical() > 0) {
+				//1.我是b 他是a
+					if(aGivingB == friend.getGiving()) {
+						friend.setGiving(eachGiving);
+					} else {
+						friend.setGiving(bGivingA);
+					};
+					friendDao.update(friend);
+					userRecord.setOutPhysical((byte)(userRecord.getOutPhysical()-1));
+				}
+			}
+		});
+		redisClient.add(UserRedisKeyPrefix.recordPrefix + accountId, userRecord);
+		return true;
+	}
+	
+	/**1803.批收获体力**/
+	public Boolean getPhysicals(Long accountId, List<Long> friendsId) {
+		//查询我的全部好友
+		List<FriendRelation> friends = friendDao.findFriendByRelation(accountId, FriendRelationType.friends.getIndex());
+		UserRecord userRecord = redisClient.getValue(UserRedisKeyPrefix.recordPrefix + accountId);
+		Role role = roleDao.getById(accountId);
+		Integer bGivingA = FriendRelationType.bGivingA.getIndex();
+		Integer aGivingB = FriendRelationType.aGivingB.getIndex();
+		Integer eachGiving = FriendRelationType.eachGiving.getIndex().intValue();
+		//封装返回对象
+		friends.stream().forEach(friend -> {
+			if (friend.getAccountId1().equals(accountId) && friendsId.indexOf(friend.getAccountId2()) != -1) {
+				if (userRecord.getPutPhysical() > 0) {
+					//1.我是a 他是b
+					if(bGivingA == friend.getGiving()) {
+						friend.setGiving(FriendRelationType.notGiving.getIndex());
+						//给我加体力
+						addTIli(role);
+					} else if(eachGiving == friend.getGiving()){
+						friend.setGiving(aGivingB);
+						addTIli(role);
+					};
+					friendDao.update(friend);
+					userRecord.setPutPhysical((byte)(userRecord.getPutPhysical()-1));
+					roleDao.update(role);
+				}
+			} else if(friend.getAccountId2().equals(accountId) && friendsId.indexOf(friend.getAccountId1()) != -1){
+				if (userRecord.getPutPhysical() > 0) {
+					//1.我是b 他是a
+					if(aGivingB == friend.getGiving()) {
+						friend.setGiving(FriendRelationType.notGiving.getIndex().intValue());
+						//给我加体力
+						addTIli(role);
+					} else if(eachGiving == friend.getGiving()){
+						friend.setGiving(bGivingA);
+						//给我加体力
+						addTIli(role);
+					};
+					friendDao.update(friend);
+					userRecord.setPutPhysical((byte)(userRecord.getPutPhysical()-1));
+				}
+			}
+		});
+		redisClient.add(UserRedisKeyPrefix.recordPrefix + accountId, userRecord);
+		return true;
+	}
+	//满足条件加体力
+	private void addTIli(Role role) {
+		if (role.getTili() < new Integer(ParameterConfig.map.get(ParameterIdConstant.index4).getValue())) {
+			role.setTili(role.getTili()+1);
+		}
+	}
+
+	/**1804.删除好友**/
+	public boolean delFriend(Long accountId, Long friendId) {
+		friendDao.delById(accountId, friendId);
+		friendDao.delById(friendId, accountId);
+		return true;
+	}
+	/**推荐好友
+	 * @return **/
+	public Set<Friend> recommendFriend(Long accountId) {
+		ParameterTemplate pT = ParameterConfig.map.get(ParameterIdConstant.index620);
+		Account oneAccount = accountDao.findTopOne();
+		Account oneAccount2 = accountDao.findAfterOne();
+		Set<Friend> friendVos = new HashSet<Friend>();
+		for (int i = 0; i <= new Integer(pT.getValue())*2; i++) {
+			 Integer nextInt = RandomUtils.nextInt(oneAccount2.getId().intValue(), (int) (oneAccount.getId()+1));
+			 Account byId = accountDao.getById(nextInt.longValue());
+			 if (byId != null) {
+				 //在这里进行筛选，过滤
+				 FriendRelation findById1 = friendDao.findById(accountId, byId.getId());
+				 FriendRelation findById2 = friendDao.findById(byId.getId(), accountId);
+				 if (findById1 == null && findById2 == null) {
+					 Friend friendVo = getFriendVO(byId);
+					 friendVos.add(friendVo);
+				}
+			}
+		}
+		return friendVos;
+	}
+
+	/**1806.搜索好友**/
+	public Friend searchFriend(String friendId) {
+		Account byId = null;
+		if (NumberUtils.isNumeric2(friendId)) {
+			byId = accountDao.getById(new Long(friendId));
+		}
+		Account byName = accountDao.getByName(friendId);
+		if(null != byId) {
+			 return getFriendVO(byId);
+		} else if (byName != null) {
+			return getFriendVO(byName);
+		}
+		return null;
+	}
+	
+
+	/**1807.申请加好友
+	 * @return **/
+	public ApplyAddFriendVO applyAddFriend(Long accountId, Long friendId) {
+		AssertUtil.asWarnTrue(null != friendId, "好友id为空，无法添加好友！");
+		FriendRelation findById1 = friendDao.findById(accountId, friendId);
+		FriendRelation findById2 = friendDao.findById(friendId, accountId);
+		FriendRelation friend = new FriendRelation();
+		Account account = accountDao.getById(friendId);
+		ApplyAddFriendVO resVo = new ApplyAddFriendVO(); 
+		Integer aApplyB = FriendRelationType.aApplyB.getIndex();
+		Integer eachApply = FriendRelationType.eachApply.getIndex();
+		Integer bApplyA = FriendRelationType.bApplyA.getIndex();
+		Integer aShieldB = FriendRelationType.aShieldB.getIndex();
+		Integer bShieldA = FriendRelationType.bShieldA.getIndex();
+		if (account == null) {
+			resVo.setRes(false);
+			resVo.setMesgCode(ApplyAddFriendType.code5.getIndex());
+			return resVo;
+		}
+		if (findById1 == null && findById2 == null) {
+			Integer countApply = friendDao.countApply(friendId);
+			if (countApply == new Integer(ParameterConfig.map.get(ParameterIdConstant.index630).getValue())) {
+				resVo.setRes(false);
+				resVo.setMesgCode(ApplyAddFriendType.code6.getIndex());
+				return resVo;
+			}
+			friend.setAccountId1(accountId);
+			friend.setAccountId2(friendId);
+			friend.setRelation(aApplyB);
+			resVo.setRes(true);
+			resVo.setMesgCode(ApplyAddFriendType.code1.getIndex());
+			friendDao.create(friend);
+		} else if (findById2 != null) {
+			if (findById2.getRelation() == aApplyB) {
+				findById2.setGiving(eachApply);
+				resVo.setRes(true);
+				resVo.setMesgCode(ApplyAddFriendType.code1.getIndex());
+				friendDao.update(findById2);
+			} else if (findById2.getRelation() == bApplyA) {
+				resVo.setRes(false);
+				resVo.setMesgCode(ApplyAddFriendType.code2.getIndex());
+			} else if (findById2.getRelation() == aShieldB) {
+				resVo.setRes(false);
+				resVo.setMesgCode(ApplyAddFriendType.code3.getIndex());
+			} else if (findById2.getRelation() == bShieldA) {
+				resVo.setRes(false);
+				resVo.setMesgCode(ApplyAddFriendType.code4.getIndex());
+			}
+		} else if (findById1 != null) {
+			if (findById1.getRelation() == aApplyB) {
+				resVo.setRes(false);
+				resVo.setMesgCode(ApplyAddFriendType.code2.getIndex());
+			} else if (findById1.getRelation() == bApplyA) {
+				findById1.setGiving(FriendRelationType.eachApply.getIndex().intValue());
+				resVo.setRes(true);
+				resVo.setMesgCode(ApplyAddFriendType.code1.getIndex());
+				friendDao.update(findById1);
+			} else if (findById1.getRelation() == aShieldB) {
+				resVo.setRes(false);
+				resVo.setMesgCode(ApplyAddFriendType.code4.getIndex());
+			} else if (findById1.getRelation() == bShieldA) {
+				resVo.setRes(false);
+				resVo.setMesgCode(ApplyAddFriendType.code3.getIndex());
+			}
+		}
+		return resVo;
+	}
+
+	/**1808.查看好友申请
+	 * @return **/
+	public List<Friend> getFriendApply(Long accountId) {
+		//查询加我的好友
+		List<FriendRelation> friends1 = friendDao.findFriendByRelation(accountId, FriendRelationType.aApplyB.getIndex());
+		List<FriendRelation> friends2 = friendDao.findFriendByRelation(accountId, FriendRelationType.bApplyA.getIndex());
+		List<FriendRelation> friends3 = friendDao.findFriendByRelation(accountId, FriendRelationType.eachApply.getIndex());
+		List<Friend> friendVOs = new ArrayList<Friend>();
+		friends1.stream().forEach(friend -> {
+			friendVOs.add(getFriendVO(accountId, friend));
+		});
+		friends2.stream().forEach(friend -> {
+			friendVOs.add(getFriendVO(accountId, friend));
+		});
+		friends3.stream().forEach(friend -> {
+			friendVOs.add(getFriendVO(accountId, friend));
+		});
+		return friendVOs;
+	}
+
+	/**批处理好友申请
+	 * @return **/
+	public boolean disposeFriendApply(Long accountId, List<Long> friendsId, Boolean type) {
+		//查询加我的好友
+		List<FriendRelation> friends1 = friendDao.findFriendByRelation(accountId, FriendRelationType.aApplyB.getIndex());
+		List<FriendRelation> friends2 = friendDao.findFriendByRelation(accountId, FriendRelationType.bApplyA.getIndex());
+		List<FriendRelation> friends3 = friendDao.findFriendByRelation(accountId, FriendRelationType.eachApply.getIndex());
+		Integer countFriend = friendDao.countFriend(accountId);
+		Integer maxFriendNumber = new Integer(ParameterConfig.map.get(ParameterIdConstant.index610).getValue());
+		for (FriendRelation friend : friends1) {
+			if (friendsId.indexOf(friend.getAccountId1()) != -1) {
+				countFriend = addOrDel(type, countFriend, maxFriendNumber, friend);
+			}
+		};
+		for (FriendRelation friend : friends2) {
+			if (friendsId.indexOf(friend.getAccountId2()) != -1) {
+				countFriend = addOrDel(type, countFriend, maxFriendNumber, friend);
+			}
+		};
+		for (FriendRelation friend : friends3) {
+			countFriend = addOrDel(type, countFriend, maxFriendNumber, friend);
+		};
+		return true;
+	}
+
+	private Integer addOrDel(Boolean type, Integer countFriend, Integer maxFriendNumber, FriendRelation friend) {
+		if (type) {
+			if (countFriend <= maxFriendNumber) {
+				friend.setRelation(FriendRelationType.friends.getIndex().intValue());
+				friendDao.update(friend);
+				countFriend = countFriend +1;
+			}
+		} else {
+			friendDao.delById(friend.getAccountId1(), friend.getAccountId2());
+		}
+		return countFriend;
+	}
+
+	/**查看黑名单好友
+	 * @return **/
+	public List<Friend> getBlacklistFriend(Long accountId) {
+		//查询加我的好友
+		List<FriendRelation> friends1 = friendDao.findFriendByRelation(accountId, FriendRelationType.aShieldB.getIndex());
+		List<FriendRelation> friends2 = friendDao.findFriendByRelation(accountId, FriendRelationType.bShieldA.getIndex());
+		List<Friend> friendVOs = new ArrayList<Friend>();
+		friends1.stream().forEach(friend -> {
+			//黑名单筛选，处理
+			if (friend.getAccountId1().equals(accountId)) {
+					friendVOs.add(getFriendVO(accountId, friend));
+			}
+		});
+		friends2.stream().forEach(friend -> {
+			//黑名单筛选，处理
+			if (friend.getAccountId2().equals(accountId)) {
+					friendVOs.add(getFriendVO(accountId, friend));
+			}
+		});
+		return friendVOs;
+	}
+
+	/**把好友移除黑名单
+	 * @return **/
+	public boolean removeFrienToBlacklist(Long accountId, Long friendId) {
+		friendDao.delById(accountId, friendId);
+		friendDao.delById(friendId, accountId);
+		return true;
+	}
+	
+	/**把好友移入黑名单
+	 * @return **/
+	public boolean addFrienToBlacklist(Long accountId, Long friendId) {
+		FriendRelation findById1 = friendDao.findById(accountId, friendId);
+		FriendRelation findById2 = friendDao.findById(friendId, accountId);
+		int count = friendDao.coountBlackList(accountId);
+		AssertUtil.asWarnTrue(count == new Integer(ParameterConfig.map.get(ParameterIdConstant.index640).getValue()), "黑名单已经满员");
+		if (null != findById2) {
+			findById2.setRelation(FriendRelationType.bShieldA.getIndex().intValue());
+			friendDao.update(findById1);
+		} else if (null != findById1) {
+			findById1.setRelation(FriendRelationType.aShieldB.getIndex().intValue());
+			friendDao.update(findById1);
+		} else {
+			FriendRelation friend = new FriendRelation();
+			friend.setAccountId1(accountId);
+			friend.setAccountId2(friendId);
+			friend.setRelation(FriendRelationType.aShieldB.getIndex().intValue());
+			friendDao.create(friend);
+		}
+		return true;
+	}
+	
+}

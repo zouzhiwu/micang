@@ -1,0 +1,38 @@
+package com.game.fight.job;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Member;
+import com.common.entity.Player;
+import com.common.entity.Room;
+import com.game.factory.Context;
+import com.game.model.Model;
+import com.game.service.FightService;
+
+@DisallowConcurrentExecution
+public class ChooseMemberJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(ChooseMemberJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Player player = (Player)jobDataMap.get("player");
+		logger.info(String.format("玩家%s选择默认上阵队员Job", player.account.getId()));
+		Member[] members = (Member[])jobDataMap.get("members");
+		if (player.members[0] == null) {
+			player.members = members;
+			Room room = Model.getInstance().roomMap.get(player.account.roomId);
+			// 广播推送上阵队员信息
+			FightService fightService = Context.getBean("fightService");
+			fightService.sendMemberInfo(room);
+		}
+	}
+}

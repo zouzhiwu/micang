@@ -1,0 +1,9 @@
+package com.game.dao;
+
+import com.common.entity.RoomInfo;
+
+public interface RoomInfoDao {
+	
+	public void update(RoomInfo roomInfo);
+
+}

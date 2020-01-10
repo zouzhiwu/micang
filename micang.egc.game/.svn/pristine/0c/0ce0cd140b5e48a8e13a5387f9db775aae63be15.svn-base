@@ -1,0 +1,35 @@
+package com.game.entity;
+
+import org.quartz.JobKey;
+
+import com.common.enumerate.TargetType;
+import com.common.util.GameUtil;
+import com.game.job.JobScheduler;
+
+/***
+ * 具备视野性质和攻击性质的抽象节点
+ */
+public abstract class BaseAttackNode extends BaseNode {
+
+    public Target target;
+    
+    public void attack(JobKey jobKey, short aoe) {
+        // 如果目标是节点，则计算攻击伤害
+        if (target.targetType == TargetType.Node) {
+            // 如果当前位置和目标位置小于射程，则减少对方血量
+            if (GameUtil.distance(this.location, target.node.location) <= aoe) {
+                // 扣血，并处理小于0的情况
+            	target.node.hp = Math.min(target.node.hp - 100, 0);
+                // 如果对方血量为0，则结束攻击
+                if (target.node.hp <= 0) {
+                    JobScheduler.stopJob(jobKey);
+                    // 阵亡处理
+                    die(target.node);
+                }
+            } else {
+            	JobScheduler.stopJob(jobKey);
+            }
+        }
+    }
+    
+}

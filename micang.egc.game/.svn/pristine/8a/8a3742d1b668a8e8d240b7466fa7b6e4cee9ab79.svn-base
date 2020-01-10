@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.MemberDao">	
+	
+	<insert id="add" parameterType="com.common.entity.Member" useGeneratedKeys="true" keyProperty="id">
+		insert into member ( id
+			<if test="null != accountId">
+				, accountId
+			</if>
+			<if test="null != templateId">
+				, templateId
+			</if>
+			<if test="null != starSeat">
+				, starSeat
+			</if>
+			<if test="null != exp">
+				, exp
+			</if>
+			<if test="null != stage">
+				, stage
+			</if>
+			<if test="null != work">
+				, work
+			</if>
+			<if test="null != likeHeros">
+				, likeHeros
+			</if>
+			<if test="null != masterSkill">
+				, masterSkill
+			</if>
+			<if test="null != maskerSkillLv">
+				, maskerSkillLv
+			</if>
+			<if test="null != slaveSkill1">
+				, slaveSkill1
+			</if>
+			<if test="null != slaveSkillLv1">
+				, slaveSkillLv1
+			</if>
+			<if test="null != slaveSkill2">
+				, slaveSkill2
+			</if>
+			<if test="null != slaveSkillLv2">
+				, slaveSkillLv2
+			</if>
+			<if test="null != slaveSkill3">
+				, slaveSkill3
+			</if>
+			<if test="null != slaveSkillLv3">
+				, slaveSkillLv3
+			</if>
+			<if test="null != characterstr">
+				, characterstr
+			</if>
+		) values ( #{id}
+			<if test="null != accountId">
+				, #{accountId}
+			</if>
+			<if test="null != templateId">
+				, #{templateId}
+			</if>
+			<if test="null != starSeat">
+				, #{starSeat}
+			</if>
+			<if test="null != exp">
+				, #{exp}
+			</if>
+			<if test="null != stage">
+				, #{stage}
+			</if>
+			<if test="null != work">
+				, #{work}
+			</if>
+			<if test="null != likeHeros">
+				, #{likeHeros}
+			</if>
+			<if test="null != masterSkill">
+				, #{masterSkill}
+			</if>
+			<if test="null != maskerSkillLv">
+				, #{maskerSkillLv}
+			</if>
+			<if test="null != slaveSkill1">
+				, #{slaveSkill1}
+			</if>
+			<if test="null != slaveSkillLv1">
+				, #{slaveSkillLv1}
+			</if>
+			<if test="null != slaveSkill2">
+				, #{slaveSkill2}
+			</if>
+			<if test="null != slaveSkillLv2">
+				, #{slaveSkillLv2}
+			</if>
+			<if test="null != slaveSkill3">
+				, #{slaveSkill3}
+			</if>
+			<if test="null != slaveSkillLv3">
+				, #{slaveSkillLv3}
+			</if>
+			<if test="null != characterstr">
+				, #{characterstr}
+			</if>
+		)
+	</insert>
+	
+	<select id="getById" parameterType="Long" resultType="com.common.entity.Member">
+		select * from member where id = #{id}
+	</select>
+	
+	<update id="update" parameterType="com.common.entity.Member">
+		update member 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != starSeat">
+				, starSeat = #{starSeat}
+			</if>
+			<if test="null != exp">
+				, exp = #{exp}
+			</if>
+			<if test="null != templateId">
+				, templateId = #{templateId}
+			</if>
+			<if test="null != stage">
+				, stage = #{stage}
+			</if>
+			<if test="null != work">
+				, work = #{work}
+			</if>
+			<if test="null != likeHeros">
+				, likeHeros = #{likeHeros}
+			</if>
+			<if test="null != masterSkill">
+				, masterSkill = #{masterSkill}
+			</if>
+			<if test="null != maskerSkillLv">
+				, maskerSkillLv = #{maskerSkillLv}
+			</if>
+			<if test="null != slaveSkill1">
+				, slaveSkill1 = #{slaveSkill1}
+			</if>
+			<if test="null != slaveSkillLv1">
+				, slaveSkillLv1 = #{slaveSkillLv1}
+			</if>
+			<if test="null != slaveSkill2">
+				, slaveSkill2 = #{slaveSkill2}
+			</if>
+			<if test="null != slaveSkillLv2">
+				, slaveSkillLv2 = #{slaveSkillLv2}
+			</if>
+			<if test="null != slaveSkill3">
+				, slaveSkill3 = #{slaveSkill3}
+			</if>
+			<if test="null != slaveSkillLv3">
+				, slaveSkillLv3 = #{slaveSkillLv3}
+			</if>
+			<if test="null != characterstr">
+				, characterstr = #{characterstr}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<select id="getByList" parameterType="Long" resultType="com.common.entity.Member">
+		select * from member where accountId = #{accountId}
+	</select>
+	
+	<select id="isExistMember" resultType="Boolean">
+		select if(count(1) &gt; 0, 'true', 'false') from member where accountId = #{accountId} and templateId = #{memberTemplateId}
+	</select>
+	
+	<select id="getWorkMemberList" resultType="com.common.entity.Member">
+		select * from member where accountId = #{accountId} and work != 0 order by work;
+	</select>
+	
+	<select id="getByWork" resultType="com.common.entity.Member">
+		select * from member where accountId = #{accountId} and work != #{work};
+	</select>
+</mapper>  

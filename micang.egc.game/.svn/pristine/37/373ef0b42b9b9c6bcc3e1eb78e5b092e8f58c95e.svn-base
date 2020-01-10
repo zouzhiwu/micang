@@ -1,0 +1,178 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.Item;
+import com.common.entity.Mail;
+import com.common.entity.WrapItem;
+import com.common.helper.TimeHelper;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.dao.MailDao;
+import com.game.helper.JsonMapper;
+
+@Service
+public class MailService {
+	private static final Logger logger = LoggerFactory.getLogger(MailService.class);
+	
+	@Autowired
+	private MailDao mailDao;
+	@Autowired
+	private ItemService itemService;
+	
+	public void create(Long accountId, String content) {
+		Map<Integer, WrapItem> wrapItemMap = new HashMap<Integer, WrapItem>();
+		WrapItem wrapItem = new WrapItem();
+		wrapItem.setUseCount(0);
+		wrapItem.setCount(1L);
+		wrapItemMap.put(wrapItem.getTemplateId(), wrapItem);
+		create(accountId, content, wrapItemMap);
+	}
+	
+	public void create(Long accountId, String content, Integer itemTemplateId) {
+		Map<Integer, WrapItem> wrapItemMap = new HashMap<Integer, WrapItem>();
+		WrapItem wrapItem = new WrapItem();
+		wrapItem.setTemplateId(itemTemplateId);
+		wrapItem.setUseCount(0);
+		wrapItem.setCount(1L);
+		wrapItemMap.put(wrapItem.getTemplateId(), wrapItem);
+		create(accountId, content, wrapItemMap);
+	}
+	
+	public void create(Long accountId, String content, Integer itemTemplateId, Integer useCount, Long count) {
+		Map<Integer, WrapItem> wrapItemMap = new HashMap<Integer, WrapItem>();
+		WrapItem wrapItem = new WrapItem();
+		wrapItem.setTemplateId(itemTemplateId);
+		wrapItem.setUseCount(useCount);
+		wrapItem.setCount(count);
+		wrapItemMap.put(wrapItem.getTemplateId(), wrapItem);
+		create(accountId, content, wrapItemMap);
+	}
+	
+	public void create(Long accountId, String content, Map<Integer, WrapItem> itemMap) {
+		Mail mail = new Mail();
+		mail.setAccountId(accountId);
+		mail.setContent(content);
+		String str = JsonMapper.getInstance().toJson(itemMap);
+		mail.setItemTemplateIds(str);
+		Integer time = TimeHelper.getTime();
+		mail.setCreateTime(time);
+		mail.setUpdateTime(time);
+		mailDao.create(mail);
+	}
+	
+	public void getMailList(Long accountId, Integer pageIndex, Integer pageSize) {
+		Integer recordIndex = pageIndex * pageSize;
+		List<Mail> mailList = mailDao.getList(accountId, recordIndex, pageSize);
+		Integer listSize = mailDao.getListSize(accountId);
+		Integer pageCount = (listSize / pageSize) + (listSize % pageSize > 0 ? 1 : 0);
+		Message msg = new Message();
+		msg.putInt(pageCount);
+		msg.putShort(mailList.size());
+		for (Mail mail : mailList) {
+			msg.putLong(mail.getId());
+			@SuppressWarnings("unchecked")
+			Map<Integer, WrapItem> wrapItemMap = JsonMapper.getInstance().fromJson(mail.getItemTemplateIds(), Map.class);
+			msg.putShort(wrapItemMap.size());
+			Set<Integer> keySet = wrapItemMap.keySet();
+			for (Iterator<Integer> it = keySet.iterator(); it.hasNext();) {
+				Integer itemTemplateId = it.next();
+				WrapItem wrapItem = wrapItemMap.get(itemTemplateId);
+				msg.putInt(itemTemplateId);
+				msg.putInt(wrapItem.getUseCount());
+				msg.putLong(wrapItem.getCount());
+			}
+			msg.putInt(mail.getCreateTime());
+			msg.putBoolean(mail.getCreateTime().equals(mail.getUpdateTime()));
+		}
+		MsgSender.sendMsg(msg, accountId);
+	}
+	
+	public void openMail(Long accountId, Long mailId) {
+		Mail mail = mailDao.getById(mailId);
+		AssertUtil.asWarnTrue(mail != null, "邮件不存在");
+		AssertUtil.asWarnTrue(mail.getAccountId().longValue() == accountId, "这封邮件不属于你");
+		mailDao.setOpened(mailId);
+		Message msg = new Message();
+		msg.putLong(mail.getId());
+		msg.putString(mail.getContent());
+		@SuppressWarnings("unchecked")
+		Map<Integer, WrapItem> wrapItemMap = JsonMapper.getInstance().fromJson(mail.getItemTemplateIds(), Map.class);
+		msg.putShort(wrapItemMap.size());
+		Set<Integer> keySet = wrapItemMap.keySet();
+		for (Iterator<Integer> it = keySet.iterator(); it.hasNext();) {
+			Integer itemTemplateId = it.next();
+			WrapItem wrapItem = wrapItemMap.get(itemTemplateId);
+			msg.putInt(itemTemplateId);
+			msg.putInt(wrapItem.getUseCount());
+			msg.putLong(wrapItem.getCount());
+		}
+		msg.putInt(mail.getCreateTime());
+		MsgSender.sendMsg(msg, accountId);
+	}
+	
+	@Transactional
+	public void openAttachment(Long accountId, Long mailId) {
+		Mail mail = mailDao.getById(mailId);
+		AssertUtil.asWarnTrue(mail != null, "邮件不存在");
+		AssertUtil.asWarnTrue(StringUtils.isNotEmpty(mail.getItemTemplateIds()), "附件为空");
+		@SuppressWarnings("unchecked")
+		Map<Integer, WrapItem> wrapItemMap = JsonMapper.getInstance().fromJson(mail.getItemTemplateIds(), Map.class);
+		List<Item> itemList = new ArrayList<Item>();
+		Set<Integer> keySet = wrapItemMap.keySet();
+		for (Iterator<Integer> it = keySet.iterator(); it.hasNext();) {
+			Integer itemTemplateId = it.next();
+			WrapItem wrapItem = wrapItemMap.get(itemTemplateId);
+			// 存储道具
+			Item item = itemService.createItem2Depo(accountId, wrapItem.getTemplateId(), wrapItem.getUseCount());
+			itemList.add(item);
+		}
+		// 清空附件
+		mail.setItemTemplateIds(StringUtils.EMPTY);
+		mail.setUpdateTime(TimeHelper.getTime());
+		mailDao.update(mail);
+		// 发送消息
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_mail_open_attachment);
+		msg.putShort(itemList.size());
+		for (Item item : itemList) {
+			msg.putLong(item.getId());
+			msg.putInt(item.getTemplateId());
+			msg.putInt(item.getUseCount());
+		}
+		MsgSender.sendMsg(msg, accountId);
+	}
+	
+	public void deleteMail(Long accountId, Long mailId) {
+		logger.info(String.format("玩家%s删除邮件%s", accountId, mailId));
+		Mail mail = mailDao.getById(mailId);
+		AssertUtil.asWarnTrue(mail != null, "邮件不存在");
+		AssertUtil.asWarnTrue(mail.getAccountId().longValue() == accountId, "这封邮件不属于你");
+		mailDao.delete(mailId);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_mail_delete);
+		MsgSender.sendMsg(msg, accountId);
+	}
+	
+	public void clearMail() {
+		Integer time = TimeHelper.getTime();
+		Integer outTime = time - 14 * TimeHelper.DAY_S;
+		mailDao.clearOutMail(outTime);
+		Integer readTime = time - TimeHelper.DAY_S;
+		mailDao.clearReadMail(readTime);
+	}
+}

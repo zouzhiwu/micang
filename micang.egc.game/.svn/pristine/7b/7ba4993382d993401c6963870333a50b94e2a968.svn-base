@@ -1,0 +1,163 @@
+package com.game.service;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.apache.commons.lang3.RandomUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.common.entity.Member;
+import com.common.enumerate.CurrencyType;
+import com.common.enumerate.WorkType;
+import com.common.template.MemberTemplate;
+import com.common.util.AssertUtil;
+import com.game.config.MemberConfig;
+import com.game.dao.MemberDao;
+
+@Service
+public class MemberService {
+	
+	@Autowired
+	private MemberDao memberDao;
+	
+//	private static final Logger logger = LoggerFactory.getLogger(MemberService.class);
+	
+	public List<Member> getByList(Long accountId) {
+		return memberDao.getByList(accountId);
+	}
+	
+	public Member getById(Long memberId) {
+		return memberDao.getById(memberId);
+	}
+
+	/**
+	 * 招募队员
+	 */
+	public Member recruit(Long accountId, Byte currencyIndex, Byte count) {
+		CurrencyType currencyType = CurrencyType.getType(currencyIndex);
+		AssertUtil.asWarnTrue(currencyType != null, "货币类型不存在");
+		// TODO	扣除货币
+		// 在队员模板中随机选择一个队员
+		List<Integer> memberTemplateIdList = MemberConfig.map.keySet().stream().collect(Collectors.toList());
+		// TODO 随机命中
+		Integer memberTemplateId = memberTemplateIdList.get(RandomUtils.nextInt(0, memberTemplateIdList.size()));
+		// 获取已上阵的队员
+		Member[] members = getWorkMembers(accountId);
+		if (isFullMembers(members)) {
+			// TODO 添加卡牌
+			return null;
+		} else {
+			Boolean isExist = memberDao.isExistMember(accountId, memberTemplateId);
+			if (isExist) {
+				// TODO 添加卡牌
+				return null;
+			} else {
+				MemberTemplate memberTemplate = MemberConfig.map.get(memberTemplateId);
+				WorkType workType = WorkType.getType(memberTemplate.getPos());
+				// 查找已上阵的队员位置，如果该位置已经有人，则不设置位置
+				if (members[workType.getIndex() - 1] != null) {
+					workType = WorkType.Off;
+				}
+				Member member = new Member();
+				member.setTemplateId(memberTemplateId);
+				member.setAccountId(accountId);
+				member.setStar((byte)0);
+				member.setExp(0);
+				member.setStage((byte)0);
+				member.setWork(workType);
+				member.setLikeHero1(0);
+				member.setLikeVal1(0);
+				member.setLikeHero2(0);
+				member.setLikeVal2(0);
+				member.setLikeHero3(0);
+				member.setLikeVal3(0);
+				member.setLikeHero4(0);
+				member.setLikeVal4(0);
+				member.setLikeHero5(0);
+				member.setLikeVal5(0);
+				member.setMasterSkill(0);
+				member.setMaskerSkillLv(0);
+				member.setSlaveSkill1(0);
+				member.setSlaveSkillLv1(0);
+				member.setSlaveSkill2(0);
+				member.setSlaveSkillLv2(0);
+				member.setSlaveSkill3(0);
+				member.setSlaveSkillLv3(0);
+				member.setCharacter1(0);
+				member.setCharacterVal1(0);
+				member.setCharacter2(0);
+				member.setCharacterVal2(0);
+				member.setCharacter3(0);
+				member.setCharacterVal3(0);
+				memberDao.add(member);
+				return member;
+			}
+		}
+	}
+	
+	/**
+	 * 上阵队员是否已满
+	 */
+	public boolean isFullMembers(Member[] members) {
+		if (members == null) {
+			return false;
+		}
+		for (int i = 0; i < members.length; i++) {
+			if (members[i] == null) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public void gotoWork(Long accountId, Long onMemberId) {
+		Member onMember = memberDao.getById(onMemberId);
+		AssertUtil.asWarnTrue(onMember != null, "该队员不存在");
+		AssertUtil.asWarnTrue(onMember.getAccountId().equals(accountId), "该队员不属于你");
+		MemberTemplate memberTemplate = MemberConfig.map.get(onMember.getTemplateId());
+		WorkType workType = WorkType.getType(memberTemplate.getPos());
+		Member offMember = memberDao.getByWork(accountId, workType);
+		swapWork(workType, onMember, offMember);
+	}
+	
+	public void swapWork(WorkType workType, Member onMember, Member offMember) {
+		if (offMember != null) {
+			offMember.setWork(WorkType.Off);
+			memberDao.update(offMember);
+		}
+		onMember.setWork(workType);
+		memberDao.update(onMember);
+	}
+	
+	/**
+	 * 获取已上阵的队员
+	 */
+	public Member[] getWorkMembers(Long accountId) {
+		List<Member> workMemberList = memberDao.getWorkMemberList(accountId);
+		Member[] members = new Member[5];
+		for (int i = 0; i < workMemberList.size(); i++) {
+			Member member = workMemberList.get(i);
+			switch (member.getWork()) {
+			case Off:
+				break;
+			case Top:
+				members[0] = member;
+				break;
+			case Jun:
+				members[1] = member;
+				break;
+			case Mid:
+				members[2] = member;
+				break;
+			case Adc:
+				members[3] = member;
+				break;
+			case Sup:
+				members[4] = member;
+				break;
+			}
+		}
+		return members;
+	}
+}

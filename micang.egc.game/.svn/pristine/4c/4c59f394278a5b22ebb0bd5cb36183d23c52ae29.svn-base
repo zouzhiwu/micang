@@ -1,0 +1,53 @@
+package com.game.room.job;
+
+import java.util.Arrays;
+import java.util.List;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.JobKey;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.cb.msg.Message;
+import com.common.constant.RoomConstant;
+import com.common.entity.OperateStep;
+import com.common.entity.Room;
+import com.game.common.MessageCode;
+import com.game.helper.MsgHelper;
+import com.game.job.JobScheduler;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class OperationNoticeJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(OperationNoticeJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		@SuppressWarnings("unchecked")
+		List<OperateStep> operateStepList = (List<OperateStep>)jobDataMap.get("operateStepList");
+		int index = (int)jobDataMap.get("index");
+		Room room = (Room)jobDataMap.get("room");
+		OperateStep operateStep = operateStepList.get(index);
+		logger.info(String.format("通知玩家%s执行%s操作", operateStep.getAccountId(), operateStep.getOperateType().getName()));
+		List<Long> accountList = Arrays.asList(room.redPlayer.account.getId(), room.bluePlayer.account.getId());
+		// 广播操作通知
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_operation_notice);
+		msg.putLong(operateStep.getAccountId());
+		msg.putByte(operateStep.getOperateType().getIndex());
+		msg.putByte(RoomConstant.operation_notice_cd_time);
+		msg.putByte((byte)index);
+		MsgHelper.sendBroadcast(msg, accountList);
+		JobKey jobKey = jobDetail.getKey();
+		if (JobScheduler.stopJob(jobKey)) {
+			JobScheduler.createOperationNoticeJob(jobKey, operateStepList, room, ++index);
+		}
+	}
+}

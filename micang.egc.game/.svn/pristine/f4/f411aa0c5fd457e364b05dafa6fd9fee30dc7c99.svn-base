@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.RoleDao">	
+	
+	<insert id="add" parameterType="com.common.entity.Role" useGeneratedKeys="true" >
+		insert into role ( accountId
+			<if test="null != exp">
+				, exp
+			</if>
+			<if test="null != expPot">
+				, expPot
+			</if>
+		) values ( #{accountId}
+			<if test="null != exp">
+				, #{exp}
+			</if>
+			<if test="null != expPot">
+				, #{expPot}
+			</if>
+		)
+	</insert>
+	
+	<select id="getById" parameterType="Long" resultType="com.common.entity.Role">
+		select * from role where accountId = #{accountId}
+	</select>
+	
+	
+	<update id="update" parameterType="com.common.entity.Role">
+		update role 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != exp">
+				, exp = #{exp}
+			</if>
+			<if test="null != expPot">
+				, expPot = #{expPot}
+			</if>
+			
+		</trim>
+		where accountId = #{accountId}
+	</update>
+	
+	
+	
+	
+	
+
+	
+</mapper>  

@@ -1,0 +1,34 @@
+package com.common.entity;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.quartz.JobKey;
+
+import com.common.enumerate.RoomState;
+
+public class Room {
+	/** 房间Id */
+	public int id;
+	
+	/** 挑战者，红方 */
+	public Player redPlayer;
+	
+	/** 被挑战者，蓝方 */
+	public Player bluePlayer;
+	
+	/** 房间状态，0-准备，1-开始，2-结算*/
+	public RoomState state;
+	
+	/** 操作步骤列表*/
+	public List<OperateStep> operateStepList;
+	
+	/** 第index步骤，从0开始*/
+	public Byte stepIndex;
+	
+	/** 自动操作JobKey*/
+	public JobKey autoOperationJobKey;
+	
+	public Map<Short, Hero> heroMap = new HashMap<Short, Hero>();
+}

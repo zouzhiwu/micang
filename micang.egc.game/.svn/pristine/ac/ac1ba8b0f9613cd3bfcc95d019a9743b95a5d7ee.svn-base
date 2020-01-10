@@ -1,0 +1,28 @@
+package com.game.job;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.quartz.JobKey;
+
+import com.common.entity.Room;
+import com.game.helper.UuidHelper;
+import com.game.job.fight.MoveInitplaceJob;
+
+public class FightJobManager {
+//	private final static Logger logger = LoggerFactory.getLogger(RoomJobManager.class);
+	
+	/**
+	 *  创建展示战斗力PK Job
+	 */
+	public static void createMoveInitplaceJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long delayTime = 7500;
+		JobScheduler.createSingleJob(jobKey, delayTime, dataMap, MoveInitplaceJob.class);
+	}
+	
+}

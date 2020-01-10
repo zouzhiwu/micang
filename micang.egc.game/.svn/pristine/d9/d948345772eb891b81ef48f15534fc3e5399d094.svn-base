@@ -1,0 +1,38 @@
+package com.game.job.room;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Room;
+import com.game.factory.Context;
+import com.game.service.RoomService;
+
+@DisallowConcurrentExecution
+public class ChooseMemberJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(ChooseMemberJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		
+		logger.info("默认选择上阵队员Job");
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Room room = (Room)jobDataMap.get("room");
+		RoomService roomService = Context.getBean(RoomService.class);
+		// 如果红方未选择队员，则自动选择队员
+		if (!room.redPlayer.isChoosed) {
+			roomService.autoChooseMember(room.redPlayer);
+		}
+		// 如果蓝方未选择队员，则自动选择队员
+		if (!room.bluePlayer.isChoosed) {
+			roomService.autoChooseMember(room.bluePlayer);
+		}
+		// 红蓝双方都选择了队员后，则发送队员信息，并开始选择（禁用）英雄流程
+		roomService.sendMemberInfo(room);
+	}
+}

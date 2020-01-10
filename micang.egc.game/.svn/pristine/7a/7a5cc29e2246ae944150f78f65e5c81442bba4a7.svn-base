@@ -1,0 +1,30 @@
+package com.game.entity;
+
+import com.common.enumerate.TargetType;
+import com.common.enumerate.TaskType;
+
+public class Task {
+	// 目标
+	public Target target;
+	// 任务类型
+	public TaskType type;
+	// 后置任务
+	public Task nextTask;
+	// 是否完成
+	public boolean isDone = false;
+	
+	public Task(Target target, TaskType type) {
+		if (type == TaskType.Wait) {
+			this.type = type;
+		} else {
+			if (target.type == TargetType.Location) {
+				this.type = TaskType.Move;
+			} else if (target.type == TargetType.Node) {
+				this.type = TaskType.Attack;
+			} else if (target.type == TargetType.Template) {
+				this.type = type;
+			}
+		}
+		this.target = target;
+	}
+}

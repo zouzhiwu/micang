@@ -1,0 +1,478 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.RandomUtils;
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.constant.RoomConstant;
+import com.common.entity.Account;
+import com.common.entity.Hero;
+import com.common.entity.Member;
+import com.common.entity.OperateStep;
+import com.common.entity.Player;
+import com.common.entity.Room;
+import com.common.enumerate.OperateType;
+import com.common.enumerate.RoomState;
+import com.common.enumerate.WorkType;
+import com.common.template.HeroTemplate;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.config.HeroConfig;
+import com.game.dao.HeroDao;
+import com.game.dao.MemberDao;
+import com.game.helper.MsgHelper;
+import com.game.job.JobScheduler;
+import com.game.model.Model;
+
+@Service
+public class RoomService {
+	
+	@Autowired
+	private MemberDao memberDao;
+	@Autowired
+	private HeroDao heroDao;
+	@Autowired
+	private MemberService memberService;
+	
+	private static final Logger logger = LoggerFactory.getLogger(MemberService.class);
+	
+	public void requestChallenge(Long asAccountId, Long beAccountId) {
+		Account beAccount = Model.getInstance().accountMap.get(beAccountId);
+		AssertUtil.asWarnTrue(beAccount != null, "被挑战的玩家不存在");
+		AssertUtil.asWarnTrue(beAccount.roomId == 0, "对方正在战斗中");
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_challenge_notice);
+		msg.putLong(asAccountId);
+		MsgSender.sendMsg(msg, beAccountId);
+	}
+	
+	public void responseChallenge(Long beAccountId, Long asAccountId, Boolean isAgree) {
+		Account asAccount = Model.getInstance().accountMap.get(asAccountId);
+		AssertUtil.asWarnTrue(asAccount != null, "发起挑战的玩家已经下线");
+		// TODO 判断发起挑战的玩家已经进入战斗
+		int roomId;
+		if (isAgree) {
+			roomId = Model.getInstance().roomId.incrementAndGet();
+			Account beAccount = Model.getInstance().accountMap.get(beAccountId);
+			AssertUtil.asWarnTrue(beAccount != null, "被挑战的玩家账户不存在");
+			Room room = new Room();
+			room.id = roomId;
+			room.redPlayer = new Player();
+			room.redPlayer.account = asAccount;
+			room.bluePlayer = new Player();
+			room.bluePlayer.account = beAccount;
+			// 设置房间状态为选择或禁用英雄
+			room.state = RoomState.ChooseAndBan;
+			Model.getInstance().roomMap.put(room.id, room);
+			asAccount.roomId = roomId;
+			beAccount.roomId = roomId;
+			JobKey jobKey = JobScheduler.getChooseMemberJobKey(room.id);
+			logger.info(String.format("创建自动选择默认队员Job name=%s group=%s", jobKey.getName(), jobKey.getGroup()));
+			// 创建自动选择默认队员Job
+			JobScheduler.createChooseMemberJob(jobKey, room);
+		} else {
+			roomId = 0;
+		}
+		List<Long> accountList = Arrays.asList(asAccountId, beAccountId);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_challenge_response);
+		msg.putLong(beAccountId);
+		msg.putBoolean(isAgree);
+		msg.putInt(roomId);
+		MsgHelper.sendBroadcast(msg, accountList);
+	}
+	
+	@Transactional
+	public void chooseMember(Integer roomId, Long accountId, Long topMemberId
+			, Long junMemberId, Long midMemberId, Long adcMemberId, Long supMemberId) {
+		Room room = Model.getInstance().roomMap.get(roomId);
+		AssertUtil.asWarnTrue(room != null, "房间不存在");
+		Player player = getPlayerWithRoom(accountId, room);
+		player.isChoosed = true;
+		logger.info(String.format("redPlayer.isChoosed=%s bluePlayer.isChoosed=%s", room.redPlayer.isChoosed, room.bluePlayer.isChoosed));
+		// 如果双方都选择了队员，则关闭自动选择队员Job
+		if (room.redPlayer.isChoosed && room.bluePlayer.isChoosed) {
+			JobKey jobKey = JobScheduler.getChooseMemberJobKey(roomId);
+			JobScheduler.stopJob(jobKey);
+			logger.info(String.format("关闭自动选择队员Job name=%s group=%s", jobKey.getName(), jobKey.getGroup()));
+		}
+		AssertUtil.asWarnTrue(player != null, "玩家不在房间");
+		Member topMember = memberDao.getById(topMemberId);
+		AssertUtil.asWarnTrue(topMember != null, "队员不存在");
+		AssertUtil.asWarnTrue(topMember.getAccountId().equals(accountId), "上单队员不属于你");
+		Member junMember = memberDao.getById(junMemberId);
+		AssertUtil.asWarnTrue(junMember != null, "队员不存在");
+		AssertUtil.asWarnTrue(junMember.getAccountId().equals(accountId), "打野队员不属于你");
+		Member midMember = memberDao.getById(midMemberId);
+		AssertUtil.asWarnTrue(midMember != null, "队员不存在");
+		AssertUtil.asWarnTrue(midMember.getAccountId().equals(accountId), "中单队员不属于你");
+		Member adcMember = memberDao.getById(adcMemberId);
+		AssertUtil.asWarnTrue(adcMember != null, "队员不存在");
+		AssertUtil.asWarnTrue(adcMember.getAccountId().equals(accountId), "输出队员不属于你");
+		Member supMember = memberDao.getById(supMemberId);
+		AssertUtil.asWarnTrue(supMember != null, "队员不存在");
+		AssertUtil.asWarnTrue(supMember.getAccountId().equals(accountId), "辅助队员不属于你");
+		Member[] members = memberService.getWorkMembers(accountId);
+		// 上单队员上阵
+		memberService.swapWork(WorkType.Top, topMember, members[0]);
+		members[0] = topMember;
+		// 打野队员上阵
+		memberService.swapWork(WorkType.Jun, junMember, members[1]);
+		members[1] = junMember;
+		// 中单队员上阵
+		memberService.swapWork(WorkType.Mid, midMember, members[2]);
+		members[2] = midMember;
+		// 输出队员上阵
+		memberService.swapWork(WorkType.Adc, adcMember, members[3]);
+		members[3] = adcMember;
+		// 辅助队员上阵
+		memberService.swapWork(WorkType.Sup, supMember, members[4]);
+		members[4] = supMember;
+		player.members = members;
+		// 发送队员信息
+		sendMemberInfo(room);
+	}
+	
+	public void autoChooseMember(Player player) {
+		Member[] members = memberService.getWorkMembers(player.account.getId());
+		player.members = members;
+	}
+	
+	public void sendMemberInfo(Room room) {
+		if (memberService.isFullMembers(room.redPlayer.members) && memberService.isFullMembers(room.bluePlayer.members)) {
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_room_member_info);
+			Player asPlayer = room.redPlayer;
+			msg.putLong(asPlayer.account.getId());
+			msg.putLong(asPlayer.members[0].getId());
+			msg.putByte(asPlayer.members[0].getStar());
+			msg.putByte(asPlayer.members[0].getStage());
+			msg.putLong(asPlayer.members[1].getId());
+			msg.putByte(asPlayer.members[1].getStar());
+			msg.putByte(asPlayer.members[1].getStage());
+			msg.putLong(asPlayer.members[2].getId());
+			msg.putByte(asPlayer.members[2].getStar());
+			msg.putByte(asPlayer.members[2].getStage());
+			msg.putLong(asPlayer.members[3].getId());
+			msg.putByte(asPlayer.members[3].getStar());
+			msg.putByte(asPlayer.members[3].getStage());
+			msg.putLong(asPlayer.members[4].getId());
+			msg.putByte(asPlayer.members[4].getStar());
+			msg.putByte(asPlayer.members[4].getStage());
+			Player bePlayer = room.bluePlayer;
+			msg.putLong(bePlayer.account.getId());
+			msg.putLong(bePlayer.members[0].getId());
+			msg.putByte(bePlayer.members[0].getStar());
+			msg.putByte(bePlayer.members[0].getStage());
+			msg.putLong(bePlayer.members[1].getId());
+			msg.putByte(bePlayer.members[1].getStar());
+			msg.putByte(bePlayer.members[1].getStage());
+			msg.putLong(bePlayer.members[2].getId());
+			msg.putByte(bePlayer.members[2].getStar());
+			msg.putByte(bePlayer.members[2].getStage());
+			msg.putLong(bePlayer.members[3].getId());
+			msg.putByte(bePlayer.members[3].getStar());
+			msg.putByte(bePlayer.members[3].getStage());
+			msg.putLong(bePlayer.members[4].getId());
+			msg.putByte(bePlayer.members[4].getStar());
+			msg.putByte(bePlayer.members[4].getStage());
+			List<Long> accountList = Arrays.asList(asPlayer.account.getId(), bePlayer.account.getId());
+			MsgHelper.sendBroadcast(msg, accountList);
+			// 启动操作流程通知Job
+			startOperationNotice(room);
+		}
+	}
+	
+	public void startOperationNotice(Room room) {
+		// 战斗力高的玩家
+		Player highPlayer = room.redPlayer;
+		// 战斗力低的玩家
+		Player lowPlayer = room.bluePlayer;
+		List<OperateStep> operateStepList = new ArrayList<OperateStep>(16);
+		// 第一步：战斗力高的一方禁用1位英雄。
+		operateStepList.add(new OperateStep(highPlayer.account.getId(), OperateType.Ban));
+		// 第二步：战斗力低的一方禁用1位英雄。
+		operateStepList.add(new OperateStep(lowPlayer.account.getId(), OperateType.Ban));
+		// 第三步：战斗力高的一方禁用1位英雄。
+		operateStepList.add(new OperateStep(highPlayer.account.getId(), OperateType.Ban));
+		// 第四步：战斗力低的一方禁用1位英雄。
+		operateStepList.add(new OperateStep(lowPlayer.account.getId(), OperateType.Ban));
+		// 第五步：战斗力高的一方选择1位英雄。
+		operateStepList.add(new OperateStep(highPlayer.account.getId(), OperateType.Choose));
+		// 第六步：战斗力低的一方选择1位英雄。
+		operateStepList.add(new OperateStep(lowPlayer.account.getId(), OperateType.Choose));
+		// 第七步：战斗力低的一方选择1位英雄。
+		operateStepList.add(new OperateStep(lowPlayer.account.getId(), OperateType.Choose));
+		// 第八步：战斗力高的一方选择1位英雄。
+		operateStepList.add(new OperateStep(highPlayer.account.getId(), OperateType.Choose));
+		// 第九步：战斗力高的一方选择1位英雄。
+		operateStepList.add(new OperateStep(highPlayer.account.getId(), OperateType.Choose));
+		// 第十步：战斗力低的一方选择1位英雄。
+		operateStepList.add(new OperateStep(lowPlayer.account.getId(), OperateType.Choose));
+		// 第十一步：战斗力低的一方禁用1位英雄。
+		operateStepList.add(new OperateStep(lowPlayer.account.getId(), OperateType.Ban));
+		// 第十二步：战斗力高的一方禁用1位英雄。
+		operateStepList.add(new OperateStep(highPlayer.account.getId(), OperateType.Ban));
+		// 第十三步：战斗力低的一方选择1位英雄。
+		operateStepList.add(new OperateStep(lowPlayer.account.getId(), OperateType.Choose));
+		// 第十四步：战斗力高的一方选择1位英雄。
+		operateStepList.add(new OperateStep(highPlayer.account.getId(), OperateType.Choose));
+		// 第十五步：战斗力高的一方选择1位英雄。
+		operateStepList.add(new OperateStep(highPlayer.account.getId(), OperateType.Choose));
+		// 第十六步：战斗力低的一方选择1位英雄。
+		operateStepList.add(new OperateStep(lowPlayer.account.getId(), OperateType.Choose));
+		// 第一次发送操作通知
+		room.stepIndex = 0;
+		room.operateStepList = operateStepList;
+		sendOperationNotice(room);
+		logger.info("创建 OperationNoticeJob");
+		JobScheduler.createAutoOperationJob(room);
+	}
+	
+	public void sendOperationNotice(Room room) {
+		OperateStep operateStep = room.operateStepList.get(room.stepIndex);
+		logger.info(String.format("通知玩家%s执行%s(%d)操作", operateStep.getAccountId(), operateStep.getOperateType().getName(), room.stepIndex));
+		List<Long> accountList = Arrays.asList(room.redPlayer.account.getId(), room.bluePlayer.account.getId());
+		// 广播操作通知
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_operation_notice);
+		msg.putLong(operateStep.getAccountId());
+		msg.putByte(operateStep.getOperateType().getIndex());
+		msg.putByte(RoomConstant.operation_notice_cd_time);
+		MsgHelper.sendBroadcast(msg, accountList);
+	}
+	
+	public void banHero(Integer roomId, Long accountId, Integer heroTemplateId) {
+		Room room = Model.getInstance().roomMap.get(roomId);
+		AssertUtil.asWarnTrue(room != null, "房间不存在");
+		Player player = getPlayerWithRoom(accountId, room);
+		AssertUtil.asWarnTrue(player != null, "玩家不在房间");
+		Player otherPlayer = getOtherPlayerWithRoom(accountId, room);
+		// 设置被禁用的英雄
+		otherPlayer.banHeroTemplateIdList.add(heroTemplateId);
+		OperateStep operateStep = room.operateStepList.get(room.stepIndex);
+		// 标识已操作
+		operateStep.setIsoperated(true);
+		if (JobScheduler.stopJob(room.autoOperationJobKey)) {
+			JobScheduler.createAutoOperationJob(room);
+		}
+		// 禁用英雄通知
+		List<Long> accountList = Arrays.asList(room.redPlayer.account.getId(), room.bluePlayer.account.getId());
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_ban_hero_notice);
+		msg.putLong(accountId);
+		msg.putLong(heroTemplateId);
+		MsgHelper.sendBroadcast(msg, accountList);
+		room.stepIndex++;
+		// 如果选择（禁用）操作未完成，则发送操作通知，否则发送阵容展示通知
+		if (room.stepIndex > room.operateStepList.size()) {
+			showLayout(room);
+		} else {
+			sendOperationNotice(room);
+		}
+	}
+	
+	public void autoBanHero(Integer roomId, Long accountId) {
+		Room room = Model.getInstance().roomMap.get(roomId);
+		Player player = getPlayerWithRoom(accountId, room);
+		// 设置被禁用的英雄
+		Player otherPlayer = getOtherPlayerWithRoom(accountId, room);
+		// 获取所有的英雄
+		List<Integer> heroTemplateIdList = new ArrayList<Integer>(HeroConfig.map.keySet());
+		// 剔除我方已禁用的英雄
+		heroTemplateIdList.removeAll(player.banHeroTemplateIdList);
+		// 剔除敌方已禁用的英雄
+		heroTemplateIdList.removeAll(otherPlayer.banHeroTemplateIdList);
+		// 剔除我方已选择的英雄
+		for (int i = 0; i < player.heros.length; i++) {
+			Hero hero = player.heros[i];
+			if (hero != null) {
+				heroTemplateIdList.remove(hero.getTemplateId());
+			}
+		}
+		// 剔除敌方已选择的英雄
+		for (int i = 0; i < otherPlayer.heros.length; i++) {
+			Hero hero = otherPlayer.heros[i];
+			if (hero != null) {
+				heroTemplateIdList.remove(hero.getTemplateId());
+			}
+		}
+		// 随机一名英雄
+		Integer heroTemplateId = heroTemplateIdList.get(RandomUtils.nextInt(0, heroTemplateIdList.size()));
+		// 设置被禁用的英雄
+		otherPlayer.banHeroTemplateIdList.add(heroTemplateId);
+		OperateStep operateStep = room.operateStepList.get(room.stepIndex);
+		// 标识已操作
+		operateStep.setIsoperated(true);
+		// 禁用英雄通知
+		List<Long> accountList = Arrays.asList(room.redPlayer.account.getId(), room.bluePlayer.account.getId());
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_ban_hero_notice);
+		msg.putLong(accountId);
+		msg.putLong(heroTemplateId);
+		MsgHelper.sendBroadcast(msg, accountList);
+		room.stepIndex++;
+		if (JobScheduler.stopJob(room.autoOperationJobKey)) {
+			JobScheduler.createAutoOperationJob(room);
+		}
+		// 如果选择（禁用）操作未完成，则发送操作通知，否则发送阵容展示通知
+		if (room.stepIndex > room.operateStepList.size()) {
+			showLayout(room);
+		} else {
+			sendOperationNotice(room);
+		}
+	}
+	
+	public void chooseHero(Integer roomId, Long accountId, Long heroId, Byte pos) {
+		Room room = Model.getInstance().roomMap.get(roomId);
+		AssertUtil.asWarnTrue(room != null, "房间不存在");
+		Player player = getPlayerWithRoom(accountId, room);
+		AssertUtil.asWarnTrue(player != null, "玩家不在房间");
+		WorkType posType = WorkType.getType(pos);
+		AssertUtil.asWarnTrue(posType != null, "pos参数错误");
+		Hero hero = heroDao.getById(heroId);
+		AssertUtil.asWarnTrue(!player.banHeroTemplateIdList.contains(hero.getTemplateId()), "该英雄已被禁用");
+		// 设置被选择的英雄
+		player.heros[posType.getIndex() - 1] = hero;
+		OperateStep operateStep = room.operateStepList.get(room.stepIndex);
+		// 标识已操作
+		operateStep.setIsoperated(true);
+		JobScheduler.triggerJob(room.autoOperationJobKey);
+		// 选择英雄通知
+		List<Long> accountList = Arrays.asList(room.redPlayer.account.getId(), room.bluePlayer.account.getId());
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_choose_hero_notice);
+		msg.putLong(accountId);
+		msg.putLong(heroId);
+		msg.putByte(pos);
+		MsgHelper.sendBroadcast(msg, accountList);
+		// 如果选择（禁用）操作未完成，则发送操作通知，否则发送阵容展示通知
+		room.stepIndex++;
+		if (room.stepIndex > room.operateStepList.size()) {
+			showLayout(room);
+		} else {
+			sendOperationNotice(room);
+		}
+	}
+	
+	public void autoChooseHero(Integer roomId, Long accountId) {
+		Room room = Model.getInstance().roomMap.get(roomId);
+		Player player = getPlayerWithRoom(accountId, room);
+		// 设置被禁用的英雄
+		Player otherPlayer = getOtherPlayerWithRoom(accountId, room);
+		List<Hero> heroList = heroDao.getByList(accountId);
+		List<Hero> heroPool = new ArrayList<Hero>();
+		byte pos = 0;
+		for (byte i = 0; i < player.heros.length; i++) {
+			if (player.heros[i] == null) {
+				pos = i;
+				break;
+			}
+		}
+		WorkType workType = WorkType.getType(pos);
+		for (int i = 0; i < heroList.size(); i++) {
+			Hero hero = heroList.get(i);
+			// 剔除不能适合该位置的英雄
+			HeroTemplate heroTemplate = HeroConfig.map.get(hero.getTemplateId());
+			if (heroTemplate.getWork().byteValue() == workType.getIndex()) {
+				// 剔除敌方已禁用的英雄
+				boolean isBan = false;
+				for (int j = 0; j < otherPlayer.banHeroTemplateIdList.size(); j++) {
+					if (hero.getTemplateId().equals(otherPlayer.banHeroTemplateIdList.get(j))) {
+						isBan = true;
+						break;
+					}
+				}
+				if (!isBan) {
+					// 剔除敌方已选择的英雄
+					boolean isOtherChoose = false;
+					for (int j = 0; j < otherPlayer.heros.length; j++) {
+						if (hero.getTemplateId().equals(otherPlayer.heros[i].getTemplateId())) {
+							isOtherChoose = true;
+							break;
+						}
+					}
+					if (!isOtherChoose) {
+						// 剔除我方已选择的英雄
+						boolean isChoose = false;
+						for (int j = 0; j < player.heros.length; j++) {
+							if (hero.getTemplateId().equals(player.heros[i].getTemplateId())) {
+								isChoose = true;
+								break;
+							}
+						}
+						if (!isChoose) {
+							heroPool.add(hero);
+						}
+					}
+				}
+			}
+		}
+		AssertUtil.asWarnTrue(CollectionUtils.isNotEmpty(heroPool), "没有合适的英雄供选择");
+		Hero hero = heroPool.get(RandomUtils.nextInt(0, heroPool.size()));
+		// 设置被禁用的英雄
+		player.heros[pos] = hero;
+		OperateStep operateStep = room.operateStepList.get(room.stepIndex);
+		// 标识已操作
+		operateStep.setIsoperated(true);
+		// 选择英雄通知
+		List<Long> accountList = Arrays.asList(room.redPlayer.account.getId(), room.bluePlayer.account.getId());
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_choose_hero_notice);
+		msg.putLong(accountId);
+		msg.putLong(hero.getId());
+		msg.putByte(pos);
+		MsgHelper.sendBroadcast(msg, accountList);
+		room.stepIndex++;
+		// 如果选择（禁用）操作未完成，则发送操作通知，否则发送阵容展示通知
+		if (room.stepIndex > room.operateStepList.size()) {
+			showLayout(room);
+		} else {
+			sendOperationNotice(room);
+		}
+	}
+
+	private Player getPlayerWithRoom(Long accountId, Room room) {
+		Player player = null;
+		if (room.redPlayer.account.getId().equals(accountId)) {
+			player = room.redPlayer;
+		} else if (room.bluePlayer.account.getId().equals(accountId)) {
+			player = room.bluePlayer;
+		}
+		return player;
+	}
+	
+	private Player getOtherPlayerWithRoom(Long accountId, Room room) {
+		Player player = null;
+		if (room.redPlayer.account.getId().equals(accountId)) {
+			player = room.redPlayer;
+		} else if (room.bluePlayer.account.getId().equals(accountId)) {
+			player = room.bluePlayer;
+		}
+		return player;
+	}
+	
+	private void showLayout(Room room) {
+		List<Long> accountList = Arrays.asList(room.redPlayer.account.getId(), room.bluePlayer.account.getId());
+		// 选择英雄通知
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_show_layout);
+		msg.putByte(RoomConstant.show_layout_time_length);
+		MsgHelper.sendBroadcast(msg, accountList);
+		// 设置房间状态为阵容展示
+		room.state = RoomState.ShowLayout;
+		// 创建开始游戏Job
+		JobScheduler.createBeginGameJob(room);
+	}
+}

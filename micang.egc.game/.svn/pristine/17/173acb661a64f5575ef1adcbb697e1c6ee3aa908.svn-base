@@ -1,0 +1,94 @@
+package com.game.entity.vo;
+
+public class Friend {
+	/**好友id**/
+	private Long accountId;	
+	
+	 /**头像**/
+	private String Loge;
+	
+	 /**昵称**/
+	private String NickName;
+	
+	/**签名**/
+	private String sign;
+	
+	/**等级**/
+	private short Lve;
+	
+	 /**战力**/
+	private int fighting;
+	
+	 /**在线状态**/
+	private Boolean Start;
+	
+	 /**下线时间**/
+	private Long OutTime;
+	
+	 /**体力赠送状态 true 送过 false-没送过**/
+	private Boolean PhysicalGive;
+	
+	 /**体力给予状态 true 给了 false 没给**/
+	private Boolean PhysicalGet;
+	
+	public Long getAccountId() {
+		return accountId;
+	}
+	public void setAccountId(Long accountId) {
+		this.accountId = accountId;
+	}
+	public String getLoge() {
+		return Loge;
+	}
+	public void setLoge(String loge) {
+		Loge = loge;
+	}
+	public String getNickName() {
+		return NickName;
+	}
+	public void setNickName(String nickName) {
+		NickName = nickName;
+	}
+	public short getLve() {
+		return Lve;
+	}
+	public void setLve(short lve) {
+		Lve = lve;
+	}
+	public int getFighting() {
+		return fighting;
+	}
+	public void setFighting(int fighting) {
+		this.fighting = fighting;
+	}
+	public Boolean getStart() {
+		return Start;
+	}
+	public void setStart(Boolean start) {
+		Start = start;
+	}
+	public Long getOutTime() {
+		return OutTime;
+	}
+	public void setOutTime(Long outTime) {
+		OutTime = outTime;
+	}
+	public Boolean getPhysicalGive() {
+		return PhysicalGive;
+	}
+	public void setPhysicalGive(Boolean physicalGive) {
+		PhysicalGive = physicalGive;
+	}
+	public Boolean getPhysicalGet() {
+		return PhysicalGet;
+	}
+	public void setPhysicalGet(Boolean physicalGet) {
+		PhysicalGet = physicalGet;
+	}
+	public String getSign() {
+		return sign;
+	}
+	public void setSign(String sign) {
+		this.sign = sign;
+	}
+}

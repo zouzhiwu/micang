@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.RoomGroupDao">	
+	
+	<insert id="create" parameterType="com.common.entity.RoomGroup" useGeneratedKeys="true" keyProperty="id">
+		insert into room_group (tid, owner, createTime) values ( #{tid}, #{owner}, #{createTime})
+	</insert>
+	
+	<delete id="delete" parameterType="String">
+		delete from room_group where tid = #{tid}
+	</delete>
+	
+	<select id="getOutList" parameterType="Integer" resultType="com.common.entity.RoomGroup">
+		select * from room_group where createTime &lt;= #{time}
+	</select>
+	
+</mapper>  

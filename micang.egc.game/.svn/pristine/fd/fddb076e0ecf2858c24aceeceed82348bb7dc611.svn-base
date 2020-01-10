@@ -1,0 +1,106 @@
+package com.game.job.fight;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.JobKey;
+import org.quartz.PersistJobDataAfterExecution;
+
+import com.cb.msg.Message;
+import com.common.enumerate.CampType;
+import com.common.enumerate.WayType;
+import com.common.template.NodeTemplate;
+import com.game.common.MessageCode;
+import com.game.entity.Room;
+import com.game.job.JobScheduler;
+import com.game.node.TroopsNode;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class ArsenalJob implements Job {
+//	private final static Logger logger = LoggerFactory.getLogger(ArsenalJob.class);
+	@SuppressWarnings("unchecked")
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Room room = (Room)jobDataMap.get("room");
+		Integer index = (Integer)jobDataMap.get("index");
+		List<List<NodeTemplate>> buleWayList = (List<List<NodeTemplate>>)jobDataMap.get("buleWayList");
+		List<List<NodeTemplate>> redWayList = (List<List<NodeTemplate>>)jobDataMap.get("redWayList");
+		List<NodeTemplate> buleTopNoteTemplateList = buleWayList.get(0);
+		List<NodeTemplate> buleMidNoteTemplateList = buleWayList.get(1);
+		List<NodeTemplate> buleDownNoteTemplateList = buleWayList.get(2);
+		List<TroopsNode> troopsNodeList = new ArrayList<TroopsNode>();
+		if (buleTopNoteTemplateList.size() > index) {
+			TroopsNode troopsNode = new TroopsNode(room.troopsNodeId++, room, buleTopNoteTemplateList.get(index), CampType.Blue, WayType.Top);
+			troopsNodeList.add(troopsNode);
+		}
+		if (buleMidNoteTemplateList.size() > index) {
+			TroopsNode troopsNode = new TroopsNode(room.troopsNodeId++, room, buleMidNoteTemplateList.get(index), CampType.Blue, WayType.Mid);
+			troopsNodeList.add(troopsNode);
+		}
+		if (buleDownNoteTemplateList.size() > index) {
+			TroopsNode troopsNode = new TroopsNode(room.troopsNodeId++, room, buleDownNoteTemplateList.get(index), CampType.Blue, WayType.Down);
+			troopsNodeList.add(troopsNode);
+		}
+		
+		List<NodeTemplate> redTopNoteTemplateList = redWayList.get(0);
+		List<NodeTemplate> redMidNoteTemplateList = redWayList.get(1);
+		List<NodeTemplate> redDownNoteTemplateList = redWayList.get(2);
+		if (redTopNoteTemplateList.size() > index) {
+			TroopsNode troopsNode = new TroopsNode(room.troopsNodeId++, room, redTopNoteTemplateList.get(index), CampType.Red, WayType.Top);
+			troopsNodeList.add(troopsNode);
+		}
+		if (redMidNoteTemplateList.size() > index) {
+			TroopsNode troopsNode = new TroopsNode(room.troopsNodeId++, room, redMidNoteTemplateList.get(index), CampType.Red, WayType.Mid);
+			troopsNodeList.add(troopsNode);
+		}
+		if (redDownNoteTemplateList.size() > index) {
+			TroopsNode troopsNode = new TroopsNode(room.troopsNodeId++, room, redDownNoteTemplateList.get(index), CampType.Red, WayType.Down);
+			troopsNodeList.add(troopsNode);
+		}
+		
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_troops_create_notice);
+		msg.putShort(troopsNodeList.size());
+//		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < troopsNodeList.size(); i++) {
+			TroopsNode troopsNode = troopsNodeList.get(i);
+			msg.putShort(troopsNode.nodeId);
+			msg.putInt(troopsNode.template.getId());
+			msg.putByte(troopsNode.wayType.getIndex());
+//			if (troopsNode.template.getId() == FightConstant.bule_super_template_id) {
+//				sb.append(",蓝方超级兵" + troopsNode.nodeId);
+//			} else if (troopsNode.template.getId() == FightConstant.red_super_template_id) {
+//				sb.append(",红方超级兵" + troopsNode.nodeId);
+//			} else if (troopsNode.template.getId() == FightConstant.bule_soldier_template_id) {
+//				sb.append(",蓝方小兵" + troopsNode.nodeId);
+//			} else if (troopsNode.template.getId() == FightConstant.red_soldier_template_id) {
+//				sb.append(",红方小兵" + troopsNode.nodeId);
+//			} else if (troopsNode.template.getId() == FightConstant.bule_artillery_template_id) {
+//				sb.append(",蓝方炮兵" + troopsNode.nodeId);
+//			} else if (troopsNode.template.getId() == FightConstant.red_artillery_template_id) {
+//				sb.append(",红方炮兵" + troopsNode.nodeId);
+//			}
+		}
+//		if (sb.length() > 0) {
+//			sb.deleteCharAt(0);
+//			logger.info("出兵：" + sb.toString());
+//		}
+//		MsgHelper.sendBroadcast(msg, room);
+		jobDataMap.put("index", ++index);
+		if (index >= buleTopNoteTemplateList.size() && index >= buleMidNoteTemplateList.size() && index >= buleDownNoteTemplateList.size()) {
+			if (index >= redTopNoteTemplateList.size() && index >= redMidNoteTemplateList.size() && index >= redDownNoteTemplateList.size()) {
+				JobKey jobKey = jobDetail.getKey();
+				JobScheduler.stopJob(jobKey);
+			}
+		}
+	}
+}

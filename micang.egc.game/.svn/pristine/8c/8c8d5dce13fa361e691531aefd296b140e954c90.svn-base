@@ -1,0 +1,58 @@
+package com.game.job.skill;
+
+import java.util.List;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Hero;
+import com.common.entity.Location;
+import com.common.entity.Room;
+import com.common.template.SkillTemplate;
+import com.game.factory.Context;
+import com.game.service.GameService;
+import com.game.util.GameUtil;
+import com.game.vision.VisionAdapter;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class TossJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(TossJob.class);
+	
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		logger.info("小小丢技能被丢玩家落地后计算伤害");
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Room room = (Room)jobDataMap.get("room");
+		Hero attHero = (Hero)jobDataMap.get("attHero");
+		Hero tossHero = (Hero)jobDataMap.get("tossHero");
+		Hero targetHero = (Hero)jobDataMap.get("targetHero");
+		SkillTemplate skillTemplate = (SkillTemplate)jobDataMap.get("skillTemplate");
+		Integer effectId = jobDataMap.getInt("effectId");
+		Location skillLocation = (Location)jobDataMap.get("skillLocation");
+		tossHero.location.x = targetHero.location.x;
+		tossHero.location.y = 0f;
+		tossHero.location.z = targetHero.location.z;
+		GameService gameService = Context.getBean("gameService");
+		// 查找半径范围内受伤的玩家
+		List<Hero> heroList = VisionAdapter.getVisionList(tossHero.location, room.heroMap, skillTemplate.getUsingdis());
+		for (Hero beAttHero : heroList) {
+			if (!beAttHero.equals(attHero)) {
+				if (GameUtil.isAttackGroup(attHero, beAttHero, skillTemplate)) {
+					// 计算伤害
+					gameService.handleHeroHurt(skillLocation, attHero, room, beAttHero, skillTemplate, effectId, skillTemplate.getHurt());
+					// 计算生命偷取
+					gameService.stealHp(attHero, skillTemplate.getHurt(), beAttHero, skillTemplate);
+				}
+			}
+		}
+	}
+}

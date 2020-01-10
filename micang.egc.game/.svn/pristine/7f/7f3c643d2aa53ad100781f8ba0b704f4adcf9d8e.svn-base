@@ -1,0 +1,343 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.alibaba.fastjson.JSONObject;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.constant.ParameterIdConstant;
+import com.common.entity.Member;
+import com.common.entity.Role;
+import com.common.enumerate.CurrencyType;
+import com.common.enumerate.GachaType;
+import com.common.enumerate.WorkType;
+import com.common.helper.TimeHelper;
+import com.common.template.GachaTemplate;
+import com.common.util.AssertUtil;
+import com.game.config.DropGroupConfig;
+import com.game.config.GachaConfig;
+import com.game.config.ItemConfig;
+import com.game.config.MemberConfig;
+import com.game.config.ParameterConfig;
+import com.game.dao.GachaDao;
+import com.game.dao.MemberDao;
+import com.game.entity.Gacha;
+import com.game.entity.Item;
+import com.game.entity.LikeHeroDaoBean;
+import com.game.util.Params;
+import com.game.util.ProbabilityExtract;
+
+@Service
+public class GachaService {
+	@Autowired
+	private GachaDao gachaDao;
+	
+	@Autowired
+	private RoleService roleService;
+	
+	@Autowired
+	private ItemService itemService;
+
+	@Autowired
+	private MemberDao memberDao;
+	@Autowired
+	private CharacterService characterService;
+	
+	/**抽奖入口**/
+	public void gachaMain(Long accountId, Byte typeId, Message message) {
+		AssertUtil.asWarnTrue(typeId >0 && typeId <5, "typeId值有误");
+		Gacha gachaInfo = getGachaInfo(accountId);
+		List<Item> gachaItemIdList = null;
+		switch (GachaType.getType(typeId)) {
+		case goldOne:
+			gachaItemIdList = goldGachaOne(accountId, gachaInfo, typeId);
+			break;
+		case goldTen:
+			gachaItemIdList = goldGachaTen(accountId, gachaInfo, typeId);
+			break;
+		case diamondOne:
+			gachaItemIdList = diamondGachaOne(accountId, gachaInfo, typeId);
+			break;
+		case diamondTen:
+			gachaItemIdList = diamondGachaTen(accountId, gachaInfo, typeId);
+			break;
+		default:
+			break;
+		}
+		senMessage(gachaInfo, gachaItemIdList, message);
+	}
+	
+	/**根据用户id查询用户的抽奖信息**/
+	public Gacha getGachaInfo(Long accountId) {
+		Gacha gachaInfo = gachaDao.findById(accountId);
+		if (null == gachaInfo) {
+			//如果用户第一次抽奖，初始化用户信息
+			gachaInfo = new Gacha();
+			gachaInfo.setAccountId(accountId);
+			gachaInfo.setFreeDiamond(new Integer(ParameterConfig.map.get(ParameterIdConstant.index11).getValue()));
+			gachaInfo.setFreeGold(new Integer(ParameterConfig.map.get(ParameterIdConstant.index10).getValue()));
+			gachaInfo.setGachaCount(0);
+			gachaInfo.setHalfDiamond(new Integer(ParameterConfig.map.get(ParameterIdConstant.index18).getValue()));
+			gachaInfo.setLastDiamondNow(TimeHelper.getTime());
+			gachaInfo.setLastGoldNow(TimeHelper.getTime() - new Integer(ParameterConfig.map.get(ParameterIdConstant.index12).getValue()));
+			gachaInfo.setLastTenGold(TimeHelper.getTime());
+			gachaInfo.setLastHalfDiamondNow(TimeHelper.getTime());
+			gachaInfo.setTenGold(new Integer(ParameterConfig.map.get(ParameterIdConstant.index13).getValue()));
+			gachaDao.create(gachaInfo);
+		}else {
+			//如果最后一次金币免费抽在今天之前，今天的免费抽次数重置
+			if (gachaInfo.getLastGoldNow() < TimeHelper.getZeroTime()) {
+				gachaInfo.setFreeGold(new Integer(ParameterConfig.map.get(ParameterIdConstant.index10).getValue()));
+			} 
+			//如果最后一次金币十连抽在今天之前，今天的十连抽次数重置
+			if (gachaInfo.getLastTenGold() < TimeHelper.getZeroTime()) {
+				gachaInfo.setFreeGold(new Integer(ParameterConfig.map.get(ParameterIdConstant.index13).getValue()));
+			} 
+			//如果最后一次钻石免费抽在今天之前，今天的免费抽次数重置
+			if (gachaInfo.getLastDiamondNow() < TimeHelper.getZeroTime()) {
+				gachaInfo.setFreeDiamond(new Integer(ParameterConfig.map.get(ParameterIdConstant.index11).getValue()));
+			} 
+			//如果最后一次钻石半价抽在今天之前，今天的半价抽次数重置
+			if (gachaInfo.getLastHalfDiamondNow() < TimeHelper.getZeroTime()) {
+				gachaInfo.setHalfDiamond(new Integer(ParameterConfig.map.get(ParameterIdConstant.index18).getValue()));
+			} 
+		}
+		return gachaInfo;
+	}
+	
+	/**金币单抽入口**/
+	@Transactional
+	private List<Item> goldGachaOne(Long accountId, Gacha gachaInfo, Byte typeId) {
+		//用户最后一次抽取免费金币的时间要小于或等于五分钟前
+		Integer fiveMinutesBefore = TimeHelper.getTime();
+		fiveMinutesBefore = fiveMinutesBefore - new Integer(ParameterConfig.map.get(ParameterIdConstant.index12).getValue()) ;
+		//判断抽奖资格
+		if (gachaInfo.getFreeGold() > 0 && gachaInfo.getLastGoldNow() <= fiveMinutesBefore) {
+			gachaInfo.setFreeGold(gachaInfo.getFreeGold() - 1);
+			gachaInfo.setLastGoldNow(TimeHelper.getTime());
+		} else {
+			deductAmount(accountId, typeId, false);
+		}
+		//抽奖
+		List<Integer> resultsList = gacha(typeId, gachaInfo);
+		//保存奖品到背包
+		List<Item> itemList = setItemToBag(accountId, resultsList);
+		//保存必中奖品
+		//保存抽奖信息
+		gachaDao.update(gachaInfo);
+		//返回结果
+		return itemList;
+	}
+
+	private List<Item> setItemToBag(Long accountId, List<Integer> resultsList) {
+		List<Item> itemList = new ArrayList<Item>();
+		resultsList.stream().forEach(itenId -> {
+			if (MemberConfig.map.containsKey(itenId)) {
+				//如果是队员，判断用户是否有这个队员，有则拆解成碎片发放，无则添加到队员仓库
+				if (memberDao.isExistMember(accountId, itenId)) {
+					//移除原队员id，更改为碎片id
+					Short size = MemberConfig.map.get(itenId).getTransformation();
+					Integer itemId = ItemConfig.memberMap.get(MemberConfig.map.get(itenId).getPreMemberId());
+					itemService.itemAdd(itemId, (int)size, accountId);
+					itemList.add(new Item(itemId,(int)size));
+				}else {
+					Member member = new Member();
+					member.setTemplateId(itenId);  
+					member.setAccountId(accountId);
+					member.setExp(0);
+					member.setWork(WorkType.Off);
+					
+					Integer likeHeroId = Integer.valueOf(MemberConfig.map.get(itenId).getLikeHeros().split(Params.fenge)[0]);
+					LikeHeroDaoBean likeHeroDaoBean = new LikeHeroDaoBean();
+					likeHeroDaoBean.setHeroLevel(1);
+					likeHeroDaoBean.setLikeVal(0);
+					likeHeroDaoBean.setSeat(1);
+					likeHeroDaoBean.setHeroTemplateId(likeHeroId);
+					List<LikeHeroDaoBean> list = new ArrayList<LikeHeroDaoBean>();
+					list.add(likeHeroDaoBean);
+					
+					member.setLikeHeros(JSONObject.toJSONString(list));
+					member.setMasterSkill(0);
+					member.setMaskerSkillLv(0);
+					member.setSlaveSkill1(0);
+					member.setSlaveSkillLv1(0);
+					member.setSlaveSkill2(0);
+					member.setSlaveSkillLv2(0);
+					member.setSlaveSkill3(0);
+					member.setSlaveSkillLv3(0);
+					member.setCharacterstr(characterService.createCharacter());
+					memberDao.add(member);
+					itemList.add(new Item(itenId,1));
+				};
+			}else {
+				itemService.itemAdd(itenId, 1, accountId);
+				itemList.add(new Item(itenId,1));
+			}
+		});
+		return itemList;
+	}
+	
+	/**根据抽奖次数抽奖**/
+	private List<Integer> gacha(Byte typeId,Gacha gachaInfo ) {
+		GachaTemplate gachaTemplate = GachaConfig.map.get((int)typeId);
+		List<Integer> resultsList = new ArrayList<Integer>();
+		for (int i = 0; i < gachaTemplate.getGachaTimes(); i++) {
+			if (gachaTemplate.getCurrencyType() == 1) {
+				gachaTwo(gachaTemplate, resultsList);
+			}else {
+				if ((gachaInfo.getGachaCount() + 1) % new Integer(ParameterConfig.map.get(ParameterIdConstant.index14).getValue()) == 0) {
+					//钻石40抽保底
+					Integer groupId = new Integer(ParameterConfig.map.get(ParameterIdConstant.index15).getValue());
+					gachaThree(resultsList, groupId);
+					gachaInfo.setGachaCount(-1);
+				}else if ((gachaInfo.getGachaCount() + 1) % new Integer(ParameterConfig.map.get(ParameterIdConstant.index14).getValue()) == 0){
+					//钻石10抽保底
+					Integer groupId = new Integer(ParameterConfig.map.get(ParameterIdConstant.index17).getValue());
+					gachaThree(resultsList, groupId);
+				}else {
+					gachaTwo(gachaTemplate, resultsList);
+				}
+				gachaInfo.setGachaCount(gachaInfo.getGachaCount() + 1);
+			}
+		}
+		return resultsList;
+	}
+	/**正常抽奖流程**/
+	private void gachaTwo(GachaTemplate gachaTemplate, List<Integer> resultsList) {
+		Integer dropGroup = ProbabilityExtract.outPrize(gachaTemplate.getJackpot());
+		gachaThree(resultsList, dropGroup);
+	}
+	/**正常抽奖核心流程**/
+	private void gachaThree(List<Integer> resultsList, Integer dropGroup) {
+		Integer index = ProbabilityExtract.outPrize(DropGroupConfig.map.get(dropGroup).getGroupProbability());
+		Integer results = null;
+		if (index == 1) {
+			results = ProbabilityExtract.outPrize(DropGroupConfig.map.get(dropGroup).getItemGroup());
+		} else {
+			results = ProbabilityExtract.outPrize(DropGroupConfig.map.get(dropGroup).getMemberGroup());
+		}
+		resultsList.add(results);
+	}
+	
+	/**金币十连抽入口**/
+	@Transactional
+	private List<Item> goldGachaTen(Long accountId, Gacha gachaInfo, Byte typeId) {
+		//判断抽奖资格
+		AssertUtil.asWarnTrue(gachaInfo.getTenGold() > 0, "今天的金币十连抽次数已经用完！");
+		gachaInfo.setTenGold(gachaInfo.getTenGold() - 1);
+		gachaInfo.setLastTenGold(TimeHelper.getTime());
+		//判断抽奖资源是否足够//扣除金币
+		deductAmount(accountId, typeId, false);
+		//抽奖
+		List<Integer> resultsList = gacha(typeId, gachaInfo);
+		//保存奖品到背包
+		List<Item> itemList = setItemToBag(accountId, resultsList);
+		//保存必中奖品
+		//保存抽奖信息
+		gachaDao.update(gachaInfo);
+		//返回结果
+		return itemList;
+	}
+	
+	//根据支付类型选择扣除对应类型金额
+	private void deductAmount(Long accountId, Byte typeId, Boolean boolean1) {
+		Role role = roleService.getById(accountId);
+		GachaTemplate gachaTemplate = GachaConfig.map.get((int)typeId);
+		if (gachaTemplate.getCurrencyType() == CurrencyType.Top.getIndex()) { //金币抽奖
+			AssertUtil.asWarnTrue(role.getGb() >= gachaTemplate.getNeedCurrency(), "金币不足！！");//判断金币数量
+			Long money = GachaConfig.map.get((int)typeId).getNeedCurrency().longValue();
+			roleService.updateGb(accountId, -money);
+		} else { //钻石抽奖
+			AssertUtil.asWarnTrue(role.getJb() >= gachaTemplate.getNeedCurrency(), "钻石不足！！");//判断钻石数量
+			//扣除钻石 
+			Long money = GachaConfig.map.get((int)typeId).getNeedCurrency().longValue();
+			if (boolean1) {
+				roleService.updateJb(accountId, -money / 2);
+			}else {
+				roleService.updateJb(accountId, -money);
+			}
+		}
+	}
+	
+	/**钻石单抽入口**/
+	@Transactional
+	private List<Item> diamondGachaOne(Long accountId, Gacha gachaInfo, Byte typeId) {
+		//判断背包有没有免费卷
+		Map<Integer, Item> itemsInfo = freeSecurities(accountId);
+		//判断抽奖资格
+		if (gachaInfo.getFreeDiamond() > 0 ) {//判断免费次数
+			gachaInfo.setFreeDiamond(gachaInfo.getFreeDiamond() - 1);
+			gachaInfo.setLastDiamondNow(TimeHelper.getTime());
+		} else if (itemsInfo.get(new Integer(ParameterConfig.map.get(ParameterIdConstant.index19).getValue())).getCount() > 0) { //判断道具卷有没有
+			itemService.useItem(new Integer(ParameterConfig.map.get(ParameterIdConstant.index19).getValue()), 1, accountId);
+		} else if (gachaInfo.getHalfDiamond() > 0){ //判断半价
+			//判断抽奖资源是否足够
+			AssertUtil.asWarnTrue(true, "钻石不足！！");//判断钻石数量
+			//扣除钻石
+			deductAmount(accountId, typeId, true);
+			//改变最后使用半价的时间
+			gachaInfo.setHalfDiamond(gachaInfo.getHalfDiamond() -1);
+			gachaInfo.setLastHalfDiamondNow(TimeHelper.getTime());
+		} else { //原价购买
+			//判断抽奖资源是否足够//扣除钻石
+			deductAmount(accountId, typeId, false);
+		}
+		//正常抽奖
+		List<Integer> resultsList = gacha(typeId, gachaInfo);
+		//保存奖品到背包
+		List<Item> itemList = setItemToBag(accountId, resultsList);
+		//保存必中奖品
+		//保存抽奖信息
+		gachaDao.update(gachaInfo);
+		//返回结果
+		return itemList;
+	}
+	
+	/**判断背包有没有免费卷**/
+	public Map<Integer, Item> freeSecurities(Long accountId) {
+		ArrayList<Integer> itemIdList = new ArrayList<Integer>();
+		itemIdList.add(new Integer(ParameterConfig.map.get(ParameterIdConstant.index19).getValue()));
+		Map<Integer, Item> itemsInfo = itemService.itemsInfo(accountId, itemIdList);
+		return itemsInfo;
+	}
+	
+	/**钻石十连抽入口
+	 * @return **/
+	@Transactional
+	private List<Item> diamondGachaTen(Long accountId, Gacha gachaInfo, Byte typeId) {
+		//判断抽奖资源是否足够//扣除钻石
+		deductAmount(accountId, typeId, false);
+		//抽奖
+		List<Integer> resultsList = gacha(typeId, gachaInfo);
+		//保存奖品到背包
+		List<Item> itemList = setItemToBag(accountId, resultsList);
+		//保存必中奖品
+		//保存抽奖信息
+		gachaDao.update(gachaInfo);
+		//返回结果
+		return itemList;
+	}
+	/**发送抽奖消息**/
+	private void senMessage(Gacha gachaInfo, List<Item> itemList, Message message) {
+		Map<Integer, Item> itemMap = freeSecurities(gachaInfo.getAccountId());
+		Message msg = new Message(message);
+		msg.putByte(gachaInfo.getFreeGold().byteValue());
+		msg.putByte(gachaInfo.getFreeDiamond().byteValue());
+		msg.putInt(itemMap.get(new Integer(ParameterConfig.map.get(ParameterIdConstant.index19).getValue())).getCount());
+		msg.putByte(gachaInfo.getHalfDiamond().byteValue());
+		msg.putByte(gachaInfo.getTenGold().byteValue());
+		msg.putLong(gachaInfo.getLastGoldNow());
+		msg.putShort(itemList.size());
+		itemList.stream().forEach(itemId -> {
+			msg.putInt(itemId.getTemplateId());
+			msg.putInt(itemId.getCount()); 
+		});
+		MsgSender.sendMsg(msg);
+	}
+}

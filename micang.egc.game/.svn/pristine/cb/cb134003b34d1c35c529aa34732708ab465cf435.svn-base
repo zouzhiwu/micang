@@ -1,0 +1,68 @@
+package com.game.util;
+
+import com.common.enumerate.EquipType;
+import com.common.enumerate.ItemType;
+import com.common.template.CriticalTemplate;
+import com.game.config.CriticalConfig;
+
+public class ItemUtil {
+	
+	public static ItemType getItemType(int itemTemplateId) {
+		if (itemTemplateId >= 10000000 && itemTemplateId < 20000000) {
+			return ItemType.Scroll;
+		} else if (itemTemplateId >= 3000 && itemTemplateId < 4000) {
+			return ItemType.Amulet;
+		} else if (itemTemplateId >= 7000 && itemTemplateId < 8000) {
+			return ItemType.Skin;
+		} else if (itemTemplateId >= 20000000 && itemTemplateId < 30000000) {
+			return ItemType.Equip;
+		} else if (itemTemplateId >= 4000 && itemTemplateId < 5000) {
+			return ItemType.Currency;
+		} else {
+			return null;
+		}
+	}
+	
+	public static EquipType getEquipType(int itemTemplateId) {
+		ItemType itemType = getItemType(itemTemplateId);
+		if (itemType == ItemType.Equip) {
+			String str = String.valueOf(itemTemplateId);
+			int type = Integer.parseInt(str.substring(3, 4));
+			return EquipType.getType(type);
+		} else {
+			return null;
+		}
+	}
+	
+	public static int getItemLevel(int itemTemplateId) {
+		String str = String.valueOf(itemTemplateId);
+		int lv = Integer.parseInt(str.substring(1, 3));
+		return lv;
+	}
+	
+	public static int getUseCount(int itemTemplateId) {
+		ItemType itemType = getItemType(itemTemplateId);
+		int id;
+		if (itemType == ItemType.Equip) {
+			id = 20000000;
+		} else if (itemType == ItemType.Scroll) {
+			int num = itemTemplateId % 100000;
+			if (num > 40000 && num < 50000) {
+				id = num;
+			} else {
+				id = 0;
+			}
+		} else if (itemType == ItemType.Amulet) {
+			id = itemTemplateId;
+		} else {
+			id = 0;
+		}
+		if (id == 0) {
+			return 0;
+		} else {
+			CriticalTemplate criticalTemplate = CriticalConfig.map.get(id);
+			return criticalTemplate.getUseCount();
+		}
+	}
+	
+}

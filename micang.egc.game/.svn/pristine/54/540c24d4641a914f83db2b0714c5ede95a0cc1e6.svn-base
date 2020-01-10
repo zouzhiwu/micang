@@ -1,0 +1,196 @@
+package com.game.service;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.constant.TemplateConstant;
+import com.common.entity.Account;
+import com.common.entity.Auction;
+import com.common.entity.AuctionInfo;
+import com.common.entity.AuctionRecord;
+import com.common.entity.Item;
+import com.common.enumerate.ItemType;
+import com.common.helper.TimeHelper;
+import com.common.template.ItemTemplate;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.config.ItemConfig;
+import com.game.dao.AccountDao;
+import com.game.dao.AuctionDao;
+import com.game.dao.AuctionRecordDao;
+import com.game.dao.ItemDao;
+import com.game.util.ItemUtil;
+
+@Service
+public class AuctionService {
+	
+	@Autowired
+	private ItemDao itemDao;
+	@Autowired
+	private AccountDao accountDao;
+	@Autowired
+	private AuctionDao auctionDao;
+	@Autowired
+	private AuctionRecordDao auctionRecordDao;
+	@Autowired
+	private AccountService accountService;
+	@Autowired
+	private MailService mailService;
+	
+	private static final int jb2gb = 10;	// 钻石转金币比例
+	private static final float rate = 0.1f;	// 拍卖成功收取的手续费率，每小时百分比
+	
+	private static final Logger logger = LoggerFactory.getLogger(AuctionService.class);
+	
+	public void getList(String itemName, Integer itemTypeId, Integer pageIndex, Integer pageSize) {
+		logger.info(String.format("itemName=%s itemTypeId=%s pageIndex=%s pageSize=%s", itemName, itemTypeId, pageIndex, pageSize));
+		ItemType itemType = null;
+		if (itemTypeId > 0) {
+			itemType = ItemType.getType(itemTypeId);
+		}
+		Integer recordIndex = pageIndex * pageSize;
+		List<AuctionInfo> auctionInfoList = auctionDao.getList(itemName, itemType, recordIndex, pageSize);
+		Integer size = auctionDao.getListSize(itemName, itemType);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_auction_list);
+		msg.putShort(size);
+		for (AuctionInfo auctionInfo : auctionInfoList) {
+			msg.putLong(auctionInfo.getId());
+			msg.putInt(auctionInfo.getItemTemplateId());
+			msg.putInt(auctionInfo.getItemUseCount());
+			msg.putInt(auctionInfo.getExpectPrice());
+			msg.putInt(auctionInfo.getPrice());
+			msg.putInt(auctionInfo.getExpiresTime());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	public void getListByAccountId(Long accountId) {
+		List<AuctionInfo> auctionInfoList = auctionDao.getByAccountId(accountId);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_auction_list_accountId);
+		msg.putShort(auctionInfoList.size());
+		for (AuctionInfo auctionInfo : auctionInfoList) {
+			msg.putLong(auctionInfo.getId());
+			msg.putInt(auctionInfo.getItemTemplateId());
+			msg.putInt(auctionInfo.getItemUseCount());
+			msg.putInt(auctionInfo.getExpectPrice());
+			msg.putInt(auctionInfo.getPrice());
+			msg.putInt(auctionInfo.getExpiresTime());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	@Transactional
+	public void sell(Long accountId, Long itemId, Integer startPrice, Integer expectPrice, Integer outMinuteTime) {
+		Item item = itemDao.getById(itemId);
+		AssertUtil.asWarnTrue(item != null, "物品为空");
+		AssertUtil.asWarnTrue(item.getAccountId().equals(accountId), "物品不属于你");
+		AssertUtil.asWarnTrue(startPrice > 0, "起拍价格必须大于0");
+		AssertUtil.asWarnTrue(expectPrice > 0, "一口价必须大于0");
+		AssertUtil.asWarnTrue(outMinuteTime > 0, "过期时间必须大于0");
+		Account account = accountDao.getById(accountId);
+		AssertUtil.asWarnTrue(account != null, "账户不存在");
+		long cost = 1;
+		AssertUtil.asWarnTrue(account.getJb() >= cost, "钻石不足");
+		itemDao.delete(itemId);
+		ItemTemplate itemTemplate = ItemConfig.map.get(item.getTemplateId());
+		ItemType itemType = ItemUtil.getItemType(itemTemplate.getId());
+		Auction auction = new Auction();
+		auction.setAccountId(accountId);
+		auction.setStartPrice(startPrice);
+		auction.setExpectPrice(expectPrice);
+		auction.setItemTemplateId(item.getTemplateId());
+		auction.setItemType(itemType);
+		auction.setItemName(itemTemplate.getName());
+		auction.setItemUserCount(item.getUseCount());
+		Integer time = TimeHelper.getTime();
+		auction.setCreateTime(time);
+		Integer expiresTime = time + outMinuteTime * 60;
+		auction.setExpiresTime(expiresTime);
+		auctionDao.create(auction);
+		// 扣除拍卖费用
+		accountService.updateJb(accountId, -cost, "拍卖物品费");
+	}
+
+	@Transactional
+	public synchronized void bidding(Long buyerId, Long auctionId, Long bidPrice) {
+		Auction auction = auctionDao.getById(auctionId);
+		AssertUtil.asWarnTrue(auction != null, "商品为空");
+		AssertUtil.asWarnTrue(bidPrice > 0, "起拍价格必须大于0");
+		AssertUtil.asWarnTrue(bidPrice > auction.getStartPrice(), "起拍价格必须大于0");
+		if (auction.getAuctionRecordId() > 0) {
+			AuctionRecord auctionRecord = auctionRecordDao.getById(auction.getAuctionRecordId());
+			AssertUtil.asWarnTrue(bidPrice > auctionRecord.getBidPrice(), "竞价必须大于最高竞价");
+		}
+		Account buyer = accountDao.getById(buyerId);
+		AssertUtil.asWarnTrue(buyer != null, "买方为空");
+		AssertUtil.asWarnTrue(buyer.getJb() >= bidPrice, "买方钻石不足");
+		// 创建竞价记录
+		AuctionRecord auctionRecord = new AuctionRecord();
+		auctionRecord.setAccountId(buyerId);
+		auctionRecord.setAuctionId(auction.getId());
+		auctionRecord.setBidPrice(bidPrice);
+		auctionRecordDao.create(auctionRecord);
+		// 更新最高竞价
+		auction.setAuctionRecordId(auctionRecord.getId());
+		auctionDao.update(auction);
+		// 如果达到一口价，则直接竞价成功
+		if (bidPrice >= auction.getExpectPrice()) {
+			settlement(auctionId);
+		}
+		// 买方扣除钻石
+		accountService.updateJb(buyerId, -bidPrice, "购买拍卖品金额");
+	}
+	
+	@Transactional
+	public synchronized void settlement(Long auctionId) {
+		Auction auction = auctionDao.getById(auctionId);
+		if (auction.getAuctionRecordId() > 0) {
+			AuctionRecord auctionRecord = auctionRecordDao.getById(auction.getAuctionRecordId());
+			// 卖方Id
+			Long sellerId = auction.getAccountId();
+			// 买方Id
+			Long buyerId = auctionRecord.getAccountId();
+			int hour = (auction.getExpiresTime() - auction.getCreateTime()) / TimeHelper.MINUTE_S;
+			int cost = (int)(hour * rate / 100.0f);
+			long gb = auctionRecord.getBidPrice() * jb2gb - cost;
+			// 卖方获得金币
+			mailService.create(sellerId, "竞拍成功，获得金币", TemplateConstant.gb, 0, gb);
+			// 买方获得道具
+			mailService.create(buyerId, "竞拍成功，获得道具", auction.getItemTemplateId());
+			// 删除最高竞价记录
+			auctionRecordDao.delete(auctionRecord.getId());
+			// 获取所有竞价记录
+			List<AuctionRecord> auctionRecordList = auctionRecordDao.getByAuctionId(auction.getId());
+			// 返还所有未竞价成功的记录
+			for (AuctionRecord ar : auctionRecordList) {
+				// 返还钻石到邮箱
+				mailService.create(ar.getAccountId(), "竞拍失败，返还钻石", TemplateConstant.jb, 0, ar.getBidPrice());
+				// 删除竞价记录
+				auctionRecordDao.delete(ar.getId());
+			}
+		} else {
+			// 卖方Id
+			Long sellerId = auction.getAccountId();
+			// 购买的道具放入邮箱
+			mailService.create(sellerId, "竞拍失败，返还道具", auction.getItemTemplateId());
+		}
+		auctionDao.delete(auction.getId());
+	}
+	
+	public void processExpiresAuction() {
+		Integer time = TimeHelper.getTime() - TimeHelper.MINUTE_S;
+		List<Auction> auctionList = auctionDao.getExpiresList(time);
+		for (Auction auction : auctionList) {
+			settlement(auction.getId());
+		}
+	}
+}

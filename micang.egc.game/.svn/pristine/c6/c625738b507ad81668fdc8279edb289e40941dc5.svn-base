@@ -1,0 +1,222 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cb.cache.ChannelCache;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.cb.util.ChannelUtil;
+import com.common.constant.HeroConstant;
+import com.common.entity.Account;
+import com.common.entity.GoldRecord;
+import com.common.entity.Guild;
+import com.common.entity.GuildOnlineCount;
+import com.common.entity.JewelRecord;
+import com.common.enumerate.AccountState;
+import com.common.enumerate.CurrencyType;
+import com.common.enumerate.StoreType;
+import com.common.helper.RandomHelper;
+import com.common.helper.TimeHelper;
+import com.common.template.ExtendTemplate;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.common.ZookeeperClient;
+import com.game.config.ExendConfig;
+import com.game.dao.AccountDao;
+import com.game.dao.GoldRecordDao;
+import com.game.dao.GuildDao;
+import com.game.dao.GuildOnlineCountDao;
+import com.game.dao.JewelRecordDao;
+import com.game.helper.MsgHelper;
+import com.game.model.Model;
+
+import io.netty.channel.Channel;
+
+@Service
+public class AccountService {
+	
+	@Autowired
+	private AccountDao accountDao;
+	@Autowired
+	private JewelRecordDao jewelRecordDao;
+	@Autowired
+	private GoldRecordDao goldRecordDao;
+	@Autowired
+	private GuildDao guildDao;
+	@Autowired
+	private GuildOnlineCountDao guildOnlineCountDao;
+	
+	private static final Logger logger = LoggerFactory.getLogger(AccountService.class);
+	
+	@Transactional
+	public synchronized Account login(String loginName, String passwd, Byte deviceType, Channel channel) {
+		AssertUtil.asWarnTrue(passwd != null, "密码不能为空");
+		Account account = accountDao.getByName(loginName);
+		Integer guildId = null;
+		if (account == null) {
+			// 创建帐户
+			account = new Account();
+			account.setGb(0L);
+			account.setLoginName(loginName);
+			account.setNick(loginName);
+			account.setAwtar(loginName);
+			account.setPasswd(passwd);
+			account.setState(AccountState.Online.getIndex());
+			account.setIsTest(0);
+			accountDao.add(account);
+		} else {
+			AssertUtil.asWarnTrue(account.getPasswd().equals(passwd), "密码不正确");
+			account.setState(AccountState.Online.getIndex());
+			accountDao.update(account);
+			Guild guild = guildDao.getByAccountId(account.getId());
+			if (guild != null) {
+				guildId = guild.getId();
+			}
+		}
+		Model.getInstance().accountMap.put(account.getId(), account);
+		Integer token = RandomHelper.getRandom();
+		ChannelUtil.setHeartbeatTime(channel, TimeHelper.getTime());
+		ChannelUtil.setToken(channel, token);
+		ChannelUtil.setGuildId(channel, guildId);
+		ChannelUtil.setDeviceType(channel, deviceType);
+		ChannelCache.putChannel(account.getId(), channel);
+		return account;
+	}
+	
+	public void requestHeartbeat(Long accountId) {
+		logger.info(String.format("玩家%s心跳请求", accountId));
+		int currTime = TimeHelper.getTime();
+		Channel channel = ChannelCache.getChannel(accountId);
+		AssertUtil.asWarnTrue(channel != null, String.format("玩家%s的channel不存在", accountId));
+		boolean isSuccess = ChannelUtil.setHeartbeatTime(channel, currTime);
+		AssertUtil.asWarnTrue(isSuccess, String.format("accountId=%s 心跳请求失败", accountId));
+	}
+	
+	public void testHearbeat() {
+		int testTime = TimeHelper.getTime() - 3 * HeroConstant.heart_beat_cycle;
+		Stream<Channel> logoutChannelList = ChannelCache.getChannelMap().values().stream().filter(ch -> ChannelUtil.getHeartbeatTime(ch) > testTime);
+		List<Long> logoutIdlist = logoutChannelList.mapToLong(ch -> ChannelUtil.getAccountId(ch)).collect((Supplier<ArrayList<Long>>) ArrayList::new, ArrayList::add, ArrayList::addAll);
+		if (CollectionUtils.isNotEmpty(logoutIdlist)) {
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_account_logout);
+			MsgHelper.sendBroadcast(msg, logoutIdlist);
+			logoutIdlist.forEach(accountId -> ChannelCache.removeChannel(accountId));
+		}
+	}
+	
+	public void calGuildOnlineCount() {
+		String host = ZookeeperClient.getInstance().localhost;
+		int createTime = TimeHelper.getTime();
+		List<Channel> channelList = ChannelCache.getChannelMap().values().stream()
+				.filter(ch -> ChannelUtil.getGuildId(ch) != null).collect(Collectors.toList());
+		List<Integer> guildIdList = channelList.stream().mapToInt(ch -> ChannelUtil.getGuildId(ch)).distinct()
+				.collect((Supplier<ArrayList<Integer>>) ArrayList::new, ArrayList::add, ArrayList::addAll);
+		// 定时保存每台服务器每个工会的在线人数
+		for (Integer guildId : guildIdList) {
+			int count = (int)(channelList.stream().filter(ch -> guildId.equals(ChannelUtil.getGuildId(ch))).count());
+			GuildOnlineCount guildOnlineCount = new GuildOnlineCount();
+			guildOnlineCount.setHost(host);
+			guildOnlineCount.setCount(count);
+			guildOnlineCount.setGuildId(guildId);
+			guildOnlineCount.setCreateTime(createTime);
+			guildOnlineCountDao.create(guildOnlineCount);
+		}
+	}
+	
+	@Transactional
+	public void extendBag(Long accountId, Byte storeTypeId, Byte currencyId, Integer toExendId) {
+		StoreType storeType = StoreType.getType(storeTypeId);
+		CurrencyType currencyType = CurrencyType.getType(currencyId);
+		AssertUtil.asWarnTrue(storeType != null, "背包类型出错");
+		Account account = accountDao.getById(accountId);
+		ExtendTemplate toExtendTemplate = ExendConfig.map.get(toExendId);
+		Integer currExendId = 0;
+		AssertUtil.asWarnTrue(toExtendTemplate != null, "扩展模板未找到");
+		switch (storeType) {
+		case Depo:
+			currExendId = 10000 + account.getExtendDepo();
+			account.setExtendDepo(toExendId);
+			break;
+		case SkillPanel:
+			AssertUtil.asWarnTrue(false, "技能背包不能扩充");
+			break;
+		case PropBag:
+			currExendId = 210000 + account.getExtendPropBag();
+			account.setExtendPropBag(toExendId);
+			break;
+		case EquipBag:
+			currExendId = 220000 + account.getExtendEquipBag();
+			AssertUtil.asWarnTrue(account.getExtendEquipBag() < 10, "最多开槽10个");
+			account.setExtendEquipBag(toExendId);
+			break;
+		}
+		AssertUtil.asWarnTrue(toExendId > currExendId, "当前扩展的数量大于需要扩展的数量");
+		Long amount = 0L;
+		for (int i = currExendId; i < toExendId; i++) {
+			ExtendTemplate extendTemplate = ExendConfig.map.get(i + 1);
+			if (extendTemplate != null) {
+				if (currencyType == CurrencyType.JB) {
+					amount += extendTemplate.getJb();
+				} else if (currencyType == CurrencyType.GB) {
+					amount += extendTemplate.getGb();
+				}
+			}
+		}
+		if (currencyType == CurrencyType.JB) {
+			AssertUtil.asWarnTrue(account.getJb() >= amount, "钻石余额不足");
+		} else if (currencyType == CurrencyType.GB) {
+			AssertUtil.asWarnTrue(account.getGb() >= amount, "金币余额不足");
+		}
+		accountDao.update(account);
+		Long balance = 0L;
+		if (currencyType == CurrencyType.JB) {
+			balance = updateJb(accountId, -amount, "扩充背包");
+		} else if (currencyType == CurrencyType.GB) {
+			AssertUtil.asWarnTrue(account.getExtendEquipBag() < 5, "后5孔只能用钻石开槽");
+			balance = updateGb(accountId, -amount, "扩充背包");
+		}
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_account_extend);
+		msg.putByte(currencyId);
+		msg.putLong(balance);
+		MsgSender.sendMsg(msg);
+	}
+	
+	@Transactional
+	public Long updateJb(Long accountId, Long addjb, String remark) {
+		accountDao.updateJb(accountId, addjb);
+		Account account = accountDao.getById(accountId);
+		JewelRecord jewelRecord = new JewelRecord();
+		jewelRecord.setJb(addjb);
+		jewelRecord.setCreateTime(TimeHelper.getTime());
+		jewelRecord.setRemark(remark);
+		jewelRecord.setBalance(account.getJb());
+		jewelRecordDao.create(jewelRecord);
+		return account.getJb();
+	}
+	
+	@Transactional
+	public Long updateGb(Long accountId, Long addgb, String remark) {
+		accountDao.updateGb(accountId, addgb);
+		Account account = accountDao.getById(accountId);
+		GoldRecord goldRecord = new GoldRecord();
+		goldRecord.setGb(addgb);
+		goldRecord.setCreateTime(TimeHelper.getTime());
+		goldRecord.setRemark(remark);
+		goldRecord.setBalance(account.getJb());
+		goldRecordDao.create(goldRecord);
+		return account.getGb();
+	}
+
+}

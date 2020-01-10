@@ -1,0 +1,463 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.constant.FightConstant;
+import com.common.entity.Hero;
+import com.common.entity.Location;
+import com.common.enumerate.ArmsType;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.RoomState;
+import com.common.enumerate.WorkType;
+import com.common.helper.TimeHelper;
+import com.common.template.HeroTemplate;
+import com.common.template.NodeTemplate;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.config.HeroConfig;
+import com.game.config.NodeConfig;
+import com.game.entity.Player;
+import com.game.entity.Room;
+import com.game.helper.MsgHelper;
+import com.game.job.JobScheduler;
+import com.game.model.Model;
+import com.game.node.BaseNode;
+import com.game.node.CrystalNode;
+import com.game.node.HeroNode;
+import com.game.node.HomeNode;
+import com.game.node.TowerNode;
+
+@Service
+public class FightService {
+	private static final Logger logger = LoggerFactory.getLogger(FightService.class);
+	
+	public void loadFinish(Long accountId) {
+		Player player = Model.getInstance().playerMap.get(accountId);
+		AssertUtil.asWarnTrue(player != null, "player对象不存在");
+		Room room = Model.getInstance().roomMap.get(player.roomId);
+		player.isLoadFinish = true;
+		// 如果红蓝双方都加载完成，则发送开始游戏通知
+		if (room.bluePlayer.isLoadFinish && room.redPlayer.isLoadFinish) {
+			JobScheduler.stopJob(room.beginGameJobKey);
+			beginGame(room);
+		}
+	}
+	
+	public void beginGame(Room room) {
+		// 设置房间状态为开始游戏
+		room.state = RoomState.Begin;
+		// 创建时间戳
+		room.createTimes = TimeHelper.getMilliTime();
+		logger.info(String.format("房间%d开始游戏", room.id));
+		// 发送开始游戏通知
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_begin_game_notice);
+		MsgHelper.sendBroadcast(msg, room);
+		// 创建建筑物节点
+		createBuildNode(room);
+		// 创建英雄节点
+		createHeroNode(room);
+		// 启动英雄到初始位置Job
+		room.startMoveInitplace();
+		// 获取蓝方小兵模板，根据蓝方小兵出生时间控制Job
+		NodeTemplate soldierNodeTemplate = getSoldierNodeTemplate();
+		// 启动创建兵Job
+		room.startArsenalContraller(soldierNodeTemplate.getBirthTime() * 1000, soldierNodeTemplate.getLoopTime() * 1000);
+		// 启动英雄上线Job
+		room.startHeroOnline(soldierNodeTemplate.getBirthTime() * 1000);
+		// 启动同步位置Job
+		room.startSyncLocation(soldierNodeTemplate.getBirthTime() * 1000);
+		// 启动移动Job
+		room.startMove(soldierNodeTemplate.getBirthTime() * 1000);
+		// 启动更新视野Job
+		room.startUpdateVision(soldierNodeTemplate.getBirthTime() * 1000);
+		// 启动攻击Job
+		room.startAttack(soldierNodeTemplate.getBirthTime() * 1000);
+	}
+	
+	public void heroOnline(Room room) {
+		// 蓝方上路英雄
+		HeroNode blueTopHero = room.getHero(CampType.Blue, WorkType.Top);
+		// 蓝方上路英雄走到上路一号塔位置
+		blueTopHero.location.x = FightConstant.bule_top_tower_location.x;
+		blueTopHero.location.y = FightConstant.bule_top_tower_location.y;
+		
+		// 蓝方中路英雄
+		HeroNode blueMidHero = room.getHero(CampType.Blue, WorkType.Mid);
+		// 蓝方中路英雄走到中路一号塔位置
+		blueMidHero.location.x = FightConstant.bule_mid_tower_location.x;
+		blueMidHero.location.y = FightConstant.bule_mid_tower_location.y;
+		
+		// 蓝方打野英雄
+		HeroNode blueJunHero = room.getHero(CampType.Blue, WorkType.Jun);
+		// 蓝方打野英雄走到蓝方野区红爸爸位置
+		blueJunHero.location.x = FightConstant.bule_red_baba_location.x;
+		blueJunHero.location.y = FightConstant.bule_red_baba_location.y;
+		
+		// 蓝方Adc英雄
+		HeroNode blueAdcHero = room.getHero(CampType.Blue, WorkType.Adc);
+		// 蓝方Adc英雄走到下路一号塔位置
+		blueAdcHero.location.x = FightConstant.bule_down_tower_location.x;
+		blueAdcHero.location.y = FightConstant.bule_down_tower_location.y;
+		
+		// 蓝方辅助英雄
+		HeroNode blueSupHero = room.getHero(CampType.Blue, WorkType.Sup);
+		// 蓝方辅助英雄走到下路一号塔位置
+		blueSupHero.location.x = FightConstant.bule_down_tower_location.x;
+		blueSupHero.location.y = FightConstant.bule_down_tower_location.y;
+		
+		// 红方上路英雄
+		HeroNode redTopHero = room.getHero(CampType.Red, WorkType.Top);
+		// 红方上路英雄走到上路一号塔位置
+		redTopHero.location.x = FightConstant.red_top_tower_location.x;
+		redTopHero.location.y = FightConstant.red_top_tower_location.y;
+		
+		// 红方中路英雄
+		HeroNode redMidHero = room.getHero(CampType.Red, WorkType.Mid);
+		// 红方中路英雄走到中路一号塔位置
+		redMidHero.location.x = FightConstant.red_mid_tower_location.x;
+		redMidHero.location.y = FightConstant.red_mid_tower_location.y;
+		
+		// 红方打野英雄
+		HeroNode redJunHero = room.getHero(CampType.Red, WorkType.Jun);
+		// 红方打野英雄走到红方野区红爸爸位置
+		redJunHero.location.x = FightConstant.red_red_baba_location.x;
+		redJunHero.location.y = FightConstant.red_red_baba_location.y;
+		
+		// 红方Adc英雄
+		HeroNode redAdcHero = room.getHero(CampType.Red, WorkType.Adc);
+		// 红方Adc英雄走到下路一号塔位置
+		redAdcHero.location.x = FightConstant.red_down_tower_location.x;
+		redAdcHero.location.y = FightConstant.red_down_tower_location.y;
+		
+		// 红方辅助英雄
+		HeroNode redSupHero = room.getHero(CampType.Red, WorkType.Sup);
+		// 红方辅助英雄走到下路一号塔位置
+		redSupHero.location.x = FightConstant.red_down_tower_location.x;
+		redSupHero.location.y = FightConstant.red_down_tower_location.y;
+		
+		List<HeroNode> heroNodeList = new ArrayList<HeroNode>();
+		heroNodeList.add(blueTopHero);
+		heroNodeList.add(blueMidHero);
+		heroNodeList.add(blueJunHero);
+		heroNodeList.add(blueAdcHero);
+		heroNodeList.add(blueSupHero);
+		heroNodeList.add(redTopHero);
+		heroNodeList.add(redMidHero);
+		heroNodeList.add(redJunHero);
+		heroNodeList.add(redAdcHero);
+		heroNodeList.add(redSupHero);
+		// 通知客户端英雄移动到达一号塔位置
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_move_to_dest);
+		msg.putInt(room.getGameTime());
+		msg.putShort(heroNodeList.size());
+		heroNodeList.forEach(node -> {
+			msg.putShort(node.nodeId);
+			msg.putShort((short)node.location.x);
+			msg.putShort((short)node.location.y);
+			logger.info(String.format("英雄%d到达上线位置location=%s", node.nodeId, node.location));
+		});
+		MsgHelper.sendBroadcast(msg, room);
+		heroNodeList.forEach(node -> {
+			// 英雄开始查找领路小兵
+			node.startFindGuider();
+		});
+	}
+	
+	private NodeTemplate getSoldierNodeTemplate() {
+		Optional<NodeTemplate> optional = NodeConfig.map.values().stream().filter(n -> {
+			NodeType nodeType = NodeType.getType(n.getType());
+			CampType campType = CampType.getType(n.getCampType());
+			ArmsType armsType = ArmsType.getType(n.getArmsType());
+			if (nodeType == NodeType.Troops && campType == CampType.Blue && armsType == ArmsType.Soldier) {
+				return true;
+			} else {
+				return false;
+			}
+		}).findFirst();
+		NodeTemplate soldierNodeTemplate = null;
+		if (optional.isPresent()) {
+			soldierNodeTemplate = optional.get();
+		}
+		AssertUtil.asWarnTrue(soldierNodeTemplate != null, "小兵模板没找到");
+		return soldierNodeTemplate;
+	}
+	
+	private void createBuildNode(Room room) {
+		// 按照模板Id排序
+		NodeConfig.map.values().stream().sorted(Comparator.comparing(NodeTemplate::getId)).forEach(nodeTemplate -> {
+			NodeType nodeType = NodeType.getType(nodeTemplate.getType());
+			// 添加双方建筑物(基地，水晶，防御塔)节点
+			switch (nodeType) {
+			case Home:
+				room.putNode(new HomeNode(room.getNewNodeId(), room, nodeTemplate));
+				break;
+			case Crystal:
+				room.putNode(new CrystalNode(room.getNewNodeId(), room, nodeTemplate));
+				break;
+			case Tower:
+				TowerNode towerNode = new TowerNode(room.getNewNodeId(), room, nodeTemplate);
+				towerNode.startUpdateVision();
+				room.putNode(towerNode);
+				break;
+			default:
+				break;
+			}
+		});
+	}
+	
+	public void getHeroNodeList(Long accountId) {
+		Player player = Model.getInstance().playerMap.get(accountId);
+		AssertUtil.asWarnTrue(player != null, "player对象不存在");
+		Room room = Model.getInstance().roomMap.get(player.roomId);
+		// 获取战斗节点数据
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_get_hero_node_list);
+		List<HeroNode> heroNodeList = room.getHeroList();
+		msg.putInt(room.getGameTime());
+		msg.putShort(heroNodeList.size());
+		for (int i = 0; i < heroNodeList.size(); i++) {
+			HeroNode heroNode = heroNodeList.get(i);
+			msg.putShort(heroNode.nodeId);
+			msg.putInt(heroNode.member.getTemplateId());
+			msg.putInt(heroNode.hero.getTemplateId());
+			msg.putInt(heroNode.hp);
+			msg.putInt(heroNode.pa);
+			msg.putInt(heroNode.ma);
+			msg.putInt(heroNode.pd);
+			msg.putInt(heroNode.md);
+			msg.putInt(heroNode.ats);
+			msg.putShort(heroNode.aoe);
+			msg.putShort(heroNode.mvs);
+			msg.putInt(heroNode.cd);
+			msg.putInt(heroNode.pcrt);
+			msg.putInt(heroNode.mcrt);
+			msg.putInt(heroNode.ppt);
+			msg.putInt(heroNode.mpt);
+			msg.putInt(heroNode.hi);
+			msg.putInt(heroNode.hr);
+			msg.putShort((short)heroNode.location.x);
+			msg.putShort((short)heroNode.location.y);
+			msg.putShort(heroNode.supplement);
+			msg.putShort(heroNode.money);
+			msg.putShort(heroNode.exp);
+			msg.putByte(heroNode.kill);
+			msg.putByte(heroNode.dead);
+			msg.putByte(heroNode.help);
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	public void getBuildNodeList(Long accountId) {
+		Player player = Model.getInstance().playerMap.get(accountId);
+		AssertUtil.asWarnTrue(player != null, "player对象不存在");
+		Room room = Model.getInstance().roomMap.get(player.roomId);
+		List<BaseNode> buleHomeNodeList = room.getNodeList(NodeType.Home, CampType.Blue);
+		List<BaseNode> buleCrystalNodeList = room.getNodeList(NodeType.Crystal, CampType.Blue);
+		List<BaseNode> buleTowerNodeList = room.getNodeList(NodeType.Tower, CampType.Blue);
+		List<BaseNode> redHomeNodeList = room.getNodeList(NodeType.Home, CampType.Red);
+		List<BaseNode> redCrystalNodeList = room.getNodeList(NodeType.Crystal, CampType.Red);
+		List<BaseNode> redTowerNodeList = room.getNodeList(NodeType.Tower, CampType.Red);
+		List<BaseNode> buildNodeList = new ArrayList<BaseNode>();
+		buildNodeList.addAll(buleHomeNodeList);
+		buildNodeList.addAll(buleCrystalNodeList);
+		buildNodeList.addAll(buleTowerNodeList);
+		buildNodeList.addAll(redHomeNodeList);
+		buildNodeList.addAll(redCrystalNodeList);
+		buildNodeList.addAll(redTowerNodeList);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_get_build_node_list);
+		msg.putInt(room.getGameTime());
+		// 建筑物列表
+		msg.putShort(buildNodeList.size());
+		for (int i = 0; i < buildNodeList.size(); i++) {
+			BaseNode node = buildNodeList.get(i);
+			msg.putShort(node.nodeId);
+			msg.putInt(node.template.getId());
+			msg.putInt(node.hp);
+			msg.putShort((short)node.location.x);
+			msg.putShort((short)node.location.y);
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	public void getMonsterNodeList(Long accountId) {
+		Player player = Model.getInstance().playerMap.get(accountId);
+		AssertUtil.asWarnTrue(player != null, "player对象不存在");
+		Room room = Model.getInstance().roomMap.get(player.roomId);
+		List<BaseNode> monsterNodeList = room.getNodeList(NodeType.Monster);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_get_monster_node_list);
+		msg.putInt(room.getGameTime());
+		// 野怪(包括野怪大小龙)列表
+		msg.putShort(monsterNodeList.size());
+		for (int i = 0; i < monsterNodeList.size(); i++) {
+			BaseNode monsterNode= monsterNodeList.get(i);
+			msg.putShort(monsterNode.nodeId);
+			msg.putInt(monsterNode.template.getId());
+			msg.putInt(monsterNode.hp);
+			msg.putShort((short)monsterNode.location.x);
+			msg.putShort((short)monsterNode.location.y);
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	public void getTroopsNodeList(Long accountId) {
+		Player player = Model.getInstance().playerMap.get(accountId);
+		AssertUtil.asWarnTrue(player != null, "player对象不存在");
+		Room room = Model.getInstance().roomMap.get(player.roomId);
+		List<BaseNode> troopsNodeList = room.getNodeList(NodeType.Troops);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_get_troops_node_list);
+		msg.putInt(room.getGameTime());
+		// 军队(包含小兵，炮兵，超级兵)列表
+		msg.putShort(troopsNodeList.size());
+		for (int i = 0; i < troopsNodeList.size(); i++) {
+			BaseNode troopsNode= troopsNodeList.get(i);
+			msg.putByte(troopsNode.enemyCamp.getIndex());
+			msg.putShort(troopsNode.nodeId);
+			msg.putInt(troopsNode.template.getId());
+			msg.putInt(troopsNode.hp);
+			msg.putShort((short)troopsNode.location.x);
+			msg.putShort((short)troopsNode.location.y);
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	private void createHeroNode(Room room) {
+		// 创建蓝方英雄
+		generateHeroNode(room, CampType.Blue, WorkType.Top);
+		generateHeroNode(room, CampType.Blue, WorkType.Mid);
+		generateHeroNode(room, CampType.Blue, WorkType.Jun);
+		generateHeroNode(room, CampType.Blue, WorkType.Sup);
+		generateHeroNode(room, CampType.Blue, WorkType.Adc);
+		// 创建红方英雄
+		generateHeroNode(room, CampType.Red, WorkType.Top);
+		generateHeroNode(room, CampType.Red, WorkType.Mid);
+		generateHeroNode(room, CampType.Red, WorkType.Jun);
+		generateHeroNode(room, CampType.Red, WorkType.Sup);
+		generateHeroNode(room, CampType.Red, WorkType.Adc);
+	}
+	
+	private void generateHeroNode(Room room, CampType campType, WorkType workType) {
+		short nodeId = room.getNewNodeId();
+		HomeNode selfHomeNode = room.getHomeNode(campType);
+		AssertUtil.asErrorTrue(selfHomeNode != null, "基地已经不存在了");
+		Location location = new Location(selfHomeNode.location.x, selfHomeNode.location.y);
+		int index = workType.getIndex() - 1;
+		Hero hero = room.bluePlayer.heros[index];
+		HeroTemplate heroTemplate = HeroConfig.map.get(hero.getTemplateId());
+		HeroNode heroNode = new HeroNode(nodeId, room, location, hero, heroTemplate, campType);
+		heroNode.member = room.bluePlayer.members[index];
+		heroNode.nodeId = nodeId;
+		// TODO 计算英雄附加属性
+		heroNode.hp = heroTemplate.getHp();
+		heroNode.pa = heroTemplate.getPa();
+		heroNode.ma = heroTemplate.getMa();
+		heroNode.pd = heroTemplate.getPd();
+		heroNode.md = heroTemplate.getMd();
+		heroNode.ats = heroTemplate.getAts();
+		heroNode.aoe = heroTemplate.getAoe();
+		heroNode.mvs = heroTemplate.getMvs();
+		heroNode.cd = heroTemplate.getCd();
+		heroNode.pcrt = heroTemplate.getPcrt();
+		heroNode.mcrt = heroTemplate.getMcrt();
+		heroNode.ppt = heroTemplate.getPpt();
+		heroNode.mpt = heroTemplate.getMpt();
+		heroNode.hi = heroTemplate.getHi();
+		heroNode.hr = heroTemplate.getHr();
+		room.putNode(heroNode);
+	}
+	
+	public void moveInitplace(Room room) {
+		int index = 0;
+		
+		// 设置蓝方英雄初始位置为目标
+		HeroNode buleTopHeroNode = room.getHero(CampType.Blue, WorkType.Top);
+		Location location = FightConstant.initplace[index++];
+		buleTopHeroNode.location.x = location.x;
+		buleTopHeroNode.location.y = location.y;
+		
+		HeroNode buleMidHeroNode = room.getHero(CampType.Blue, WorkType.Mid);
+		location = FightConstant.initplace[index++];
+		buleMidHeroNode.location.x = location.x;
+		buleMidHeroNode.location.y = location.y;
+		
+		HeroNode buleJunHeroNode = room.getHero(CampType.Blue, WorkType.Jun);
+		location = FightConstant.initplace[index++];
+		buleJunHeroNode.location.x = location.x;
+		buleJunHeroNode.location.y = location.y;
+		
+		HeroNode buleSupHeroNode = room.getHero(CampType.Blue, WorkType.Sup);
+		location = FightConstant.initplace[index++];
+		buleSupHeroNode.location.x = location.x;
+		buleSupHeroNode.location.y = location.y;
+		
+		HeroNode buleAdcHeroNode = room.getHero(CampType.Blue, WorkType.Adc);
+		location = FightConstant.initplace[index++];
+		buleAdcHeroNode.location.x = location.x;
+		buleAdcHeroNode.location.y = location.y;
+		
+		// 设置红方英雄初始位置为目标
+		HeroNode redTopHeroNode = room.getHero(CampType.Red, WorkType.Top);
+		location = FightConstant.initplace[index++];
+		redTopHeroNode.location.x = location.x;
+		redTopHeroNode.location.y = location.y;
+		
+		HeroNode redMidHeroNode = room.getHero(CampType.Red, WorkType.Mid);
+		location = FightConstant.initplace[index++];
+		redMidHeroNode.location.x = location.x;
+		redMidHeroNode.location.y = location.y;
+		
+		HeroNode redJunHeroNode = room.getHero(CampType.Red, WorkType.Jun);
+		location = FightConstant.initplace[index++];
+		redJunHeroNode.location.x = location.x;
+		redJunHeroNode.location.y = location.y;
+		
+		HeroNode redSupHeroNode = room.getHero(CampType.Red, WorkType.Sup);
+		location = FightConstant.initplace[index++];
+		redSupHeroNode.location.x = location.x;
+		redSupHeroNode.location.y = location.y;
+		
+		HeroNode redAdcHeroNode = room.getHero(CampType.Red, WorkType.Adc);
+		location = FightConstant.initplace[index++];
+		redAdcHeroNode.location.x = location.x;
+		redAdcHeroNode.location.y = location.y;
+		
+		List<HeroNode> heroNodeList = new ArrayList<HeroNode>();
+		heroNodeList.add(buleTopHeroNode);
+		heroNodeList.add(buleMidHeroNode);
+		heroNodeList.add(buleJunHeroNode);
+		heroNodeList.add(buleSupHeroNode);
+		heroNodeList.add(buleAdcHeroNode);
+		heroNodeList.add(redTopHeroNode);
+		heroNodeList.add(redMidHeroNode);
+		heroNodeList.add(redJunHeroNode);
+		heroNodeList.add(redSupHeroNode);
+		heroNodeList.add(redAdcHeroNode);
+		// 通知客户端开始移动
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_move_to_dest);
+		msg.putInt(room.getGameTime());
+		msg.putShort(heroNodeList.size());
+		heroNodeList.forEach(node -> {
+			msg.putShort(node.nodeId);
+			msg.putShort((short)node.location.x);
+			msg.putShort((short)node.location.y);
+			logger.info(String.format("英雄%d到达初始位置location=%s", node.nodeId, node.location));
+		});
+		MsgHelper.sendBroadcast(msg, room);
+	}
+	
+}

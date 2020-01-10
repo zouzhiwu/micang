@@ -1,0 +1,45 @@
+package com.game.job.room;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.game.factory.Context;
+import com.game.factory.Server;
+import com.game.helper.MsgHelper;
+import com.game.model.Model;
+import com.game.service.RoomService;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class ShutdownJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(ShutdownJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		String content = jobDataMap.getString("content");
+		Integer index = jobDataMap.getInt("index");
+		logger.info("shutdown job");
+		if (index == 0) {
+			RoomService roomService = Context.getBean("roomService");
+			// 踢出所有玩家
+			roomService.kickHero();
+			// 关闭虚拟机
+			Server.stop();
+		} else {
+			List<Long> roleIdList = Model.getInstance().heroMap.values().stream().map(r -> r.getAccountId()).collect(Collectors.toList());
+			MsgHelper.broadcastShutdown(content, roleIdList);
+			jobDataMap.put("index", --index);
+		}
+	}
+}

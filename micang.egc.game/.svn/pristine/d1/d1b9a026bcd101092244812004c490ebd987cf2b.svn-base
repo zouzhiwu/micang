@@ -1,0 +1,15 @@
+package com.game.dao;
+
+import java.util.List;
+
+import com.common.entity.Hero;
+
+public interface HeroDao {
+
+	public void add(Hero hero);
+
+	public Hero getById(Long id);
+	
+	public List<Hero> getByList(Long accountId);
+
+}

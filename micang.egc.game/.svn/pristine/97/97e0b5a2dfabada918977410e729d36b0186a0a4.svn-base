@@ -1,0 +1,99 @@
+package com.game.entity;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.quartz.JobKey;
+
+import com.common.entity.Location;
+import com.common.enumerate.MapNodeType;
+import com.common.enumerate.NodeType;
+import com.common.util.GameUtil;
+import com.game.service.MapService;
+
+/**
+ * 具备移动性质的抽象节点
+ */
+public abstract class BaseMoveNode extends BaseAttackNode {
+
+	/**视野内的节点 */
+    public List<BaseNode> visionList = new ArrayList<BaseNode>();
+    
+	protected List<Location> way = new ArrayList<Location>();
+	
+	public JobKey updateVisionJobKey;
+	public JobKey moveJobKey;
+	
+	public abstract void startMove();
+	
+	public abstract void stopMove();
+	
+	public abstract void startUpdateVision();
+	
+	public abstract void stopUpdateVision();
+    
+    public void updateVision(Room room, short vr) {
+    	List<BaseNode> nodeList = room.getNodeList(enemyCamp);
+    	for (BaseNode node : nodeList) {
+    		if (visionList.contains(node)) {
+    			if (GameUtil.distance(node.location, this.location) > vr) {
+        			visionList.remove(node);
+        		}
+    		} else {
+    			if (GameUtil.distance(node.location, this.location) <= vr) {
+        			visionList.add(node);
+        		}
+    		}
+    	}
+    }
+    
+    public void setTarget(Target target) {
+    	this.target = target;
+        this.way.clear();
+    }
+    
+    public void move(short aoe) {
+        if (way.size() == 0) {
+        	autoSearchWay(aoe);
+        } else {
+            Location location = way.get(0);
+            if (location != null) {
+                // 如果当前位置和目标位置小于射程，则攻击，否则继续移动
+                if (GameUtil.distance(this.location, target.node.location) <= aoe) {
+                    way.clear();
+                    // TODO 睡眠1.5秒后循环攻击
+//                    InvokeRepeating("Attack", 1.5f, 0.5f);
+                } else {
+                    // 如果当前位置和节点位置小于等于0.1，则视为到达目标位置，删除目标位置，否则移动到目标位置
+                    if (GameUtil.distance(this.location, location) <= 0.1f) {
+                        way.remove(location);
+                        //Debug.Log(string.Format("英雄{0}({1},{2})", code, vector.x, vector.y));
+                    } else {
+                        //CoffeeBean.Log.Logger.Info(string.Format("英雄{0}({1},{2})", code, vector.x, vector.y));
+                    	// TODO 移动
+                        //transform.localPosition = Vector2.MoveTowards(transform.localPosition, location, mvs * Time.deltaTime);
+                    }
+                }
+            }
+        }
+    }
+    
+	private void autoSearchWay(short aoe) {
+		Location targetLocation = target.node.location;
+    	float distance = GameUtil.distance(targetLocation, this.location);
+    	// 如果当前位置与目标位置距离超过射程，则寻路
+    	if (distance > aoe) {
+    		NodeType nodeType = getNodeType();
+    		switch (nodeType) {
+			case Hero:
+				this.way = MapService.searchWay(this.location.x, this.location.y, targetLocation.x, targetLocation.y, MapNodeType.White);
+				break;
+			case Troops:
+				this.way = MapService.searchWay(this.location.x, this.location.y, targetLocation.x, targetLocation.y, MapNodeType.Gray);
+				break;
+			default:
+				break;
+			}
+    	}
+    }
+}

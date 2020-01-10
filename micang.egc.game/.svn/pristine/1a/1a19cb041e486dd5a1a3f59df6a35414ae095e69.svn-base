@@ -1,0 +1,70 @@
+package com.game.config;
+
+import java.awt.image.BufferedImage;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.imageio.ImageIO;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.NodeType;
+import com.common.util.MapUtil;
+
+public class MapConfig {
+	private final static Logger logger = LoggerFactory.getLogger(MapConfig.class);
+	/**白色地图 **/
+	public static byte[][] whiteMap;
+	/**灰色地图 **/
+	public static byte[][] grayMap;
+	public static final List<Location> locationList = new ArrayList<Location>();
+	
+	public static void init() {
+		logger.info("load map...");
+		loadData("template/map.bmp");
+	}
+	
+	private static void loadData(String fileName) {
+		InputStream in = MapConfig.class.getClassLoader().getResourceAsStream(fileName);
+		BufferedImage bi = null;
+		try {
+			bi = ImageIO.read(in);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		int srcWidth = bi.getWidth();
+		int srcHeight = bi.getHeight();
+		int minx = bi.getMinX();
+		int miny = bi.getMinY();
+		whiteMap = MapUtil.initMap(srcWidth, srcHeight);
+		grayMap = MapUtil.initMap(srcWidth, srcHeight);
+		for (int i = miny; i < srcHeight; i++) {
+			for (int j = minx; j < srcWidth; j++) {
+				int pixel = bi.getRGB(j, i);
+				NodeType nodeType = MapUtil.toNodeType(pixel);
+				if (nodeType == null) {
+					logger.error(String.format("第%d行第%d列错误", j, i));
+				} else if (nodeType == NodeType.White) {
+					whiteMap[i][j] = nodeType.getIndex();
+				} else if (nodeType == NodeType.Gray) {
+					whiteMap[i][j] = NodeType.White.getIndex();
+					grayMap[i][j] = NodeType.Gray.getIndex();
+				}
+				Location location = new Location(j, i);
+				locationList.add(location);
+			}
+		}
+//		MapUtil.print(whiteMap);
+	}
+	
+	public static boolean isRoad(float x, float z) {
+		int intx = (int)Math.ceil(x * 10);
+		int intz = (int)Math.ceil(z * 10);
+		byte value = whiteMap[intz][intx];
+		NodeType nodeType = NodeType.getType(value);
+		return nodeType == NodeType.White || nodeType == NodeType.Gray;
+	}
+}

@@ -1,0 +1,255 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.alibaba.fastjson.JSONObject;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.Member;
+import com.common.entity.Role;
+import com.common.enumerate.CoinEnum;
+import com.common.enumerate.ItemChangeEnum;
+import com.common.enumerate.WorkType;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.config.MemberConfig;
+import com.game.dao.MemberDao;
+import com.game.dao.RoleDao;
+import com.game.entity.CoinItemCountBean;
+import com.game.entity.Item;
+import com.game.entity.LikeHeroDaoBean;
+import com.game.util.Params;
+
+@Service
+public class RoleService {
+
+	@Autowired
+	private RoleDao roleDao;
+	@Autowired
+	private ItemService itemService;
+	@Autowired
+	private MemberDao memberDao;
+	@Autowired
+	private CharacterService characterService;
+
+	/**
+	 * 添加道具和货币
+	 * 
+	 * @param accountId
+	 * @param role
+	 * @param addCoinItemId
+	 * @param addCountCoin  正数是增加，负数是减少)
+	 */
+	public void addCoinItem(long accountId, Role role, int[] addCoinItemIdArr, int[] addCountCoinArr,
+			Integer[] memberIdArr) {
+		List<CoinItemCountBean> list = new ArrayList<CoinItemCountBean>();
+		for (int i = 0; i < addCoinItemIdArr.length; i++) {
+			CoinItemCountBean cBean = new CoinItemCountBean(addCoinItemIdArr[i], addCountCoinArr[i]);
+			list.add(cBean);
+		}
+
+		List<CoinItemCountBean> coinList = list.stream().filter(p -> p.getCoinItemId().intValue() <= Params.coin_100)
+				.collect(Collectors.toList());
+		this.addCoin(role, coinList);
+
+		List<CoinItemCountBean> itemList = list.stream().filter(p -> p.getCoinItemId().intValue() > Params.coin_100)
+				.collect(Collectors.toList());
+		List<Item> tempAdditemList = new ArrayList<Item>();
+		for (CoinItemCountBean ciBean : itemList) {
+			Item item = new Item();
+			item.setBoxId(ciBean.getCoinItemId());
+			item.setTemplateId(ciBean.getCoinItemId());
+			item.setCount(ciBean.getCount());
+			tempAdditemList.add(item);
+		}
+		if (tempAdditemList.size() > 0) {
+			itemService.settlementItem(accountId, tempAdditemList);
+		}
+
+		if (memberIdArr != null && memberIdArr.length > 0) {
+			for (int itenId : memberIdArr) {
+				Member member = new Member();
+				member.setTemplateId(itenId);
+				member.setAccountId(accountId);
+				member.setExp(0);
+				member.setWork(WorkType.Off);
+
+				Integer likeHeroId = Integer
+						.valueOf(MemberConfig.map.get(itenId).getLikeHeros().split(Params.fenge)[0]);
+				LikeHeroDaoBean likeHeroDaoBean = new LikeHeroDaoBean();
+				likeHeroDaoBean.setHeroLevel(1);
+				likeHeroDaoBean.setLikeVal(0);
+				likeHeroDaoBean.setSeat(1);
+				likeHeroDaoBean.setHeroTemplateId(likeHeroId);
+				List<LikeHeroDaoBean> likeList = new ArrayList<LikeHeroDaoBean>();
+				likeList.add(likeHeroDaoBean);
+
+				member.setLikeHeros(JSONObject.toJSONString(likeList));
+				member.setMasterSkill(0);
+				member.setMaskerSkillLv(0);
+				member.setSlaveSkill1(0);
+				member.setSlaveSkillLv1(0);
+				member.setSlaveSkill2(0);
+				member.setSlaveSkillLv2(0);
+				member.setSlaveSkill3(0);
+				member.setSlaveSkillLv3(0);
+				member.setCharacterstr(characterService.createCharacter());
+				memberDao.add(member);
+			}
+		}
+		// 通知
+		Message msgNotify = new Message();
+		msgNotify.setMsgcd(MessageCode.msg_item_change);
+		int memberIdLength = (memberIdArr != null && memberIdArr.length > 0) ? memberIdArr.length : 0;
+		msgNotify.putShort(addCoinItemIdArr.length + memberIdLength);
+		for (int i = 0; i < addCoinItemIdArr.length; i++) {
+			if (addCoinItemIdArr[i] <= Params.coin_100) {
+				msgNotify.putByte(ItemChangeEnum.Coin.getIndex());
+			} else {
+				msgNotify.putByte(ItemChangeEnum.Item.getIndex());
+			}
+			msgNotify.putInt(addCoinItemIdArr[i]);
+			msgNotify.putInt(addCountCoinArr[i]);
+		}
+		if (memberIdLength > 0) {
+			for (int memberId : memberIdArr) {
+				msgNotify.putByte(ItemChangeEnum.Member.getIndex());
+				msgNotify.putInt(memberId);
+				msgNotify.putInt(1);
+			}
+		}
+		MsgSender.sendMsg(msgNotify);
+	}
+
+	public void addCoin(Role role, List<CoinItemCountBean> list) {
+		if (list == null || list.size() == 0) {
+			return;
+		}
+		for (CoinItemCountBean cb : list) {
+			if (cb.getCoinItemId() == CoinEnum.gb.getIndex()) {
+				role.setGb(role.getGb() + cb.getCount());
+			} else if (cb.getCoinItemId() == CoinEnum.jb.getIndex()) {
+				role.setJb(role.getJb() + cb.getCount());
+			} else if (cb.getCoinItemId() == CoinEnum.xinlifudaoCoin.getIndex()) {
+				role.setXinlifudaoCoin(role.getXinlifudaoCoin() + cb.getCount());
+			} else if (cb.getCoinItemId() == CoinEnum.expPot.getIndex()) {
+				role.setExpPot(role.getExpPot().intValue() + cb.getCount());
+			} else {
+				AssertUtil.asWarnTrue(false, "币种不存在");
+			}
+		}
+		roleDao.update(role);
+	}
+
+	/**
+	 * 检测道具和货币是否足够
+	 * 
+	 * @param accountId
+	 * @param role
+	 * @param list
+	 * @return
+	 */
+	public boolean checkCoinItemEnough(long accountId, Role role, int[] consumeCoinItemId, int[] consumeCountCoin) {
+
+		List<CoinItemCountBean> list = new ArrayList<CoinItemCountBean>();
+		for (int i = 0; i < consumeCoinItemId.length; i++) {
+			CoinItemCountBean cBean = new CoinItemCountBean(consumeCoinItemId[i], consumeCountCoin[i]);
+			list.add(cBean);
+		}
+		List<CoinItemCountBean> coinList = list.stream().filter(p -> p.getCoinItemId().intValue() <= Params.coin_100)
+				.collect(Collectors.toList());
+		boolean flag = true;
+		if (coinList != null && coinList.size() > 0) {
+			flag = this.checkCoinEnough(role, coinList);
+		}
+		if (!flag) {
+			return flag;
+		}
+		List<CoinItemCountBean> itemList = list.stream().filter(p -> p.getCoinItemId().intValue() > Params.coin_100)
+				.collect(Collectors.toList());
+		if (itemList != null && itemList.size() > 0) {
+			List<Integer> itemIdlist = itemList.stream().map(p -> p.getCoinItemId()).collect(Collectors.toList());
+			Map<Integer, Item> map = itemService.itemsInfo(accountId, itemIdlist);
+			flag = this.checkItemEnough(map, itemList);
+		}
+
+		return flag;
+	}
+
+	/**
+	 * 检测道具是否足够
+	 * 
+	 * @param itemsMap
+	 * @param consumeList
+	 * @return
+	 */
+	public boolean checkItemEnough(Map<Integer, Item> itemsMap, List<CoinItemCountBean> consumeList) {
+		boolean flag = true;
+		for (CoinItemCountBean coinItemCountBean : consumeList) {
+			if (!(itemsMap.get(coinItemCountBean.getCoinItemId()) != null
+					&& itemsMap.get(coinItemCountBean.getCoinItemId()).getCount() >= coinItemCountBean.getCount())) {
+				flag = false;
+				AssertUtil.asWarnTrue(true, "itemid:" + coinItemCountBean.getCoinItemId() + "不足");
+				break;
+			}
+		}
+		return flag;
+	}
+
+	public boolean checkCoinEnough(Role role, List<CoinItemCountBean> list) {
+		boolean flag = true;
+		for (CoinItemCountBean cb : list) {
+			if (cb.getCoinItemId() == CoinEnum.gb.getIndex()) {
+				if (role.getGb() < cb.getCount()) {
+					AssertUtil.asWarnTrue(true, "itemid:" + CoinEnum.gb.getName() + "不足");
+					flag = false;
+				}
+			} else if (cb.getCoinItemId() == CoinEnum.jb.getIndex()) {
+				if (role.getJb() < cb.getCount()) {
+					AssertUtil.asWarnTrue(true, "itemid:" + CoinEnum.jb.getName() + "不足");
+					flag = false;
+				}
+			} else if (cb.getCoinItemId() == CoinEnum.xinlifudaoCoin.getIndex()) {
+				if (role.getXinlifudaoCoin() < cb.getCount()) {
+					AssertUtil.asWarnTrue(true, "itemid:" + CoinEnum.xinlifudaoCoin.getName() + "不足");
+					flag = false;
+				}
+			} else if (cb.getCoinItemId() == CoinEnum.expPot.getIndex()) {
+				if (role.getExpPot() < cb.getCount()) {
+					AssertUtil.asWarnTrue(true, "itemid:" + CoinEnum.expPot.getName() + "不足");
+					flag = false;
+				}
+			} else {
+				flag = false;
+			}
+		}
+		return flag;
+	}
+
+	public void add(Role role) {
+		roleDao.add(role);
+	}
+
+	public void update(Role role) {
+		roleDao.update(role);
+	}
+
+	public Role getById(Long id) {
+		return roleDao.getById(id);
+	}
+
+	public void updateGb(Long accountId, Long add) {
+		roleDao.updateGb(accountId, add);
+	}
+
+	public void updateJb(Long accountId, Long add) {
+		roleDao.updateJb(accountId, add);
+	}
+
+}

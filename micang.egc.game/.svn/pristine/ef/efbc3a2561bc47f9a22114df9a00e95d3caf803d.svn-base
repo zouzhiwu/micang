@@ -1,0 +1,67 @@
+package com.game.service;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Message;
+import com.common.constant.RoleConstant;
+import com.common.entity.Hero;
+import com.common.entity.Location;
+import com.common.entity.Member;
+import com.common.entity.Role;
+import com.common.entity.Room;
+import com.common.enumerate.RoomState;
+import com.game.common.MessageCode;
+import com.game.helper.MsgHelper;
+
+@Service
+public class FightService {
+	private static final Logger logger = LoggerFactory.getLogger(FightService.class);
+	
+	public void beginGame(Room room) {
+		// 设置房间状态为开始游戏
+		room.state = RoomState.Begin;
+		logger.info(String.format("房间%d开始游戏", room.id));
+		// 发送开始游戏通知
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_begin_game_notice);
+		MsgHelper.sendBroadcast(msg, room);
+	}
+	
+	public void initRole(Room room) {
+		int id = 0;
+		for (int i = 0; i < 5; i++) {
+			Member member = room.redPlayer.members[i];
+			Hero hero = room.redPlayer.heros[i];
+			createRole(++id, member, hero, RoleConstant.birthplace[i]);
+		}
+		for (int i = 5; i < 10; i++) {
+			Member member = room.bluePlayer.members[i];
+			Hero hero = room.bluePlayer.heros[i];
+			createRole(++id, member, hero, RoleConstant.birthplace[i]);
+		}
+	}
+	
+	private Role createRole(int id, Member member, Hero hero, Location location) {
+		Role role = new Role();
+		role.id = id;
+		role.hp = hero.hp;
+		role.ad = hero.ad;
+		role.ap = hero.ap;
+		role.ac = hero.ac;
+		role.mr = hero.mr;
+		role.as = hero.as;
+		role.aoe = hero.aoe;
+		role.speed = hero.speed;
+		role.cd = hero.cd;
+		role.acrt = hero.acrt;
+		role.mcrt = hero.mcrt;
+		role.apt = hero.apt;
+		role.mpt = hero.mpt;
+		role.ha = hero.ha;
+		role.dr = hero.dr;
+		role.location = location;
+		return role;
+	}
+}

@@ -1,0 +1,64 @@
+package com.game.node;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+
+public class MonsterNode extends AbsUpdateVisionNode {
+	private static final Logger logger = LoggerFactory.getLogger(MonsterNode.class);
+	public MonsterNode(short nodeId, Room room, NodeTemplate template) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = CampType.Neutral;
+		setEnemyCamp();
+		this.hp = template.getHp();
+		logger.info(String.format("创建 nodeId=%d %s %s", nodeId, this.selfCamp.getName(), this.getNodeType().getName()));
+	}
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Monster;
+	}
+	
+	@Override
+	public void startAttack() {
+		FightJobManager.createAttackJob(room, this, template.getAts(), template.getPa());
+	}
+	
+	@Override
+	public void stopAttack() {
+		JobScheduler.stopJob(this.attackJobKey);
+	}
+
+	@Override
+	public void die(BaseNode attackNode) {
+		// TODO 把这个节点从所有节点视野中删除，从Room列表删除
+		logger.info(String.format("nodeId=%d阵亡", this.nodeId));
+		refreshAllNodeVision();
+	}
+
+	@Override
+	public void setTarget(Target target) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void startUpdateVision() {
+		FightJobManager.createUpdateVisionJob(room, this, vr);
+	}
+
+	@Override
+	public void stopUpdateVision() {
+		JobScheduler.stopJob(this.updateVisionJobKey);
+	}
+}

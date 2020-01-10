@@ -1,0 +1,127 @@
+package com.game.node;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.TargetType;
+import com.common.util.GameUtil;
+
+/**
+ * 具备视野性质的抽象节点
+ */
+public abstract class AbsUpdateVisionNode extends AbsAttackNode {
+	private static final Logger logger = LoggerFactory.getLogger(AbsAttackNode.class);
+    
+	/**视野内的节点 */
+    public List<BaseNode> visionList = new ArrayList<BaseNode>();
+	
+	/**视野半径 */
+	public short vr;
+    
+	public boolean startUpdateVision() {
+		if (hp > 0) {
+			return room.addUpdateVisionNode(this);
+		} else {
+			return false;
+		}
+	}
+	
+	public boolean stopUpdateVision() {
+		return room.removeUpdateVisionNode(this);
+	}
+    
+    public void onUpdateVision() {
+    	List<BaseNode> nodeList = room.getNodeList(enemyCamp);
+//    	logger.info(String.format("nodeId=%d enemyCamp=%s", nodeId, enemyCamp.getName()));
+//    	printNodeList(nodeList);
+    	for (BaseNode node : nodeList) {
+    		double distance = GameUtil.distance(node.location, this.location);
+//    		logger.info(String.format("this.nodeId=%d node.nodeId=%d distance=%s vr=%d", nodeId, node.nodeId, distance, vr));
+    		if (visionList.contains(node)) {
+    			if (distance > vr) {
+        			visionList.remove(node);
+        		}
+    		} else {
+    			if (distance <= vr) {
+        			visionList.add(node);
+        		}
+    		}
+    	}
+//    	printNodeList(visionList);
+    	if (visionList.size() > 0) {
+    		BaseNode node = getMinDistance();
+    		if (node != null) {
+    			logger.info(String.format("nodeId=%d minNodeId=%d", nodeId, node.nodeId));
+    			if (target.type == TargetType.Node) {
+    				if (node != target.node) {
+    					if (node.hp > 0) {
+    						logger.info(String.format("nodeId=%d 变更目标 nodeId=%d", nodeId, node.nodeId));
+    						setTarget(new Target(node));
+    					}
+    				}
+    			}
+    		}
+    	} else {
+    		// 如果视野内没有节点，并且没有目标，则把对方基地作为目标寻路
+    		if (this.target == null) {
+        		HomeNode enemyHomeNode = room.getHomeNode(enemyCamp);
+        		if (enemyHomeNode != null) {
+//        			logger.info(String.format("nodeId=%d变更目标nodeId=%d", nodeId, enemyHomeNode.nodeId));
+        			setTarget(new Target(enemyHomeNode));
+        		}
+    		}
+    	}
+    }
+    
+    /**
+          * 在视野中查找最近距离的节点
+     * @return
+     */
+    private BaseNode getMinDistance() {
+    	if (visionList.size() == 1) {
+			BaseNode node = visionList.get(0);
+			if (target != null && target.type == TargetType.Node) {
+				if (target.node.hp > 0) {
+					if (node.nodeId != target.node.nodeId) {
+    					return node;
+        			}
+				}
+			}
+		} else if (visionList.size() > 1) {
+			final Location myLocation = this.location;
+			// 距离排序
+			Collections.sort(visionList, new Comparator<BaseNode>() {
+			    @Override
+			    public int compare(BaseNode node1, BaseNode node2) {
+			    	return GameUtil.distance(node1.location, myLocation) > GameUtil.distance(node2.location, myLocation) ? 1 : -1;
+			    }
+			});
+			// 选择最近距离的节点攻击
+			BaseNode node = visionList.get(0);
+			return node;
+		} else {
+			return null;
+		}
+    	return null;
+    }
+    
+//	private void printNodeList(List<BaseNode> nodeList) {
+//		if (nodeList.size() == 0) {
+//			logger.info("nodeId=" + nodeId + " nodeList.size=" + nodeList.size());
+//		} else {
+//			StringBuilder sb = new StringBuilder();
+//			for (int i = 0; i < nodeList.size(); i++) {
+//				BaseNode node = nodeList.get(i);
+//				sb.append(String.format(",%s%s", node.nodeId, node.location));
+//			}
+//			sb.deleteCharAt(0);
+//			logger.info("nodeId=" + nodeId + " nodeList:" + sb.toString());
+//		}
+//	}
+}

@@ -1,0 +1,82 @@
+Manifest-Version: 1.0
+Built-By: zouzhiwu
+Class-Path: . /root/project/micang.egc.game/lib/micang.egc.common-1.0.
+ 0-SNAPSHOT.jar /root/project/micang.egc.game/lib/coffeeBean.net-0.0.1
+ -Final.jar /root/project/micang.egc.game/lib/netty-all-4.0.56.Final.j
+ ar /root/project/micang.egc.game/lib/mybatis-generator-core-1.3.2.jar
+  /root/project/micang.egc.game/lib/spring-webmvc-4.3.8.RELEASE.jar /r
+ oot/project/micang.egc.game/lib/spring-web-4.3.8.RELEASE.jar /root/pr
+ oject/micang.egc.game/lib/spring-tx-4.3.8.RELEASE.jar /root/project/m
+ icang.egc.game/lib/spring-jdbc-4.3.8.RELEASE.jar /root/project/micang
+ .egc.game/lib/spring-context-4.3.8.RELEASE.jar /root/project/micang.e
+ gc.game/lib/spring-context-support-4.3.8.RELEASE.jar /root/project/mi
+ cang.egc.game/lib/spring-core-4.3.8.RELEASE.jar /root/project/micang.
+ egc.game/lib/spring-expression-4.3.8.RELEASE.jar /root/project/micang
+ .egc.game/lib/spring-orm-4.3.8.RELEASE.jar /root/project/micang.egc.g
+ ame/lib/spring-aop-4.3.8.RELEASE.jar /root/project/micang.egc.game/li
+ b/aspectjweaver-1.8.10.jar /root/project/micang.egc.game/lib/aspectjr
+ t-1.5.4.jar /root/project/micang.egc.game/lib/spring-test-4.3.8.RELEA
+ SE.jar /root/project/micang.egc.game/lib/mysql-connector-java-5.1.42.
+ jar /root/project/micang.egc.game/lib/zookeeper-3.4.6.jar /root/proje
+ ct/micang.egc.game/lib/jline-0.9.94.jar /root/project/micang.egc.game
+ /lib/junit-3.8.1.jar /root/project/micang.egc.game/lib/netty-3.7.0.Fi
+ nal.jar /root/project/micang.egc.game/lib/spring-data-redis-1.8.3.REL
+ EASE.jar /root/project/micang.egc.game/lib/spring-data-keyvalue-1.2.3
+ .RELEASE.jar /root/project/micang.egc.game/lib/spring-oxm-4.3.8.RELEA
+ SE.jar /root/project/micang.egc.game/lib/spring-session-1.1.1.RELEASE
+ .jar /root/project/micang.egc.game/lib/spring-data-mongodb-1.8.2.RELE
+ ASE.jar /root/project/micang.egc.game/lib/spring-data-commons-1.13.3.
+ RELEASE.jar /root/project/micang.egc.game/lib/mongo-java-driver-3.2.1
+ .jar /root/project/micang.egc.game/lib/jedis-2.9.0.jar /root/project/
+ micang.egc.game/lib/commons-pool2-2.4.2.jar /root/project/micang.egc.
+ game/lib/mybatis-3.4.4.jar /root/project/micang.egc.game/lib/mybatis-
+ spring-1.3.1.jar /root/project/micang.egc.game/lib/slf4j-api-1.7.25.j
+ ar /root/project/micang.egc.game/lib/slf4j-log4j12-1.7.25.jar /root/p
+ roject/micang.egc.game/lib/jcl-over-slf4j-1.7.25.jar /root/project/mi
+ cang.egc.game/lib/log4j-core-2.8.2.jar /root/project/micang.egc.game/
+ lib/log4j-api-2.8.2.jar /root/project/micang.egc.game/lib/protobuf-ja
+ va-2.5.0.jar /root/project/micang.egc.game/lib/log4j-1.2.17.jar /root
+ /project/micang.egc.game/lib/fastjson-1.2.32.jar /root/project/micang
+ .egc.game/lib/commons-lang3-3.3.2.jar /root/project/micang.egc.game/l
+ ib/commons-collections-3.2.1.jar /root/project/micang.egc.game/lib/co
+ mmons-beanutils-1.9.3.jar /root/project/micang.egc.game/lib/commons-f
+ ileupload-1.3.2.jar /root/project/micang.egc.game/lib/javax.servlet-a
+ pi-3.1.0.jar /root/project/micang.egc.game/lib/jackson-databind-2.9.0
+ .jar /root/project/micang.egc.game/lib/jackson-annotations-2.9.0.jar 
+ /root/project/micang.egc.game/lib/jackson-core-2.9.0.jar /root/projec
+ t/micang.egc.game/lib/commons-io-2.4.jar /root/project/micang.egc.gam
+ e/lib/commons-net-3.3.jar /root/project/micang.egc.game/lib/commons-c
+ odec-1.9.jar /root/project/micang.egc.game/lib/commons-logging-1.2.ja
+ r /root/project/micang.egc.game/lib/spring-beans-4.3.8.RELEASE.jar /r
+ oot/project/micang.egc.game/lib/httpclient-4.5.3.jar /root/project/mi
+ cang.egc.game/lib/httpcore-4.4.6.jar /root/project/micang.egc.game/li
+ b/httpmime-4.5.3.jar /root/project/micang.egc.game/lib/dom4j-1.6.1.ja
+ r /root/project/micang.egc.game/lib/xml-apis-1.0.b2.jar /root/project
+ /micang.egc.game/lib/xstream-1.4.7.jar /root/project/micang.egc.game/
+ lib/xmlpull-1.1.3.1.jar /root/project/micang.egc.game/lib/xpp3_min-1.
+ 1.4c.jar /root/project/micang.egc.game/lib/pagehelper-5.0.4.jar /root
+ /project/micang.egc.game/lib/jsqlparser-1.0.jar /root/project/micang.
+ egc.game/lib/guava-22.0.jar /root/project/micang.egc.game/lib/jsr305-
+ 1.3.9.jar /root/project/micang.egc.game/lib/error_prone_annotations-2
+ .0.18.jar /root/project/micang.egc.game/lib/j2objc-annotations-1.1.ja
+ r /root/project/micang.egc.game/lib/animal-sniffer-annotations-1.14.j
+ ar /root/project/micang.egc.game/lib/HikariCP-3.3.1.jar /root/project
+ /micang.egc.game/lib/commons-collections4-4.1.jar /root/project/mican
+ g.egc.game/lib/poi-3.17.jar /root/project/micang.egc.game/lib/log4jdb
+ c-1.2.jar /root/project/micang.egc.game/lib/qdox-1.9.2.jar /root/proj
+ ect/micang.egc.game/lib/json-20160810.jar /root/project/micang.egc.ga
+ me/lib/poi-ooxml-3.17.jar /root/project/micang.egc.game/lib/poi-ooxml
+ -schemas-3.17.jar /root/project/micang.egc.game/lib/xmlbeans-2.6.0.ja
+ r /root/project/micang.egc.game/lib/stax-api-1.0.1.jar /root/project/
+ micang.egc.game/lib/curvesapi-1.04.jar /root/project/micang.egc.game/
+ lib/quartz-2.2.3.jar /root/project/micang.egc.game/lib/c3p0-0.9.1.1.j
+ ar /root/project/micang.egc.game/lib/tomcat-embed-core-8.5.41.jar /ro
+ ot/project/micang.egc.game/lib/tomcat-annotations-api-8.5.41.jar /roo
+ t/project/micang.egc.game/lib/tomcat-embed-jasper-8.5.41.jar /root/pr
+ oject/micang.egc.game/lib/ecj-3.12.3.jar /root/project/micang.egc.gam
+ e/lib/tomcat-embed-el-8.5.41.jar /root/project/micang.egc.game/lib/to
+ mcat-embed-websocket-8.5.41.jar
+Build-Jdk: 1.8.0_131
+Created-By: Maven Integration for Eclipse
+Main-Class: com.game.factory.Server
+

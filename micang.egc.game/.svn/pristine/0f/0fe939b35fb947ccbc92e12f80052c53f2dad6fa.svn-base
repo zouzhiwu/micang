@@ -1,0 +1,4 @@
+jdbc.game.url=jdbc:mysql://192.168.0.170:3306/times?useSSL=false
+jdbc.game.driver=com.mysql.jdbc.Driver
+jdbc.game.user=root
+jdbc.game.password=123456

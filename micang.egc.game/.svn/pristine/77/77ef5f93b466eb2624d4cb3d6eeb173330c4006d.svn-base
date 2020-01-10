@@ -1,0 +1,149 @@
+package com.game.node;
+
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.cb.msg.Message;
+import com.common.entity.Location;
+import com.common.enumerate.MapNodeType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.TargetType;
+import com.common.util.GameUtil;
+import com.game.common.MessageCode;
+import com.game.helper.MsgHelper;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+import com.game.service.MapService;
+
+/**
+ * 具备移动性质的抽象节点
+ */
+public abstract class AbsMoveNode extends AbsAttackNode {
+	private static final Logger logger = LoggerFactory.getLogger(AbsMoveNode.class);
+	
+	/**移动JobKey */
+	public JobKey moveJobKey;
+	
+	public void startMove() {
+		// 通知客户端开始移动
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_move_start);
+		msg.putInt(room.getTime());
+		msg.putShort(nodeId);
+		msg.putShort(location.x);
+		msg.putShort(location.y);
+		msg.putShort(target.location.x);
+		msg.putShort(target.location.y);
+		MsgHelper.sendBroadcast(msg, room);
+		logger.info(String.format("nodeId=%d 开始移动 location=%s target.location=%s", nodeId, location, target.location));
+		// 开始移动
+		FightJobManager.createMoveJob(room, this);
+	}
+
+	public void stopMove() {
+		if (JobScheduler.isHasJob(moveJobKey)) {
+			// 通知客户端停止移动
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_fight_move_stop);
+			msg.putInt(room.getTime());
+			msg.putShort(nodeId);
+			msg.putShort(location.x);
+			msg.putShort(location.y);
+			MsgHelper.sendBroadcast(msg, room);
+			logger.info(String.format("nodeId=%d 停止移动 location=%s", nodeId, location));
+			// 停止移动
+			JobScheduler.stopJob(moveJobKey);
+		}
+	}
+	
+	/**攻击速度 */
+	public short ats;
+	
+	/**移动速度 */
+	public short mvs;
+	
+	@Override
+	public void setTarget(Target target) {
+		stopMove();
+    	this.target = target;
+        this.way.clear();
+        autoSearchWay();
+        startMove();
+    }
+	
+    public void move(long timeLength) {
+        if (way.size() > 0) {
+            Location subTargetLocation = way.get(0);
+            if (subTargetLocation != null) {
+            	// 如果当前位置和节点位置小于等于0.1，则视为到达目标位置，删除目标位置，否则移动到目标位置
+                if (GameUtil.distance(this.location, subTargetLocation) <= 0.5f) {
+                    way.remove(subTargetLocation);
+                    this.location.x = subTargetLocation.x;
+                    this.location.y = subTargetLocation.y;
+                } else {
+                	// 更新位置
+                	float time = timeLength / 1000.0f;
+        			updateLocation(mvs, time, subTargetLocation);
+                }
+            }
+        } else {
+        	stopMove();
+        }
+        if (this.target.type == TargetType.Node) {
+        	// 如果当前位置和目标位置小于射程，则攻击，否则继续移动
+            if (GameUtil.distance(this.location, target.location) <= aoe) {
+                way.clear();
+                stopMove();
+                startAttack();
+            }
+        }
+    }
+    
+    private void updateLocation(short mvs, float timeLength, Location targetLocation) {
+    	double angle = Math.atan2(targetLocation.y - this.location.y, targetLocation.x - this.location.x);
+    	double addx = Math.cos(angle) * mvs * timeLength;
+    	double addy = Math.sin(angle) * mvs * timeLength;
+        this.location.x += Math.round(addx);
+        this.location.y += Math.round(addy);
+        logger.info(String.format("nodeId=%d location=%s", this.nodeId, this.location));
+    }
+    
+	public void autoSearchWay() {
+		Location targetLocation = target.location;
+    	float distance = GameUtil.distance(targetLocation, this.location);
+//		logger.info(String.format("nodeId=%s 自动寻路 location=%s targetLocation=%s distance=%s aoe=%s", this.nodeId, this.location, targetLocation, distance, aoe));
+    	// 如果当前位置与目标位置距离超过射程，则寻路
+    	if (distance > aoe) {
+    		NodeType nodeType = getNodeType();
+    		switch (nodeType) {
+			case Hero:
+				this.way = MapService.searchWay(this.location, targetLocation, MapNodeType.White);
+				break;
+			case Troops:
+				this.way = MapService.searchWay(this.location, targetLocation, MapNodeType.Gray);
+				break;
+			default:
+				break;
+			}
+//    		printWayList(way);
+    	} else {
+    		this.stopMove();
+    	}
+    }
+	
+//	private void printWayList(List<Location> way) {
+//		if (way.size() == 0) {
+//			logger.info("nodeId=" + nodeId + " way.size=" + way.size());
+//		} else {
+//			StringBuilder sb = new StringBuilder();
+//			for (int i = 0; i < way.size(); i++) {
+//				Location location = way.get(i);
+//				sb.append(String.format(",%s", location.toString()));
+//			}
+//			sb.deleteCharAt(0);
+//			logger.info("nodeId=" + nodeId + " wayList:" + sb.toString());
+//		}
+//	}
+	
+}

@@ -1,0 +1,88 @@
+package com.game.config;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.template.CheckPointTemplate;
+import com.game.util.PoiUtil;
+
+public class CheckPointConfig {
+	private final static String sheetName = "CheckPoint";
+	private static final Logger logger = LoggerFactory.getLogger(CheckPointConfig.class);
+	public static Map<Integer, List<CheckPointTemplate>> map = new HashMap<Integer, List<CheckPointTemplate>>();
+	public static Map<Integer, CheckPointTemplate> map1 = new HashMap<Integer, CheckPointTemplate>();
+
+	public static void init() {
+		InputStream in = CheckPointConfig.class.getClassLoader().getResourceAsStream("template/CheckPoint.xlsx");
+		try {
+			XSSFWorkbook workBook = new XSSFWorkbook(in);
+			XSSFSheet sheet = workBook.getSheet(sheetName);
+			int i = 0;
+			List<CheckPointTemplate> checkPointTemplateList = null;
+			for (Iterator<Row> iterator = sheet.rowIterator(); iterator.hasNext();) {
+				XSSFRow row = (XSSFRow) iterator.next();
+				if (i >= 2) {
+					int index = 0;
+					Integer id = PoiUtil.getInt((XSSFCell) row.getCell(index++));
+					Integer chapterId = PoiUtil.getInt((XSSFCell) row.getCell(index++));
+					Byte diffculty = PoiUtil.getByte((XSSFCell) row.getCell(index++));
+					Short plotId = PoiUtil.getShort((XSSFCell) row.getCell(index++));
+					String image = PoiUtil.getString((XSSFCell) row.getCell(index++));
+					String icon = PoiUtil.getString((XSSFCell) row.getCell(index++));
+					String title = PoiUtil.getString((XSSFCell) row.getCell(index++));
+					String chapterContent = PoiUtil.getString((XSSFCell) row.getCell(index++));
+					Byte teamLineup = PoiUtil.getByte((XSSFCell) row.getCell(index++));
+					Short exp = PoiUtil.getShort((XSSFCell) row.getCell(index++));
+					Short gold = PoiUtil.getShort((XSSFCell) row.getCell(index++));
+					String display = PoiUtil.getString((XSSFCell) row.getCell(index++));
+					Integer reward = PoiUtil.getInt((XSSFCell) row.getCell(index++));
+					Integer lastLevelId = PoiUtil.getInt((XSSFCell) row.getCell(index++));
+					Integer nextLevelId = PoiUtil.getInt((XSSFCell) row.getCell(index++));
+					Short newspaperId = PoiUtil.getShort((XSSFCell) row.getCell(index++));
+					Integer posX = PoiUtil.getInt((XSSFCell) row.getCell(index++));
+					Integer posY = PoiUtil.getInt((XSSFCell) row.getCell(index++));
+					String npc = PoiUtil.getString((XSSFCell) row.getCell(index++));
+					Integer task1 = PoiUtil.getInt((XSSFCell) row.getCell(index++));
+					String taskTxt1 = PoiUtil.getString((XSSFCell) row.getCell(index++));
+					Integer task2 = PoiUtil.getInt((XSSFCell) row.getCell(index++));
+					String taskTxt2 = PoiUtil.getString((XSSFCell) row.getCell(index++));
+					Integer task3 = PoiUtil.getInt((XSSFCell) row.getCell(index++));
+					String taskTxt3 = PoiUtil.getString((XSSFCell) row.getCell(index++));
+
+					CheckPointTemplate chapterTemplate = new CheckPointTemplate(id, chapterId, diffculty, plotId, image,
+							icon, title, chapterContent, teamLineup, exp, gold, display, reward, lastLevelId,
+							nextLevelId, newspaperId, posX, posY, npc, task1, taskTxt1, task2, taskTxt2, task3,
+							taskTxt3);
+
+					if (map.containsKey(chapterId)) {
+						map.get(chapterId).add(chapterTemplate);
+					} else {
+						checkPointTemplateList = new ArrayList<CheckPointTemplate>();
+						checkPointTemplateList.add(chapterTemplate);
+						map.put(chapterId, checkPointTemplateList);
+					}
+					map1.put(id, chapterTemplate);
+				}
+				i++;
+			}
+			logger.info(String.format("CheckPoint config loaded record %d", i - 2));
+			workBook.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+}

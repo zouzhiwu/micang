@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.UserMailDao">	
+	
+	<insert id="create" parameterType="com.game.entity.UserMail" useGeneratedKeys="true" keyProperty="id">
+		insert into user_mail ( accountId
+			<if test="null != startIndex">
+				, startIndex
+			</if>
+			<if test="null != endIndex">
+				, endIndex
+			</if>
+			<if test="null != receiveStartIndex">
+				, receiveStartIndex
+			</if>
+			<if test="null != receiveEndIndex">
+				, receiveEndIndex
+			</if>
+			<if test="null != delInde">
+				, delInde
+			</if>
+			<if test="null != noRead">
+				, noRead
+			</if>
+			<if test="null != noReceive">
+				, noReceive
+			</if>
+		) values ( #{accountId}
+			<if test="null != startIndex">
+				, #{startIndex}
+			</if>
+			<if test="null != endIndex">
+				, #{endIndex}
+			</if>
+			<if test="null != receiveStartIndex">
+				, #{receiveStartIndex}
+			</if>
+			<if test="null != receiveEndIndex">
+				, #{receiveEndIndex}
+			</if>
+			<if test="null != delInde">
+				, #{delInde}
+			</if>
+			<if test="null != noRead">
+				, #{noRead}
+			</if>
+			<if test="null != noReceive">
+				, #{noReceive}
+			</if>
+		)
+	</insert>
+	
+	<select id="findById" parameterType="Long" resultType="com.game.entity.UserMail">
+		select * from user_mail where accountId = #{accountId}
+	</select>
+	
+	<update id="update" parameterType="com.game.entity.UserMail">
+		update user_mail 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != startIndex">
+				, startIndex = #{startIndex}
+			</if>
+			<if test="null != endIndex">
+				, endIndex = #{endIndex}
+			</if>
+			<if test="null != receiveStartIndex">
+				, receiveStartIndex = #{receiveStartIndex}
+			</if>
+			<if test="null != receiveEndIndex">
+				, receiveEndIndex = #{receiveEndIndex}
+			</if>
+			<if test="null != delInde">
+				, delInde = #{delInde}
+			</if>
+			<if test="null != noRead">
+				, noRead = #{noRead}
+			</if>
+			<if test="null != noReceive">
+				, noReceive = #{noReceive}
+			</if>
+		</trim>
+		where accountId = #{accountId}
+	</update>
+	
+	<delete id="delById" parameterType="Long">
+		delete from user_mail where accountId = #{accountId}
+	</delete>
+</mapper>  

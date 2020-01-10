@@ -1,0 +1,65 @@
+package com.game.node;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.MonsterType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+import com.game.job.FightJobManager;
+
+public class MonsterNode extends AbsUpdateVisionNode {
+	private static final Logger logger = LoggerFactory.getLogger(MonsterNode.class);
+	public MonsterNode(short nodeId, Room room, NodeTemplate template) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = CampType.Neutral;
+		setEnemyCamp();
+		this.hp = template.getHp();
+		this.pa = template.getPa();
+		this.ma = template.getMa();
+		MonsterType monsterType = MonsterType.getType(template.getMonsterType());
+		logger.info(String.format("创建 nodeId=%d %s %s", nodeId, this.selfCamp.getName(), monsterType.getName()));
+	}
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Monster;
+	}
+	
+	public void revive() {
+		MonsterType monsterType = MonsterType.getType(template.getMonsterType());
+		if (monsterType == MonsterType.SamllDragon) {
+			long reviveTime = template.getGrowthInterval() * 1000;
+			// 复活小龙Job
+			FightJobManager.createMonsterJob(room, reviveTime, template);
+		} else if (monsterType == MonsterType.BigDragon) {
+			long reviveTime = template.getGrowthInterval() * 1000;
+			// 复活大龙Job
+			FightJobManager.createMonsterJob(room, reviveTime, template);
+		} else {
+			long reviveTime = template.getGrowthInterval() * 1000;
+			// 复活野怪Job
+			FightJobManager.createMonsterJob(room, reviveTime, template);
+		}
+	}
+	
+	@Override
+	public void die(BaseNode attackNode) {
+		logger.info(String.format("nodeId=%d 阵亡", this.nodeId));
+		stopAttack();
+		stopUpdateVision();
+		refreshAllNodeVision();
+		revive();
+	}
+
+	@Override
+	public void setTarget(Target target) {
+		this.target = target;
+	}
+}

@@ -1,0 +1,13 @@
+package com.game.dao;
+
+import com.common.entity.GuildOnlineCount;
+
+public interface GuildOnlineCountDao {
+
+	public void create(GuildOnlineCount guildOnlineCount);
+
+	public void clear();
+	
+	public void updateVal();
+	
+}

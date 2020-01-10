@@ -1,0 +1,131 @@
+package com.game.job;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.SchedulerFactory;
+import org.quartz.Trigger;
+import org.quartz.TriggerKey;
+import org.quartz.impl.StdSchedulerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.constant.FightConstant;
+import com.common.entity.Member;
+import com.common.entity.OperateStep;
+import com.common.entity.Player;
+import com.common.entity.Room;
+import com.game.fight.job.ChooseMemberJob;
+import com.game.fight.job.OperationNoticeJob;
+import com.game.helper.UuidHelper;
+
+public class JobScheduler {
+	private final static Logger logger = LoggerFactory.getLogger(JobScheduler.class);
+	public static SchedulerFactory factory = new StdSchedulerFactory();
+	
+	public static JobDetail getJobDetail(JobKey jobKey) {
+		JobDetail jobDetail = null;
+		try {
+			jobDetail = factory.getScheduler().getJobDetail(jobKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return jobDetail;
+	}
+	
+	public static Trigger getTrigger(TriggerKey triggerKey) {
+		Trigger trigger = null;
+		try {
+			trigger = factory.getScheduler().getTrigger(triggerKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return trigger;
+	}
+	
+	public static Scheduler getScheduler() {
+		Scheduler scheduler = null;
+		try {
+			scheduler = factory.getScheduler();
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return scheduler;
+	}
+	
+	public static boolean isHasJob(JobKey jobKey) {
+		boolean result = false;
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			result = scheduler.checkExists(jobKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return result;
+	}
+	
+	public static boolean stopJob(JobKey jobKey) {
+		boolean result = false;
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			result = scheduler.deleteJob(jobKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return result;
+	}
+	
+	/**
+	 *  创建选择默认上阵队员Job
+	 */
+	public static void createChooseMemberJob(Player player, Member[] members) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("player", player);
+		dataMap.put("members", members);
+		long delayMilliseconds = 0;
+		long IntervalInMilliseconds = 30 * 1000;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, ChooseMemberJob.class);
+	}
+	
+	public static JobKey generateOperationNoticeJobKey(int roomId) {
+		String jobName = String.format("job_name_operation_notice_%d", roomId);
+		String groupName = String.format("group_name_operation_notice_%d", roomId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		return jobKey;
+	}
+	
+	/**
+	 *  创建操作通知Job
+	 */
+	public static void createOperationNoticeJob(JobKey jobKey, List<OperateStep> operateStepList, int index) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("operateStepList", operateStepList);
+		dataMap.put("index", index);
+		long delayMilliseconds = 0;
+		long IntervalInMilliseconds = FightConstant.operation_notice_cd_time * 1000;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, OperationNoticeJob.class);
+	}
+	
+	/**
+	 *  创建开始游戏Job
+	 */
+	public static void createBeginGameJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long delayMilliseconds = 0;
+		long IntervalInMilliseconds = FightConstant.operation_notice_cd_time * 1000;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, OperationNoticeJob.class);
+	}
+	
+}

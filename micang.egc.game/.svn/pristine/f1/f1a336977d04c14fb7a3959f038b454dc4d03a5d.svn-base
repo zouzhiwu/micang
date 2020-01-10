@@ -1,0 +1,108 @@
+package com.game.action;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.alibaba.fastjson.JSONObject;
+import com.cb.msg.Action;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.game.common.MessageCode;
+import com.game.entity.ChapterInfo;
+import com.game.entity.PointsBean;
+import com.game.service.DuplicateService;
+
+import io.netty.channel.Channel;
+
+/**
+ * 副本模块action
+ * 
+ * @author gf
+ *
+ */
+@Service
+public class DuplicateAction {
+	private static final Logger logger = LoggerFactory.getLogger(DuplicateAction.class);
+
+	@Autowired
+	private DuplicateService duplicateService;
+
+	@Action(MessageCode.msg_duplicate_chapter_info)
+	public void chapterListInfo(Message message, Channel channel) throws Exception {
+		Byte difficulty = message.getByte();
+		logger.info(String.format("RESV %d from accountId=%s difficulty=%d", message.getMsgcd(), message.getAccountId(),
+				difficulty));
+		List<ChapterInfo> chapterList = duplicateService.findChapterList(message.getAccountId(), difficulty);
+		Message msg = new Message(message);
+		msg.putShort(chapterList.size());
+		chapterList.stream().forEach(chapter -> {
+			msg.putLong(chapter.getId());
+			msg.putInt(chapter.getChapterId());
+
+			msg.putByte(chapter.getChapterBox().byteValue());
+			List<PointsBean> list = JSONObject.parseArray(chapter.getPoints(), PointsBean.class);
+			if (list != null) {
+				msg.putByte(Integer.valueOf(list.size()).byteValue());
+			} else {
+				msg.putByte((byte) 0);
+			}
+			msg.putByte(chapter.getStarLeveBox1().byteValue());
+			msg.putByte(chapter.getStarLeveBox2().byteValue());
+			msg.putByte(chapter.getStarLeveBox3().byteValue());
+		});
+		MsgSender.sendMsg(msg);
+	}
+
+	@Action(MessageCode.msg_duplicate_checkpoint_info)
+	public void checkpointListInfo(Message message, Channel channel) throws Exception {
+		Long chapterInfoId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s chapterInfoId=%d", message.getMsgcd(),
+				message.getAccountId(), chapterInfoId));
+
+		ChapterInfo chapterInfo = duplicateService.findById(chapterInfoId);
+
+		List<PointsBean> list = JSONObject.parseArray(chapterInfo.getPoints(), PointsBean.class);
+		if (list == null) {
+			list = new ArrayList<PointsBean>();
+		}
+		Message msg = new Message(message);
+		msg.putShort(list.size());
+		list.stream().forEach(checkpointInfo -> {
+			msg.putInt(checkpointInfo.getPointId());
+			msg.putByte(checkpointInfo.getStarCount().byteValue());
+		});
+		MsgSender.sendMsg(msg);
+	}
+
+	@Action(MessageCode.msg_duplicate_procedures)
+	public void checkpointProcedures(Message message, Channel channel) throws Exception {
+		Long id = message.getLong();
+		Integer checkpointId = message.getInt();
+		logger.info(String.format("RESV %d from accountId=%s id=%d checkpointId=%d", message.getMsgcd(),
+				message.getAccountId(), id, checkpointId));
+
+		Message msg = new Message(message);
+		msg.putInt(checkpointId);
+		Byte checkpointStar = 3;
+		msg.putByte(checkpointStar);
+		MsgSender.sendMsg(msg);
+	}
+
+	@Action(MessageCode.msg_duplicate_get_box)
+	public void receiveBox(Message message, Channel channel) throws Exception {
+		Byte boxType = message.getByte();
+		Long chapterInfoId = message.getLong();
+		Byte boxIndex = message.getByte();
+		logger.info(String.format("RESV %d from accountId=%s boxType=%d chapterInfoId=%d boxIndex=%d ",
+				message.getMsgcd(), message.getAccountId(), boxType, chapterInfoId, boxIndex));
+		Byte results = duplicateService.receiveBox(message.getAccountId(), boxType, chapterInfoId, boxIndex);
+		Message msg = new Message(message);
+		msg.putByte(results);
+		MsgSender.sendMsg(msg);
+	}
+}

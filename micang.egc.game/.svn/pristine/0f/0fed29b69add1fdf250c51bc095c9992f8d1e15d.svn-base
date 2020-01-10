@@ -1,0 +1,39 @@
+package com.game.job.fight;
+
+import java.util.List;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+
+import com.cb.msg.Message;
+import com.game.common.MessageCode;
+import com.game.entity.Room;
+import com.game.helper.MsgHelper;
+import com.game.node.BaseNode;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class SyncLocationJob implements Job {
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Room room = (Room)jobDataMap.get("room");
+		List<BaseNode> moveNodeList = room.getMoveNodeList();
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_sync_location);
+		msg.putInt(room.getTime());
+		msg.putShort(moveNodeList.size());
+		for (BaseNode node : moveNodeList) {
+			msg.putShort(node.nodeId);
+			msg.putShort((short)node.location.x);
+			msg.putShort((short)node.location.y);
+		}
+		MsgHelper.sendBroadcast(msg, room);
+	}
+}

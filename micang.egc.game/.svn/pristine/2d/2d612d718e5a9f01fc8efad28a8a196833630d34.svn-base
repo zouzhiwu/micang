@@ -1,0 +1,302 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.alibaba.fastjson.JSON;
+import com.common.enumerate.MailType;
+import com.common.util.AssertUtil;
+import com.game.config.MailConfig;
+import com.game.dao.SysMailDao;
+import com.game.dao.UserMailDao;
+import com.game.entity.Item;
+import com.game.entity.SysMail;
+import com.game.entity.UserMail;
+import com.game.entity.vo.UserMailVO;
+import com.mysql.jdbc.StringUtils;
+
+@Service
+public class MailService {
+	@Autowired
+	private SysMailDao sysMailDao;
+	
+	@Autowired
+	private UserMailDao userMailDao;
+	
+	@Autowired
+	private ItemService itemService;
+	
+	/**发布系统邮件  邮件推送**/
+	public boolean sendMail(SysMail sysMail) {
+		AssertUtil.asWarnTrue(MailConfig.map.containsKey(sysMail.getTemplateId()), "模板id不存在！");
+		//保存邮件
+		sysMailDao.create(sysMail);
+		//向所有在线玩家发送新邮件推送
+		//Message message = new Message();
+		//message.setMsgcd(msgcd);
+		return true;
+	}
+	
+	/**查看我的邮件**/
+	public List<UserMailVO> getEmail(Long accountIdLong) {
+		List<UserMailVO> usermailVOList = new ArrayList<UserMailVO>();
+		UserMail userMail = userMailDao.findById(accountIdLong);
+		if (null == userMail) {
+			//用户邮件初始化
+			SysMail sysMail = sysMailDao.findTopOne();
+			userMail = new UserMail();
+			userMail.setAccountId(accountIdLong);
+			userMail.setStartIndex(sysMail.getId()+1);
+			userMail.setEndIndex(sysMail.getId()+1);
+			userMail.setReceiveEndIndex(sysMail.getId()+1);
+			userMail.setReceiveStartIndex(sysMail.getId()+1);
+			userMail.setDelInde("");
+			userMail.setNoRead("");
+			userMail.setNoReceive("");
+			userMailDao.create(userMail);
+		} 
+		//查询邮件规则//根据开始索引和结束索引
+		List<SysMail> sysMailList = sysMailDao.findByStart(userMail.getStartIndex());
+		//得到已删除的
+		Set<Long> delIndexList = stringToIndexs(userMail.getDelInde());
+		//得到未阅读的
+		Set<Long> noReadIndexList = stringToIndexs(userMail.getNoRead());
+		//得到未领取的
+		Set<Long> noReceiveIndexList = stringToIndexs(userMail.getNoReceive());
+		//邮件计数，如果邮件数太大，则删除部分邮件
+		if (sysMailList.size() - delIndexList.size() > 99) {
+			//邮件数量过载，开始自动删除
+			sendDelMessger(sysMailList, sysMailList.size() - delIndexList.size(), userMail);
+		}
+		for (SysMail sysMailTemp : sysMailList) {
+			if (delIndexList.contains(sysMailTemp.getId())) {
+				continue;
+			}
+			UserMailVO userMailVO = new UserMailVO();
+			userMailVO.setId(sysMailTemp.getId());
+			userMailVO.setTitle(sysMailTemp.getTitle());
+			userMailVO.setContext(sysMailTemp.getContext());
+			List<Item> attachment = JSON.parseArray(sysMailTemp.getAttachment(), Item.class);
+			userMailVO.setAttachment(attachment );
+			userMailVO.setSendNow(sysMailTemp.getNowTime());
+			userMailVO.setTemplateId(sysMailTemp.getTemplateId());
+			//阅读状态 大于开始 小于等于结束 不在未阅读中 
+			//附件状态 大于开始 小于等于结束  不在未阅读中 
+			if (sysMailTemp.getId() >= userMail.getStartIndex() && 
+					sysMailTemp.getId() <= userMail.getEndIndex() &&
+					(!noReadIndexList.contains(sysMailTemp.getId()))) {
+				userMailVO.setReadType(true);
+				if (sysMailTemp.getId() > userMail.getReceiveStartIndex() && 
+						sysMailTemp.getId() <= userMail.getReceiveEndIndex() && 
+								(!noReceiveIndexList.contains(sysMailTemp.getId()))) {
+					userMailVO.setReceiveType(true);
+				}else {
+					userMailVO.setReceiveType(false);
+				}
+			} else {
+				userMailVO.setReadType(false);
+				userMailVO.setReceiveType(false);
+			}
+			usermailVOList.add(userMailVO);
+		}
+		return usermailVOList;
+	}
+	/**
+	 * 
+	 * @param sysMailList 我的邮件列表
+	 * @param i 需要删除的邮件件数
+	 * @param userMail 我的邮箱信息
+	 */
+	private void sendDelMessger(List<SysMail> sysMailList, int i, UserMail userMail) {
+		for (int j = 0 ; j < i ; j++) {
+			if (!StringUtils.isNullOrEmpty(sysMailList.get(j).getAttachment())) {
+				List<Item> attachment = JSON.parseArray(sysMailList.get(j).getAttachment(), Item.class);
+				itemService.useItems(userMail.getAccountId(), attachment);
+			}
+			sysMailList.remove(j);
+		}
+		userMail.setStartIndex(sysMailList.get(i).getId());
+	}
+
+	private Set<Long> stringToIndexs(String indexString) {
+		//索引字符串变成id集合
+		Set<Long> delIndexList = new HashSet<Long>();
+		if (!StringUtils.isNullOrEmpty(indexString)) {
+			String[] split = indexString.split(",");
+			for (String string : split) {
+				if (!string.equals("")) {
+					delIndexList.add(new Long(string.trim()));
+				}
+			}
+		}
+		return delIndexList;
+	}
+	
+	/**领取附件**/
+	public Boolean getAttachment(Long accountId, Long id) {
+		SysMail sysMail = sysMailDao.findById(id);
+		UserMail userMail = userMailDao.findById(accountId);
+		//得到未领取的
+		Set<Long> noReceiveIndexList = stringToIndexs(userMail.getNoReceive());
+		AssertUtil.asWarnTrue(userMail.getReceiveEndIndex() < id || noReceiveIndexList.contains(id), "该附件已经领取过！");
+		addNoRead(id, userMail);
+		addNoReceive(id, userMail);
+		List<Item> attachment = JSON.parseArray(sysMail.getAttachment(), Item.class);
+		itemService.settlementItem(accountId, attachment);
+		userMailDao.update(userMail);
+		return true;
+	}
+
+	/**删除邮件**/
+	public boolean delMail(Long accountId, Long id) {
+		AssertUtil.asWarnTrue(null != id, "邮件id不能为空");
+		SysMail sysMail = sysMailDao.findById(id);
+		UserMail userMail = userMailDao.findById(accountId);
+		//得到删除的
+		Set<Long> delIndexList = stringToIndexs(userMail.getDelInde());
+		AssertUtil.asWarnTrue(id < userMail.getStartIndex() || (!delIndexList.contains(id)), "邮件已删除！");
+		//领取附件 
+		//得到未领取的
+		Set<Long> noReceiveIndexList = stringToIndexs(userMail.getNoReceive());
+		if (userMail.getReceiveEndIndex() < id || noReceiveIndexList.contains(id)) {
+			List<Item> attachment = JSON.parseArray(sysMail.getAttachment(), Item.class);
+			itemService.settlementItem(accountId, attachment);
+		}
+		delById(id, userMail, delIndexList);
+		userMailDao.update(userMail);
+		return true;
+	}
+	
+	/**一键式操作**/
+	public Boolean aKeyOperation(Long accountId, Byte type) {
+		MailType emnuMailType = MailType.getType(type);
+		AssertUtil.asWarnTrue(emnuMailType != null, "type类型有误！");
+		UserMail userMail = userMailDao.findById(accountId);
+		List<SysMail> sysMailList = sysMailDao.findByStart(userMail.getStartIndex());
+		//得到未领取的
+		Set<Long> noReceiveIndexList = stringToIndexs(userMail.getNoReceive());
+		//找到所有未领取的邮件，领取
+		useItems(accountId, userMail, sysMailList, noReceiveIndexList);
+		SysMail sysMail = sysMailList.get(sysMailList.size()-1);
+		userMail.setEndIndex(sysMail.getId());
+		userMail.setReceiveEndIndex(sysMail.getId());
+		if (emnuMailType == MailType.delMail) {//删除
+			userMail.setStartIndex(sysMail.getId());
+			userMail.setReceiveStartIndex(sysMail.getId());
+			userMail.setDelInde(sysMail.getId().toString());
+		} 
+		userMail.setNoRead("");
+		userMail.setNoReceive("");
+		userMailDao.update(userMail);
+		return true;
+	}
+	/**阅读邮件**/
+	public boolean readMail(Long accountId, Long id) {
+		AssertUtil.asWarnTrue(null != id, "邮件id不能为空");
+		UserMail userMail = userMailDao.findById(accountId);
+		addNoRead(id, userMail);
+		userMailDao.update(userMail);
+		return true;
+	}
+
+	private void useItems(Long accountId, UserMail userMail, List<SysMail> sysMailList, Set<Long> noRecIndexList) {
+		//找到所有未领取的邮件，领取
+		sysMailList.stream().forEach(sysMailTemp -> {
+			if (noRecIndexList.contains(sysMailTemp.getId()) || sysMailTemp.getId() > userMail.getReceiveEndIndex()) {
+				List<Item> attachment = JSON.parseArray(sysMailTemp.getAttachment(), Item.class);
+				itemService.settlementItem(accountId, attachment);
+			}
+		});
+	}
+	/**对用户邮件操作-修改阅读进度 参数-邮件id**/
+	private void addNoRead(Long id, UserMail userMail) {
+		//1.当前id在我阅读范围之内，但是未阅读
+		//2.当前id不在阅读范围之内
+		if (userMail.getEndIndex() > id) {
+			//得到未阅读的
+			Set<Long> noReadIndexList = stringToIndexs(userMail.getNoRead());
+			noReadIndexList.remove(id);
+		}else {
+			if (id - userMail.getEndIndex() != 1) {
+				StringBuilder stringBuilder = new StringBuilder(userMail.getNoRead());
+				for (int i = userMail.getEndIndex().intValue() + 1; i < id; i++) {
+					stringBuilder.append("," + i);
+				}
+				userMail.setNoRead(stringBuilder.toString());
+			}
+			userMail.setEndIndex(id);
+		}
+	}
+	/**对用户邮件操作-修改领取进度 参数-邮件id**/
+	private void addNoReceive(Long id, UserMail userMail) {
+		//1.当前id在我领取阅读范围之内，但是未领取
+		//2.当前id不在领取阅读范围之内
+		if (userMail.getReceiveEndIndex() > id) {
+			//得到未阅读的
+			Set<Long> noReceiveIndexList = stringToIndexs(userMail.getNoReceive());
+			noReceiveIndexList.remove(id);
+		}else {
+			if (id - userMail.getReceiveEndIndex() != 1) {
+				StringBuilder stringBuilder = new StringBuilder(userMail.getNoReceive());
+				for (int i = userMail.getReceiveEndIndex().intValue() + 1; i < id; i++) {
+					stringBuilder.append("," + i);
+				}
+				userMail.setNoReceive(stringBuilder.toString());
+			}
+			userMail.setReceiveEndIndex(id);
+		}
+	}
+	/**对用户邮件操作-删除邮件id 参数 邮件id**/
+	private void delById(Long id, UserMail userMail,Set<Long> delIndex) {
+		//1.id不在当前阅读，领取范围内
+		//2.id当前阅读领取范围内
+		if (userMail.getEndIndex() < id) {
+			if (id - userMail.getReceiveEndIndex() != 1) {
+				StringBuilder stringBuilder = new StringBuilder(userMail.getNoReceive());
+				for (int i = userMail.getReceiveEndIndex().intValue() + 1; i < id; i++) {
+					stringBuilder.append("," + i);
+				}
+				userMail.setNoReceive(stringBuilder.toString());
+				
+				stringBuilder = new StringBuilder(userMail.getNoRead());
+				for (int i = userMail.getEndIndex().intValue() + 1; i < id; i++) {
+					stringBuilder.append("," + i);
+				}
+				userMail.setNoRead(stringBuilder.toString());
+			}
+			userMail.setReceiveEndIndex(id);
+			userMail.setEndIndex(id);
+		}else {
+			Set<Long> noReceiveIndexsList = stringToIndexs(userMail.getNoReceive());
+			if (noReceiveIndexsList.contains(id)) {
+				noReceiveIndexsList.remove(id);
+				StringBuilder stringBuilder = new StringBuilder();
+				noReceiveIndexsList.stream().forEach(noReceiveIndex -> {
+					stringBuilder.append("," + noReceiveIndex);
+				});
+				userMail.setNoReceive(stringBuilder.toString());
+			}
+			Set<Long> noReadIndexsList = stringToIndexs(userMail.getNoRead());
+			if (noReadIndexsList.contains(id)) {
+				noReadIndexsList.remove(id);
+				StringBuilder stringBuilder = new StringBuilder();
+				noReadIndexsList.stream().forEach(noReadIndex -> {
+					stringBuilder.append("," + noReadIndex);
+				});
+				userMail.setNoRead(stringBuilder.toString());
+			}
+		}
+		delIndex.add(id);
+		StringBuilder delIndexStringBuilder = new StringBuilder();
+		delIndex.stream().forEach(delIndexTemp -> {
+			delIndexStringBuilder.append("," + delIndexTemp);
+		});
+		userMail.setDelInde(delIndexStringBuilder.toString());
+	}
+	
+}

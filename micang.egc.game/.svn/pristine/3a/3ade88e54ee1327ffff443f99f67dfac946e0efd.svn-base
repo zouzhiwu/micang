@@ -1,0 +1,180 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.common.entity.Role;
+import com.common.enumerate.CoinEnum;
+import com.common.util.AssertUtil;
+import com.game.dao.RoleDao;
+import com.game.entity.CoinItemCountBean;
+import com.game.entity.Item;
+import com.game.util.Params;
+
+@Service
+public class RoleService {
+
+	@Autowired
+	private RoleDao roleDao;
+	@Autowired
+	private ItemService itemService;
+	
+	
+	
+	
+	
+	/**
+	 * 消耗道具和货币
+	 * @param accountId
+	 * @param role
+	 * @param list
+	 */
+	public void consumeCoinItemEnough(long accountId, Role role, int[] consumeCoinItemId, int[] consumeCountCoin) {
+		
+		List<CoinItemCountBean> list = new ArrayList<CoinItemCountBean>();
+		for(int i=0;i<consumeCoinItemId.length;i++) {
+			CoinItemCountBean cBean = new CoinItemCountBean(consumeCoinItemId[i], consumeCountCoin[i]);
+			list.add(cBean);
+		}
+
+		List<CoinItemCountBean> coinList = list.stream().filter(p -> p.getCoinItemId().intValue() <= Params.coin_100)
+				.collect(Collectors.toList());
+		this.consumeCoin(role, coinList);
+		
+		List<CoinItemCountBean> itemList = list.stream().filter(p -> p.getCoinItemId().intValue() > Params.coin_100)
+				.collect(Collectors.toList());
+		List<Item> tempitemList = new ArrayList<Item>();
+		for (CoinItemCountBean ciBean: itemList) {
+			Item item = new Item();
+			item.setBoxId(ciBean.getCoinItemId());
+			item.setTemplateId(ciBean.getCoinItemId());
+			item.setCount(ciBean.getCount());
+
+			tempitemList.add(item);
+		}
+		itemService.useItems(accountId, tempitemList);
+	}
+	
+	
+	public void consumeCoin(Role role, List<CoinItemCountBean> list) {
+		for (CoinItemCountBean cb:list) {
+			if(cb.getCoinItemId()==CoinEnum.gb.getIndex()) {
+				role.setGb(role.getGb()-cb.getCount());
+			} else if(cb.getCoinItemId()==CoinEnum.jb.getIndex()) {
+				role.setJb(role.getJb()-cb.getCount());
+			} else if(cb.getCoinItemId()==CoinEnum.xinlifudaoCoin.getIndex()) {
+				role.setXinlifudaoCoin(role.getXinlifudaoCoin()-cb.getCount());
+			} else {
+				AssertUtil.asWarnTrue(false, "币种不存在");
+			}
+		}
+		roleDao.update(role);
+	}
+	
+	
+	/**
+	 * 检测道具和货币是否足够
+	 * @param accountId
+	 * @param role
+	 * @param list
+	 * @return
+	 */
+	public boolean checkCoinItemEnough(long accountId, Role role, int[] consumeCoinItemId, int[] consumeCountCoin) {
+		
+		List<CoinItemCountBean> list = new ArrayList<CoinItemCountBean>();
+		for(int i=0;i<consumeCoinItemId.length;i++) {
+			CoinItemCountBean cBean = new CoinItemCountBean(consumeCoinItemId[i], consumeCountCoin[i]);
+			list.add(cBean);
+		}
+		
+		
+		List<CoinItemCountBean> coinList = list.stream().filter(p -> p.getCoinItemId().intValue() <= Params.coin_100)
+				.collect(Collectors.toList());
+		boolean flag =true;
+		if(coinList!=null && coinList.size()>0) {
+			flag = this.checkCoinEnough(role, coinList);
+		}
+		if(!flag) {
+			return flag;
+		}
+
+		List<CoinItemCountBean> itemList = list.stream().filter(p -> p.getCoinItemId().intValue() > Params.coin_100)
+				.collect(Collectors.toList());
+		
+		List<Integer> itemIdlist = itemList.stream().map(p->p.getCoinItemId()).collect(Collectors.toList());
+		Map<Integer, Item> map = itemService.itemsInfo(accountId, itemIdlist);
+		flag = this.checkItemEnough(map, itemList);
+
+		return flag;
+	}
+	
+	/**
+	 * 检测道具是否足够
+	 * @param itemsMap
+	 * @param consumeList
+	 * @return
+	 */
+	public boolean checkItemEnough(Map<Integer, Item> itemsMap, List<CoinItemCountBean> consumeList) {
+		boolean flag = true;
+		for (CoinItemCountBean coinItemCountBean : consumeList) {
+			if (!(itemsMap.get(coinItemCountBean.getCoinItemId()) != null && itemsMap.get(coinItemCountBean.getCoinItemId()).getCount() >= coinItemCountBean.getCount())) {
+				flag = false;
+				break;
+			}
+		}
+		return flag;
+	}
+	
+	public boolean checkCoinEnough(Role role, List<CoinItemCountBean> list) {
+		boolean flag =true;
+		for (CoinItemCountBean cb:list) {
+			if(cb.getCoinItemId()==CoinEnum.gb.getIndex()) {
+				if(role.getGb()<cb.getCount()) {
+					flag = false;
+				}
+			} else if(cb.getCoinItemId()==CoinEnum.jb.getIndex()) {
+				if(role.getJb()<cb.getCount()) {
+					flag = false;
+				}
+			} else if(cb.getCoinItemId()==CoinEnum.xinlifudaoCoin.getIndex()) {
+				if(role.getXinlifudaoCoin()<cb.getCount()) {
+					flag = false;
+				}
+			} else {
+				flag = false;
+			}
+		}
+		return flag;
+	}
+	
+	
+	
+	
+	
+
+	public void add(Role role) {
+		roleDao.add(role);
+	}
+
+	public void update(Role role) {
+		roleDao.update(role);
+	}
+
+	public Role getById(Long id) {
+		return roleDao.getById(id);
+	}
+
+	public void updateGb(Long accountId, Long add) {
+		roleDao.updateGb(accountId, add);
+	}
+
+	public void updateJb(Long accountId, Long add) {
+		roleDao.updateJb(accountId, add);
+	}
+
+}

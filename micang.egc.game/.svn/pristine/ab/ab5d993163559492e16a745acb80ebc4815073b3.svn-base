@@ -1,0 +1,140 @@
+package com.game.node;
+
+import java.util.List;
+
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Hero;
+import com.common.entity.Location;
+import com.common.entity.Member;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.HeroTemplate;
+import com.common.util.GameUtil;
+import com.game.entity.Room;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+
+public class HeroNode extends AbsMoveNode {
+	private static final Logger logger = LoggerFactory.getLogger(HeroNode.class);
+	public Hero hero;
+	public HeroTemplate heroTemplate;
+	public Member member;
+	
+	public HeroNode(short nodeId, Room room, Location location, Hero hero, HeroTemplate heroTemplate, CampType camp) {
+		this.nodeId = nodeId;
+		this.selfCamp = camp;
+		this.room = room;
+		this.location = new Location(location.x, location.y);
+		this.hero = hero;
+		this.heroTemplate = heroTemplate;
+		setEnemyCamp();
+		this.hp = heroTemplate.getHp();
+		this.vr = heroTemplate.getVr();
+		this.pa = heroTemplate.getPa();
+		this.ma = heroTemplate.getMa();
+		this.ats = heroTemplate.getAts();
+		logger.info(String.format("创建 nodeId=%d %s %s %s", nodeId, this.selfCamp.getName(), this.getNodeType().getName(), location));
+	}
+	
+	
+	/**加成后的物防(Physical Defense)*/
+	public int pd;
+	
+	/**加成后的法防(Magic Defense)*/
+	public int md;
+	
+	/**加成后的经验值*/
+    public short exp;
+    
+	/**加成后的冷却时间(Cold Down)*/
+	public int cd;
+	
+	/**加成后的物暴(Physical Crit)*/
+	public int pcrt;
+	
+	/**加成后的法暴(Magic Crit)*/
+	public int mcrt;
+	
+	/**加成后的物穿(Physical Penetrating Power)*/
+	public int ppt;
+	
+	/**加成后的法穿(Magic Penetrating Power)*/
+	public int mpt;
+	
+	/**加成后的伤害加深(Hurt Increase)*/
+	public int hi;
+	
+	/**加成后的伤害减免(Hurt Reduction)*/
+	public int hr;
+	
+	/**补刀数*/
+	public short supplement;
+	
+	/**金钱数*/
+	public short money;
+	
+	/**击杀数量*/
+	public byte kill;
+	
+	/**死亡次数*/
+	public byte dead;
+	
+	/**助攻次数*/
+	public byte help;
+	
+	/**查找领路人*/
+	public JobKey findGuiderJobKey;
+	
+	public void startFindGuider() {
+		FightJobManager.createFindGuiderJob(room, this);
+	}
+	
+	public void stopFindGuider() {
+		JobScheduler.stopJob(findGuiderJobKey);
+	}
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Hero;
+	}
+	
+	public void die(BaseNode attackNode) {
+    	// TODO 英雄复活
+		logger.info(String.format("nodeId=%d 阵亡", this.nodeId));
+		// 删除节点
+    	room.remove(nodeId);
+    	stopAttack();
+    	stopMove();
+    	stopUpdateVision();
+		refreshAllNodeVision();
+    }
+	
+	public void findGuider() {
+		// 是否找到追随者
+		boolean isFind = false;
+		List<BaseNode> nodeList = room.getNodeList(NodeType.Troops, selfCamp);
+		// 在视野半径中查找是否存在己方小兵节点
+    	for (BaseNode node : nodeList) {
+    		double distance = GameUtil.distance(node.location, this.location);
+			if (distance <= vr) {
+				isFind = true;
+				break;
+    		}
+    	}
+    	logger.info(String.format("nodeId=%d isFind=%s", this.nodeId, isFind));
+    	// 如果找到追随者，则冲向对方基地
+    	if (isFind) {
+    		HomeNode enemyHome = room.getHomeNode(enemyCamp);
+    		// 停止查找追随者Job
+    		stopFindGuider();
+    		logger.info(String.format("nodeId=%d 变更目标 nodeId=%d", nodeId, enemyHome.nodeId));
+    		// 设置对方基地为目标
+    		setTarget(new Target(enemyHome));
+    		// 启动更新视野Job
+    		startUpdateVision();
+    	}
+	}
+}

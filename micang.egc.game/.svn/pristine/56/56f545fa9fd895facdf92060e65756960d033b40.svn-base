@@ -1,0 +1,128 @@
+package com.game.entity;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.HeroTemplate;
+import com.game.job.FightJobManager;
+
+public class Hero extends BaseMoveNode {
+	
+	public Hero() {
+		
+	}
+	
+	public Hero(short nodeId, Room room, Location location, HeroTemplate heroTemplate, CampType camp) {
+		this.nodeId = nodeId;
+		this.selfCamp = camp;
+		this.room = room;
+		this.location = new Location(location.x, location.y);
+		this.template = heroTemplate;
+		setEnemyCamp();
+	}
+	
+	public void createJob() {
+		FightJobManager.createUpdateVisionJob(room, this, vr);
+		FightJobManager.createAttackJob(this, aoe);
+		FightJobManager.createMoveJob(this, aoe);
+	}
+	
+	private Long id;
+	private Long accountId;
+	private Integer templateId;
+	
+	/***************************战斗属性***********************************/
+	public Room room;
+	public HeroTemplate template;
+	/**物攻(Physical Attack)*/
+	public int pa;
+	
+	/**法攻(Magic Attack)*/
+	public int ma;
+	
+	/**物防(Physical Defense)*/
+	public int pd;
+	
+	/**法防(Magic Defense)*/
+	public int md;
+	
+	/**经验值*/
+    public short exp;
+    
+    /**射程半径*/
+    public short aoe = 10;
+    
+    /**视野半径 */
+    public short vr;
+    
+    /**移速(Move Speed)*/
+	public int mvs;
+	
+	/**攻速(Attack Speed)*/
+	public int ats;
+	
+	/**冷却时间(Cold Down)*/
+	public int cd;
+	
+	/**物暴(Physical Crit)*/
+	public int pcrt;
+	
+	/**法暴(Magic Crit)*/
+	public int mcrt;
+	
+	/**物穿(Physical Penetrating Power)*/
+	public int ppt;
+	
+	/**法穿(Magic Penetrating Power)*/
+	public int mpt;
+	
+	/**伤害加深(Hurt Increase)*/
+	public int hi;
+	
+	/**伤害减免(Hurt Reduction)*/
+	public int hr;
+	
+	/**补刀数*/
+	public short supplement;
+	
+	/**金钱数*/
+	public short money;
+	
+	/**击杀数量*/
+	public byte kill;
+	
+	/**死亡次数*/
+	public byte dead;
+	
+	/**助攻次数*/
+	public byte help;
+	
+	public NodeType getNodeType() {
+		return NodeType.Hero;
+	}
+	/***************************战斗属性***********************************/
+	
+	public Long getId() {
+		return id;
+	}
+	public void setId(Long id) {
+		this.id = id;
+	}
+	public Long getAccountId() {
+		return accountId;
+	}
+	public void setAccountId(Long accountId) {
+		this.accountId = accountId;
+	}
+	public Integer getTemplateId() {
+		return templateId;
+	}
+	public void setTemplateId(Integer templateId) {
+		this.templateId = templateId;
+	}
+	
+	public void die(BaseNode node) {
+    	// TODO 把这个节点从所有节点视野中删除
+    	// TODO 如果是英雄，则创建复活job，否则删除对象
+    }
+}

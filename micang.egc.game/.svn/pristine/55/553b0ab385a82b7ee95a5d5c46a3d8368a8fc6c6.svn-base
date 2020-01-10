@@ -1,0 +1,164 @@
+package com.game.node;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.cb.msg.Message;
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.TargetType;
+import com.common.util.GameUtil;
+import com.game.common.MessageCode;
+import com.game.entity.Room;
+import com.game.helper.MsgHelper;
+
+/***
+ * 具备视野性质和攻击性质的抽象节点
+ */
+public abstract class AbsAttackNode extends BaseNode {
+	private static final Logger logger = LoggerFactory.getLogger(AbsAttackNode.class);
+    /**攻击JobKey*/
+    public JobKey attackJobKey;
+    
+    /**视野JobKey */
+	public JobKey updateVisionJobKey;
+	
+	/**视野内的节点 */
+    public List<BaseNode> visionList = new ArrayList<BaseNode>();
+    
+    /**移动路径 */
+	protected List<Location> way = new ArrayList<Location>();
+	
+	/**攻击目标*/
+	public Target target;
+	
+	/**射程 */
+	public short aoe;
+    
+    public abstract void startAttack();
+    
+    public abstract void stopAttack();
+    
+    public abstract void setTarget(Target target);
+    
+    public void updateVision(Room room, short vr) {
+    	List<BaseNode> nodeList = room.getNodeList(enemyCamp);
+    	for (BaseNode node : nodeList) {
+    		if (visionList.contains(node)) {
+    			double distance = GameUtil.distance(node.location, this.location);
+    			if (distance > vr) {
+        			visionList.remove(node);
+        		}
+    		} else {
+    			double distance = GameUtil.distance(node.location, this.location);
+    			if (distance <= vr) {
+        			visionList.add(node);
+        		}
+    		}
+    	}
+//    	printVisionList();
+    	if (visionList.size() > 0) {
+    		BaseNode node = getMinDistance();
+    		if (node != null) {
+    			setTarget(new Target(node));
+    		}
+    	} else {
+    		// 如果视野内没有节点，并且没有目标，则把对方基地作为目标寻路
+    		if (this.target == null) {
+        		HomeNode enemyHomeNode = this.selfCamp == CampType.Blue ? room.getRedHome() : room.getBuleHome();
+        		if (enemyHomeNode != null) {
+        			setTarget(new Target(enemyHomeNode));
+        		}
+    		}
+    	}
+    }
+    
+    /**
+          * 在视野中查找最近距离的节点
+     * @return
+     */
+    private BaseNode getMinDistance() {
+    	if (visionList.size() == 1) {
+			BaseNode node = visionList.get(0);
+			if (target.type == TargetType.Node) {
+				if (target.node.hp > 0) {
+					if (node.nodeId != target.node.nodeId) {
+    					return node;
+        			}
+				}
+			}
+		} else if (visionList.size() > 1) {
+			final Location myLocation = this.location;
+			// 距离排序
+			Collections.sort(visionList, new Comparator<BaseNode>() {
+			    @Override
+			    public int compare(BaseNode node1, BaseNode node2) {
+			        return GameUtil.distance(node1.location, myLocation) > GameUtil.distance(node2.location, myLocation) ? 0 : 1;
+			    }
+			});
+			// 选择最近距离的节点攻击
+			BaseNode node = visionList.get(0);
+			return node;
+		} else {
+			return null;
+		}
+    	return null;
+    }
+    
+    public void attack() {
+        // 如果目标是节点，则计算攻击伤害
+        if (target.type == TargetType.Node) {
+        	if (target.node.hp > 0) {
+        		// 如果当前位置和目标位置小于射程，则扣对方血量
+                if (GameUtil.distance(this.location, target.node.location) <= aoe) {
+                    // 扣血，并处理小于0的情况
+                	target.node.hp -= 100;
+                	logger.info(String.format("nodeId=%d hp=%d", target.node.nodeId, target.node.hp));
+                    // 如果对方血量为0，则结束攻击
+                    if (target.node.hp < 0) {
+                    	target.node.hp = 0;
+                    }
+                    sendHpMessage(room, this, target.node);
+                } else {
+                	stopAttack();
+                }
+        	}
+        	// 如果对方血量为0，则结束攻击
+            if (target.node.hp <= 0) {
+                // 阵亡处理
+            	target.node.die(this);
+            	// 如果当前节点是父类是可移动类BaseMoveNode，则把对方基地作为目标寻路
+            	if (AbsMoveNode.class.isAssignableFrom(this.getClass())) {
+            		HomeNode enemyHomeNode = this.selfCamp == CampType.Blue ? room.getRedHome() : room.getBuleHome();
+            		if (enemyHomeNode != null) {
+            			setTarget(new Target(enemyHomeNode));
+            		}
+            	}
+            	stopAttack();
+            }
+        } else {
+        	logger.error(String.format("nodeId(%d)攻击攻击目标错误", this.nodeId));
+        }
+    }
+    
+    private void sendHpMessage(Room room, BaseNode asNode, BaseNode beNode) {
+    	Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_hp_notice);
+		msg.putShort(asNode.nodeId);
+		msg.putShort(asNode.location.x);
+		msg.putShort(asNode.location.y);
+		msg.putInt(asNode.hp);
+		msg.putShort(beNode.nodeId);
+		msg.putShort(beNode.location.x);
+		msg.putShort(beNode.location.y);
+		msg.putInt(beNode.hp);
+		MsgHelper.sendBroadcast(msg, room);
+    }
+    
+}

@@ -1,0 +1,89 @@
+package com.game.service;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.Account;
+import com.common.entity.Goods;
+import com.common.enumerate.CurrencyType;
+import com.common.template.ItemTemplate;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.config.ItemConfig;
+import com.game.dao.AccountDao;
+import com.game.dao.GoodsDao;
+
+@Service
+public class GoodsService {
+	private static final Logger logger = LoggerFactory.getLogger(GoodsService.class);
+	
+	@Autowired
+	private GoodsDao goodsDao;
+	@Autowired
+	private AccountDao accountDao;
+	@Autowired
+	private MailService mailService;
+	@Autowired
+	private AccountService accountService;
+	
+	public void getListInfo(Integer tabIndex, Integer pageIndex, Integer pageSize) {
+		logger.info(String.format("tabIndex=%d pageIndex=%d pageSize=%d", tabIndex, pageIndex, pageSize));
+		Integer recordIndex = pageIndex * pageSize;
+		List<Goods> goodsList = goodsDao.getList(tabIndex, recordIndex, pageSize);
+		Integer recordCount = goodsDao.getRecordCount(pageIndex);
+		Integer pageCount = (recordCount / pageSize) + (recordCount % pageSize > 0 ? 1 : 0);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_goods_list);
+		msg.putInt(pageCount);
+		msg.putShort(goodsList.size());
+		for (Goods goods : goodsList) {
+			msg.putInt(goods.getId());
+			msg.putInt(goods.getTemplateId());
+			msg.putInt(goods.getJb());
+			msg.putInt(goods.getGb());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	@Transactional
+	public void buy(Long accountId, Integer goodsId, Integer count, Integer currencyId) {
+		CurrencyType currencyType = CurrencyType.getType(currencyId);
+		AssertUtil.asWarnTrue(currencyType != null, "不存在的货币类型");
+		Goods goods = goodsDao.getById(goodsId);
+		ItemTemplate itemTemplate = ItemConfig.map.get(goods.getTemplateId());
+		long amount = 0;
+		Account account = accountDao.getById(accountId);
+		Long jb = 0L;
+		Long gb = 0L;
+		if (currencyType == CurrencyType.JB) {
+			amount = goods.getJb() * count;
+			AssertUtil.asWarnTrue(account.getJb() >= amount, "您的钻石不足");
+			jb = accountService.updateJb(accountId, -amount, String.format("购买商品%d(%s)", goods.getTemplateId(), itemTemplate.getName()));
+		} else if (currencyType == CurrencyType.GB) {
+			amount = goods.getGb() * count;
+			AssertUtil.asWarnTrue(account.getGb() >= amount, "您的金币不足");
+			gb = accountService.updateGb(accountId, -amount, String.format("购买商品%d(%s)", goods.getTemplateId(), itemTemplate.getName()));
+		}
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < count; i++) {
+			sb.append("," + goods.getTemplateId());
+		}
+		if (sb.length() > 0) {
+			sb.deleteCharAt(0);
+		}
+		mailService.create(accountId, String.format("购买商品%s", itemTemplate.getName()), itemTemplate.getId());
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_goods_buy);
+		msg.putLong(jb);
+		msg.putLong(gb);
+		MsgSender.sendMsg(msg);
+	}
+	
+}

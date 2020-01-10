@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.AccountScoreDao">	
+	
+	<insert id="replace" parameterType="com.common.entity.AccountScore" useGeneratedKeys="true" keyProperty="id">
+		replace into account_score(accountId, obj) values (#{accountId}, #{obj})
+	</insert>
+	
+	<select id="getByAccountId" parameterType="Long" resultType="com.common.entity.AccountScore">
+		select * from account_score where accountId = #{accountId}
+	</select>
+</mapper>  

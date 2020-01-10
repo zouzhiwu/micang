@@ -1,0 +1,97 @@
+package com.game.action;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Action;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.game.common.MessageCode;
+import com.game.service.TradeService;
+
+import io.netty.channel.Channel;
+
+@Service
+public class TradeAction {
+
+	private static final Logger logger = LoggerFactory.getLogger(TradeAction.class);
+
+	@Autowired
+	private TradeService tradeService;
+	
+	/**
+	 * 邀请玩家交易
+	 */
+	@Action(MessageCode.msg_trade_invite)
+	public void invite(Message message, Channel channel) throws Exception {
+		Long beAccountId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s beAccountId=%s", message.getMsgcd(), message.getAccountId(), beAccountId));
+		tradeService.invite(message.getAccountId(), beAccountId);
+	}
+	
+	/**
+	 * 审批邀请
+	 */
+	@Action(MessageCode.msg_trade_approve)
+	public void approveInvite(Message message, Channel channel) throws Exception {
+		Boolean isAgree = message.getBoolean();
+		String jobName = message.getString();
+		String jobGroup = message.getString();
+		logger.info(String.format("RESV %d from accountId=%s isAgree=%s jobName=%s jobGroup=%s"
+				, message.getMsgcd(), message.getAccountId(), isAgree, jobName, jobGroup));
+		tradeService.approveInvite(message.getAccountId(), isAgree, jobName, jobGroup);
+	}
+	
+	/**
+	 * 交易操作
+	 */
+	@Action(MessageCode.msg_trade_operation)
+	public void tradeOperation(Message message, Channel channel) throws Exception {
+		Long tradeId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s tradeId=%s", message.getMsgcd(), message.getAccountId(), tradeId));
+		tradeService.operationTrade(message.getAccountId(), tradeId);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 锁定交易
+	 */
+	@Action(MessageCode.msg_trade_lock)
+	public void lockTrade(Message message, Channel channel) throws Exception {
+		Long tradeId = message.getLong();
+		short size = message.getShort();
+		Long[] itemIds = new Long[size];
+		for (int i = 0; i < size; i++) {
+			itemIds[i] = message.getLong();
+		}
+		Long jb = message.getLong();
+		Long gb = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s tradeId=%s", message.getMsgcd(), message.getAccountId(), tradeId));
+		tradeService.lockTrade(message.getAccountId(), tradeId, itemIds, jb, gb);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 确认交易
+	 */
+	@Action(MessageCode.msg_trade_enter)
+	public void enterTrade(Message message, Channel channel) throws Exception {
+		Long tradeId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s tradeId=%s", message.getMsgcd(), message.getAccountId(), tradeId));
+		tradeService.enterTrade(message.getAccountId(), tradeId);
+	}
+	
+	/**
+	 * 取消交易
+	 */
+	@Action(MessageCode.msg_trade_cancel)
+	public void cancelTrade(Message message, Channel channel) throws Exception {
+		Long tradeId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s tradeId=%s", message.getMsgcd(), message.getAccountId(), tradeId));
+		tradeService.cancelTrade(message.getAccountId(), tradeId);
+	}
+}

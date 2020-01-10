@@ -1,0 +1,46 @@
+package com.game.job.vision;
+
+import java.util.Arrays;
+import java.util.List;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+
+import com.common.entity.Hero;
+import com.common.entity.Room;
+import com.game.helper.MsgHelper;
+import com.game.vision.VisionAdapter;
+
+@DisallowConcurrentExecution
+public class UpdateHeroVisionJob implements Job {
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Room room = (Room)jobDataMap.get("room");
+		Hero currHero = (Hero)jobDataMap.get("currHero");
+		int vision = jobDataMap.getInt("vision");
+		List<Hero> visionHeroList = VisionAdapter.getVisionHeroList(currHero, room.heroMap, vision);
+		List<Hero> inHeroList = VisionAdapter.getInHeroList(currHero.visionHeroList, visionHeroList);
+		List<Hero> outHeroList = VisionAdapter.getOutHeroList(currHero.visionHeroList, visionHeroList);
+		if (CollectionUtils.isNotEmpty(inHeroList)) {
+			currHero.visionHeroList.addAll(inHeroList);
+		}
+		if (CollectionUtils.isNotEmpty(outHeroList)) {
+			currHero.visionHeroList.removeAll(outHeroList);
+		}
+		if (!currHero.isNpc) {
+			if (CollectionUtils.isNotEmpty(inHeroList) || CollectionUtils.isNotEmpty(outHeroList)) {
+				MsgHelper.broadcastVisionHeroList(Arrays.asList(currHero), inHeroList, outHeroList, currHero.roomId);
+			}
+			if (CollectionUtils.isNotEmpty(inHeroList)) {
+				MsgHelper.sendBuffStatus(currHero, inHeroList);
+			}
+		}
+	}
+}

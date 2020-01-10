@@ -1,0 +1,71 @@
+package com.game.entity;
+
+import java.util.List;
+
+public class PrivateMail {
+	
+	private Long id;
+	/**邮件标题*/
+	private String title;
+	/**邮件名*/
+	private String name;
+	/**邮件内容*/
+	private String content;
+	/**附件*/
+	private List<Item> itemList;
+	/**创建时间*/
+	private int createTime;
+	/**读取时间*/
+	private int readTime;
+	/**领取时间*/
+	private boolean receiveTime;
+	
+	public Long getId() {
+		return id;
+	}
+	public void setId(Long id) {
+		this.id = id;
+	}
+	public String getTitle() {
+		return title;
+	}
+	public void setTitle(String title) {
+		this.title = title;
+	}
+	public String getName() {
+		return name;
+	}
+	public void setName(String name) {
+		this.name = name;
+	}
+	public String getContent() {
+		return content;
+	}
+	public void setContent(String content) {
+		this.content = content;
+	}
+	public List<Item> getItemList() {
+		return itemList;
+	}
+	public void setItemList(List<Item> itemList) {
+		this.itemList = itemList;
+	}
+	public int getCreateTime() {
+		return createTime;
+	}
+	public void setCreateTime(int createTime) {
+		this.createTime = createTime;
+	}
+	public int getReadTime() {
+		return readTime;
+	}
+	public void setReadTime(int readTime) {
+		this.readTime = readTime;
+	}
+	public boolean isReceiveTime() {
+		return receiveTime;
+	}
+	public void setReceiveTime(boolean receiveTime) {
+		this.receiveTime = receiveTime;
+	}
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.PublicMailAccountDao">	
+	
+	<insert id="create" parameterType="com.game.entity.PublicMailAccount" useGeneratedKeys="true" keyProperty="id">
+		insert into public_mail_account ( mailId, accountId
+		) values ( #{mailId}, #{accountId}
+		)
+	</insert>
+	<delete id="delByMailId" parameterType="Long">
+		delete from public_mail_account where mailId = #{mailId}
+	</delete>
+</mapper>  

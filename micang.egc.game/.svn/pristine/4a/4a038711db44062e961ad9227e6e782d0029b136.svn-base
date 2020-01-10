@@ -1,0 +1,30 @@
+package com.game.entity;
+
+import java.io.Serializable;
+
+public class Item implements Serializable  {
+	private static final long serialVersionUID = 1L;
+	public Item(Integer templateId, Integer count) {
+		super();
+		this.templateId = templateId;
+		this.count = count;
+	}
+	/** 道具模板id**/
+	private Integer templateId;
+	
+	/**道具数量**/
+	private Integer count;
+	
+	public Integer getTemplateId() {
+		return templateId;
+	}
+	public void setTemplateId(Integer templateId) {
+		this.templateId = templateId;
+	}
+	public Integer getCount() {
+		return count;
+	}
+	public void setCount(Integer count) {
+		this.count = count;
+	}
+}

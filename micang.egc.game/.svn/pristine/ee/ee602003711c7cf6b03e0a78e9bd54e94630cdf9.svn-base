@@ -1,0 +1,63 @@
+package com.game.node;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+
+public class TowerNode extends BaseAttackNode {
+	private static final Logger logger = LoggerFactory.getLogger(TowerNode.class);
+	public TowerNode(short nodeId, Room room, NodeTemplate template, CampType camp) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = camp;
+		setEnemyCamp();
+		this.hp = template.getHp();
+	}
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Tower;
+	}
+	
+	
+
+	@Override
+	public void die(BaseNode attackNode) {
+		logger.info(String.format("nodeId=%d阵亡", this.nodeId));
+		room.remove(this.nodeId);
+		List<BaseNode> nodeList = room.getAllList();
+		for (BaseNode node : nodeList) {
+			if (BaseMoveNode.class.isAssignableFrom(node.getClass())) {
+				BaseMoveNode baseMoveNode = (BaseMoveNode) node;
+				boolean isRemove = baseMoveNode.visionList.remove(this);
+				logger.info(String.format("节点%d 视野列表中移除nodeId=%d isRemove=%s", baseMoveNode.nodeId, this.nodeId, isRemove));
+			}
+		}
+	}
+
+	@Override
+	public void startAttack() {
+		FightJobManager.createAttackJob(this, template.getAoe(), template.getAts());
+	}
+
+	@Override
+	public void stopAttack() {
+		JobScheduler.stopJob(this.attackJobKey);
+	}
+
+	@Override
+	public short getAoe() {
+		return this.template.getAoe();
+	}
+}

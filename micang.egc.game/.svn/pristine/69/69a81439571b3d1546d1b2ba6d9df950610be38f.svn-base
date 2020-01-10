@@ -1,0 +1,40 @@
+package com.game.job.skill;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.game.job.JobScheduler;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class ThreeChopsJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(ThreeChopsJob.class);
+	
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		int index = jobDataMap.getInt("index");
+		logger.info(String.format("第%d斩", index));
+		jobDataMap.put("index", ++index);
+		// 如果大于3次，则结束job
+		if (index > 3) {
+			JobScheduler.stopJob(jobDetail.getKey());
+		} else {
+			boolean isActive = jobDataMap.getBoolean("isActive");
+			// 如果当前斩已激活，则重新设置为未激活，等待玩家激活，否则结束job
+			if (isActive) {
+				jobDataMap.put("isActive", false);
+			} else {
+				JobScheduler.stopJob(jobDetail.getKey());
+			}
+		}
+	}
+}

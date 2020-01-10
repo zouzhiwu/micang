@@ -1,0 +1,129 @@
+package com.game.node;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.MapNodeType;
+import com.common.enumerate.NodeType;
+import com.common.util.GameUtil;
+import com.game.entity.Room;
+import com.game.service.MapService;
+
+/**
+ * 具备移动性质的抽象节点
+ */
+public abstract class BaseMoveNode extends BaseAttackNode {
+	private static final Logger logger = LoggerFactory.getLogger(BaseMoveNode.class);
+
+	/**视野内的节点 */
+    public List<BaseNode> visionList = new ArrayList<BaseNode>();
+    
+    /**移动路径 */
+	protected List<Location> way = new ArrayList<Location>();
+	
+	/**视野JobKey */
+	public JobKey updateVisionJobKey;
+	
+	/**移动JobKey */
+	public JobKey moveJobKey;
+	
+	public abstract void startMove();
+	
+	public abstract void stopMove();
+	
+	public abstract void startUpdateVision();
+	
+	public abstract void stopUpdateVision();
+    
+    public void updateVision(Room room, short vr) {
+    	List<BaseNode> nodeList = room.getNodeList(enemyCamp);
+    	for (BaseNode node : nodeList) {
+    		if (visionList.contains(node)) {
+    			if (GameUtil.distance(node.location, this.location) > vr) {
+        			visionList.remove(node);
+        		}
+    		} else {
+    			if (GameUtil.distance(node.location, this.location) <= vr) {
+        			visionList.add(node);
+        		}
+    		}
+    	}
+    }
+    
+    
+    public void setTarget(Target target) {
+    	this.target = target;
+        this.way.clear();
+    }
+    
+    public void move(short aoe, short mvs, long timeLength) {
+        if (way.size() == 0) {
+        	autoSearchWay(aoe);
+        } else {
+            Location subTargetLocation = way.get(0);
+            if (subTargetLocation != null) {
+                // 如果当前位置和目标位置小于射程，则攻击，否则继续移动
+                if (GameUtil.distance(this.location, target.location) <= aoe) {
+                    way.clear();
+                    startAttack();
+                } else {
+                    // 如果当前位置和节点位置小于等于0.1，则视为到达目标位置，删除目标位置，否则移动到目标位置
+                    if (GameUtil.distance(this.location, subTargetLocation) <= 0.5f) {
+                        way.remove(subTargetLocation);
+                        //Debug.Log(string.Format("英雄{0}({1},{2})", code, vector.x, vector.y));
+                    } else {
+                    	// 更新位置
+                    	float time = timeLength / 1000.0f;
+            			updateLocation(mvs, time, subTargetLocation);
+                    }
+                }
+            }
+        }
+    }
+    
+    private void updateLocation(short mvs, float timeLength, Location targetLocation) {
+    	double angle = Math.atan2(targetLocation.y - this.location.y, targetLocation.x - this.location.x);
+    	double addx = Math.cos(angle) * mvs * timeLength;
+    	double addy = Math.sin(angle) * mvs * timeLength;
+        this.location.x += (short)addx;
+        this.location.y += (short)addy;
+        logger.info(String.format("nodeId=%d location=%s", this.nodeId, this.location));
+    }
+    
+	private void autoSearchWay(short aoe) {
+		Location targetLocation = target.location;
+    	float distance = GameUtil.distance(targetLocation, this.location);
+    	// 如果当前位置与目标位置距离超过射程，则寻路
+    	if (distance > aoe) {
+    		NodeType nodeType = getNodeType();
+    		switch (nodeType) {
+			case Hero:
+				this.way = MapService.searchWay(this.location.x, this.location.y, targetLocation.x, targetLocation.y, MapNodeType.White);
+				break;
+			case Troops:
+				this.way = MapService.searchWay(this.location.x, this.location.y, targetLocation.x, targetLocation.y, MapNodeType.Gray);
+				break;
+			default:
+				break;
+			}
+//    		printLocationList(way);
+    	} else {
+    		this.stopMove();
+    	}
+    }
+	
+//	private void printLocationList(List<Location> way) {
+//		StringBuilder sb = new StringBuilder();
+//		for (int i = 0; i < way.size(); i++) {
+//			Location location = way.get(i);
+//			sb.append(String.format(",%s", location.toString()));
+//		}
+//		sb.deleteCharAt(0);
+//		logger.info(sb.toString());
+//	}
+}

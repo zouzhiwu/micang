@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.GoodsDao">	
+	
+	<insert id="create" parameterType="com.common.entity.Goods" useGeneratedKeys="true" keyProperty="id">
+		insert into goods ( id
+			<if test="null != templateId">
+				, templateId
+			</if>
+			<if test="null != isUpper">
+				, isUpper
+			</if>
+			<if test="null != tabIndex">
+				, tabIndex
+			</if>
+			<if test="null != rowIndex">
+				, rowIndex
+			</if>
+			<if test="null != colIndex">
+				, colIndex
+			</if>
+			<if test="null != jb">
+				, jb
+			</if>
+			<if test="null != gb">
+				, gb
+			</if>
+		) values ( #{id}
+			<if test="null != templateId">
+				, #{templateId}
+			</if>
+			<if test="null != isUpper">
+				, #{isUpper}
+			</if>
+			<if test="null != tabIndex">
+				, #{tabIndex}
+			</if>
+			<if test="null != rowIndex">
+				, #{rowIndex}
+			</if>
+			<if test="null != colIndex">
+				, #{colIndex}
+			</if>
+			<if test="null != jb">
+				, #{jb}
+			</if>
+			<if test="null != gb">
+				, #{gb}
+			</if>
+		)
+	</insert>
+	
+	<delete id="delete" parameterType="Integer">
+		delete from goods where id = #{id}
+	</delete>
+	
+	<update id="update" parameterType="com.common.entity.Goods">
+		update goods 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != templateId">
+				, templateId = #{templateId}
+			</if>
+			<if test="null != isUpper">
+				, isUpper = #{isUpper}
+			</if>
+			<if test="null != tabIndex">
+				, tabIndex = #{tabIndex}
+			</if>
+			<if test="null != rowIndex">
+				, rowIndex = #{rowIndex}
+			</if>
+			<if test="null != jb">
+				, jb = #{jb}
+			</if>
+			<if test="null != jb">
+				, jb = #{jb}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<select id="getById" resultType="com.common.entity.Goods">
+		select * from goods where id = #{id}
+	</select>
+	
+	<select id="getList" resultType="com.common.entity.Goods">
+		select * from goods where isUpper = 1 and tabIndex = #{tabIndex}
+		limit #{recordIndex}, #{pageSize}
+	</select>
+	
+	<select id="getRecordCount" resultType="Integer">
+		select count(1) from goods where isUpper = 1 and tabIndex = #{tabIndex}
+	</select>
+	
+</mapper>  

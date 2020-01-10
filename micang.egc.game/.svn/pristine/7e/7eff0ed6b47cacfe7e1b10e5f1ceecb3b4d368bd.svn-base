@@ -1,0 +1,130 @@
+package com.game.node;
+
+import com.common.entity.Hero;
+import com.common.entity.Location;
+import com.common.entity.Member;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.HeroTemplate;
+import com.game.entity.Room;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+
+public class HeroNode extends BaseMoveNode {
+	public Room room;
+	public Hero hero;
+	public HeroTemplate heroTemplate;
+	public Member member;
+	
+	public HeroNode(short nodeId, Room room, Location location, Hero hero, HeroTemplate heroTemplate, CampType camp) {
+		this.nodeId = nodeId;
+		this.selfCamp = camp;
+		this.room = room;
+		this.location = new Location(location.x, location.y);
+		this.hero = hero;
+		this.heroTemplate = heroTemplate;
+		setEnemyCamp();
+	}
+	
+	/**加成后的物攻(Physical Attack)*/
+	public int pa;
+	
+	/**加成后的法攻(Magic Attack)*/
+	public int ma;
+	
+	/**加成后的物防(Physical Defense)*/
+	public int pd;
+	
+	/**加成后的法防(Magic Defense)*/
+	public int md;
+	
+	/**加成后的经验值*/
+    public short exp;
+    
+    /**加成后的射程半径*/
+    public short aoe = 10;
+    
+    /**视野半径 */
+    public short vr;
+    
+    /**加成后的移速(Move Speed)*/
+	public int mvs;
+	
+	/**加成后的攻速(Attack Speed)*/
+	public int ats;
+	
+	/**加成后的冷却时间(Cold Down)*/
+	public int cd;
+	
+	/**加成后的物暴(Physical Crit)*/
+	public int pcrt;
+	
+	/**加成后的法暴(Magic Crit)*/
+	public int mcrt;
+	
+	/**加成后的物穿(Physical Penetrating Power)*/
+	public int ppt;
+	
+	/**加成后的法穿(Magic Penetrating Power)*/
+	public int mpt;
+	
+	/**加成后的伤害加深(Hurt Increase)*/
+	public int hi;
+	
+	/**加成后的伤害减免(Hurt Reduction)*/
+	public int hr;
+	
+	/**补刀数*/
+	public short supplement;
+	
+	/**金钱数*/
+	public short money;
+	
+	/**击杀数量*/
+	public byte kill;
+	
+	/**死亡次数*/
+	public byte dead;
+	
+	/**助攻次数*/
+	public byte help;
+	
+	@Override
+	public void startAttack() {
+		FightJobManager.createAttackJob(this, heroTemplate.getAoe());
+	}
+	
+	@Override
+	public void stopAttack() {
+		JobScheduler.stopJob(this.attackJobKey);
+	}
+	
+	@Override
+	public void startMove() {
+		FightJobManager.createMoveJob(this, aoe);
+	}
+	
+	@Override
+	public void stopMove() {
+		JobScheduler.stopJob(this.moveJobKey);
+	}
+	
+	@Override
+	public void startUpdateVision() {
+		FightJobManager.createUpdateVisionJob(room, this, vr);
+	}
+	
+	@Override
+	public void stopUpdateVision() {
+		JobScheduler.stopJob(this.updateVisionJobKey);
+	}
+	
+	public NodeType getNodeType() {
+		return NodeType.Hero;
+	}
+	
+	public void die(BaseNode node) {
+    	// TODO 把这个节点从所有节点视野中删除
+    	// TODO 英雄复活
+    }
+}

@@ -1,0 +1,133 @@
+package com.game.job;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.quartz.JobKey;
+
+import com.common.constant.RoomConstant;
+import com.game.entity.Room;
+import com.game.helper.UuidHelper;
+import com.game.job.fight.ArsenalControllerJob;
+import com.game.job.fight.ArsenalJob;
+import com.game.job.fight.AttackJob;
+import com.game.job.fight.BeginGameJob;
+import com.game.job.fight.MoveInitplaceJob;
+import com.game.job.fight.MoveJob;
+import com.game.job.fight.UpdateVisionJob;
+import com.game.node.AbsAttackNode;
+import com.game.node.AbsMoveNode;
+import com.game.node.TroopsNode;
+
+public class FightJobManager {
+//	private final static Logger logger = LoggerFactory.getLogger(RoomJobManager.class);
+	
+	/**
+	 *  创建开始游戏Job
+	 */
+	public static void createBeginGameJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		room.beginGameJobKey = jobKey;
+		long delayTime = RoomConstant.game_scene_load_time * 1000;
+		JobScheduler.createSingleJob(jobKey, delayTime, dataMap, BeginGameJob.class);
+	}
+	
+	/**
+	 *  指定到初始位置 Job
+	 */
+	public static void createMoveInitplaceJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long delayTime = 7500;
+		JobScheduler.createSingleJob(jobKey, delayTime, dataMap, MoveInitplaceJob.class);
+	}
+	
+	/**
+	 *  创建攻击Job
+	 */
+	public static void createAttackJob(AbsAttackNode node, int ats) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		node.attackJobKey = jobKey;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("node", node);
+		long delayTime = 1000;
+		long repeatInterval = ats;
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, AttackJob.class);
+	}
+	
+	/**
+	 *  创建更新视野Job
+	 */
+	public static void createUpdateVisionJob(Room room, AbsMoveNode node, short vr) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		node.updateVisionJobKey = jobKey;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("node", node);
+		dataMap.put("vr", vr);
+		long delayTime = 0;
+		long repeatInterval = 300;
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, UpdateVisionJob.class);
+	}
+	
+	/**
+	 *  创建移动Job
+	 */
+	public static void createMoveJob(AbsMoveNode node) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		long delayTime = 500;
+		long repeatInterval = 20;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		node.moveJobKey = jobKey;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("node", node);
+		dataMap.put("interval", repeatInterval);
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, MoveJob.class);
+	}
+	
+	/**
+	 *  创建兵工厂控制器Job
+	 */
+	public static void createArsenalContrallerJob(Room room, long delayTime, long repeatInterval) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("index", 0);
+		room.arsenalContrallerJobKey = jobKey;
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, ArsenalControllerJob.class);
+	}
+	
+	/**
+	 *  创建兵工厂Job
+	 */
+	public static void createArsenalJob(Room room, List<List<TroopsNode>> buleTroopsNodeList, List<List<TroopsNode>> redTroopsNodeList) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		room.arsenalJobKey = jobKey;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		long delayTime = 0;
+		long repeatInterval = 1000;
+		dataMap.put("room", room);
+		dataMap.put("buleTroopsNodeList", buleTroopsNodeList);
+		dataMap.put("redTroopsNodeList", redTroopsNodeList);
+		dataMap.put("index", 0);
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, ArsenalJob.class);
+	}
+	
+}

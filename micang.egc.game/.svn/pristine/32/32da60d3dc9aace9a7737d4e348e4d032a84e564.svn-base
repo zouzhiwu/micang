@@ -1,0 +1,57 @@
+package com.game.util;
+
+import com.common.constant.ParameterIdConstant;
+import com.common.template.ParameterTemplate;
+import com.game.config.ParameterConfig;
+
+public class ParameterUtil {
+	/***
+	 * 第一次出兵的游戏时间，单位：毫秒
+	 */
+	public static int getSoldierBirthTime() {
+		ParameterTemplate template = ParameterConfig.map.get(ParameterIdConstant.soldier_create_time_id);
+		int birthTime = gameTime2realTime(new Integer(template.getValue()) * 1000);
+		return birthTime;
+	}
+	
+	/**
+	 * 每波兵的间隔时间，单位：毫秒
+	 */
+	public static int getSoldierPushInterval() {
+		ParameterTemplate template = ParameterConfig.map.get(ParameterIdConstant.soldier_create_interval_id);
+		// 出兵间隔时间
+		int pushSoldierInterval = gameTime2realTime(new Integer(template.getValue()) * 1000);
+		return pushSoldierInterval;
+	}
+	
+	public static int gameTime2realTime(int millisecond) {
+		return (int)(millisecond / ParameterConfig.timeProportion);
+	}
+	
+	/**
+	 * 获取小龙第一次出生时间，单位：毫秒
+	 */
+	public static int getSmallDragonBirthTime() {
+		ParameterTemplate createSmallDragonTemplate = ParameterConfig.map.get(ParameterIdConstant.create_small_dragon_time_id);
+		int birthTime = gameTime2realTime(new Integer(createSmallDragonTemplate.getValue()) * 1000);
+		return birthTime;
+	}
+	
+	/**
+	 * 获取大龙第一次出生时间，单位：毫秒
+	 */
+	public static int getBigDragonBirthTime() {
+		ParameterTemplate createBigDragonTemplate = ParameterConfig.map.get(ParameterIdConstant.create_big_dragon_time_id);
+		int birthTime = gameTime2realTime(new Integer(createBigDragonTemplate.getValue()) * 1000);
+		return birthTime;
+	}
+	
+	/**
+	 * 获取野怪第一次出生时间，单位：毫秒
+	 */
+	public static int getMonsterBirthTime() {
+		ParameterTemplate createMonsterTemplate = ParameterConfig.map.get(ParameterIdConstant.create_monster_time_id);
+		int birthTime = gameTime2realTime(new Integer(createMonsterTemplate.getValue()) * 1000);
+		return birthTime;
+	}
+}

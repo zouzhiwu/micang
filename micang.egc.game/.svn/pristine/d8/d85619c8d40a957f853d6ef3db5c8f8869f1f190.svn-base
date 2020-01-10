@@ -1,0 +1,266 @@
+package com.game.util;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.commons.lang3.StringUtils;
+import org.quartz.JobKey;
+
+import com.common.entity.Book;
+import com.common.entity.Box;
+import com.common.entity.Hero;
+import com.common.entity.Location;
+import com.common.entity.Node;
+import com.common.entity.Room;
+import com.common.enumerate.AttackGroupType;
+import com.common.enumerate.BSkillType;
+import com.common.enumerate.BuffStatus;
+import com.common.enumerate.RoleRelation;
+import com.common.enumerate.SelfSkill;
+import com.common.enumerate.SkillType;
+import com.common.helper.RandomHelper;
+import com.common.template.SkillTemplate;
+import com.game.helper.MsgHelper;
+import com.game.job.JobScheduler;
+
+public class GameUtil {
+	/**
+	 * 四舍五入，保留num位小数点
+	 */
+	public static float round(double f, int num) {
+		double pow = Math.pow(10, num);
+		return (float)(Math.round(f * pow) / pow);
+	}
+	
+	public static float round2(double f) {
+		return round(f, 2);
+	}
+	
+	/**
+	 * 两点的实际距离
+	 */
+	public static float distance(Location p1, Location p2) {
+		if (p1.y == p2.y) {
+			double d = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.z - p1.z, 2));
+			double distance = round(d, 2);
+			return (float)distance;
+		} else {
+			return 9999;
+		}
+		
+	}
+	
+	public static boolean isInCircle(Location p0, float r, Location p) {
+		return r > distance(p0, p);
+	}
+	
+	public static double angle(Location p1, Location p0, Location p2) {
+		double angle1 = angle(p0, p1);
+		double angle2 = angle(p0, p2);
+		return Math.abs((angle1 - angle2) * (180 / Math.PI));
+	}
+	
+	public static double angle(Location p1, Location p2) {
+		return Math.atan2(p2.z - p1.z, p2.x - p1.x);
+	}
+	
+	public static double angle(Node node1, Node node2) {
+		return Math.atan2(node2.coord.y - node1.coord.y, node2.coord.x - node1.coord.x);
+	}
+	
+	/**
+	 * 玩家收到伤害 ，根据额外血量，计算血量
+	 * @param hero 被收到伤害的玩家
+	 * @param value 伤害的血量
+	 * @param milliTime 当前时间戳（毫秒）
+	 * @param isUseShield 链接时无视护盾
+	 */
+	public static void beHurt(Hero hero, int value, Long milliTime, boolean isUseShield) {
+		if (value > 0) {
+			// 如果使用护盾，则用护盾抵消伤害
+			if (isUseShield) {
+				// 查找是否有护盾buff
+				if (JobScheduler.isHasJob(hero, BSkillType.Shield)) {
+					if (hero.extraHp > 0) {
+						if (hero.extraHp >= value) {
+							hero.extraHp -= value;
+							value = 0;
+						} else {
+							value -= hero.extraHp;
+							hero.extraHp = 0;
+						}
+					}
+				}
+			}
+			beHurt(hero, value);
+		}
+	}
+	
+	public static void beHurt(Hero hero, int value) {
+		if (value > 0) {
+			// 如果没有处于无敌状态，则扣血
+			if (!JobScheduler.isHasJob(hero, SelfSkill.Unmatch)) {
+				hero.hp -= value;
+				JobKey treatJobKey = JobScheduler.generateJobKey(hero, SelfSkill.Treat);
+				// 如果有自身治疗任务，则停止
+				if (JobScheduler.isHasJob(treatJobKey)) {
+					JobScheduler.stopJob(treatJobKey);
+					MsgHelper.broadcastSelfSkillStatus(hero, SelfSkill.Treat, BuffStatus.Stop);
+				}
+				if (hero.hp < 0) {
+					hero.hp = 0;
+				}
+			}
+		}
+	}
+	
+	public static void beHurt(Box box, int value) {
+		if (value > 0) {
+			if (value > 0) {
+				box.hp -= value;
+				if (box.hp < 0) {
+					box.hp = 0;
+				}
+			}
+		}
+	}
+	
+	public static synchronized Book generateBook(Location location, int templateId, Room room) {
+		Book book = new Book();
+		int code = 0;
+		for (int j = 0; j < 10; j++) {
+			int rd = RandomHelper.getRandom(1, Integer.MAX_VALUE);
+			if (!room.bookMap.containsKey(rd)) {
+				code = rd;
+				break;
+			}
+		}
+		book.code = code;
+		book.templateId = templateId;
+		int offsetx = RandomHelper.getRandom(-5, 5);		// x坐标的偏移量
+		int offsetz = RandomHelper.getRandom(-5, 5);		// z坐标的偏移量
+		float x = (float)(location.x + (offsetx / 10.0));
+		float z = (float)(location.z + (offsetz / 10.0));
+		book.location = new Location(x, 0f, z);
+		room.bookMap.put(book.code, book);
+		return book;
+	}
+	
+	/**
+	 * 通过当前位置和方向计算下一位置
+	 */
+	public static void calcNextLocation(Location location, float direction, float speed, float intervalTime) {
+		double distance = (double)(speed * intervalTime);
+		double radians = Math.toRadians(direction);
+		location.x += Math.sin(radians) * distance;
+		location.z += Math.cos(radians) * distance;
+	}
+	
+	public static Location subtract(Location srcLocation, Location destLocation) {
+		return new Location(destLocation.x - srcLocation.x, 0f, destLocation.z - srcLocation.z);
+	}
+	
+	public static boolean isLike(double targetValue, double testValue, double offset) {
+		return targetValue > testValue - offset && targetValue < testValue + offset;
+	}
+	
+	public static boolean isTeammate(Hero attHero, Hero beAttHero) {
+		if (attHero.teamId == beAttHero.teamId) {
+			if (attHero.teamId == 0) {
+				return false;
+			} else {
+				return true;
+			}
+		} else {
+			return false;
+		}
+	}
+	
+	public static List<Hero> getVisionHeroList(Hero hero) {
+		List<Hero> observerList = new ArrayList<Hero>(hero.visionHeroList);
+		observerList.add(hero);
+		return observerList;
+	}
+	
+	public static int[] string2Ints(String value) {
+	    int[] intArr = new int[0];
+	    if(StringUtils.isEmpty(value)){
+	        intArr = new int[0];
+	    }else{
+	        String[] valueArr = value.split(",");
+	        intArr = new int[valueArr.length];
+	        for (int i = 0; i < valueArr.length; i++) {
+	            intArr[i] = Integer.parseInt(valueArr[i]);
+	        }
+	    }
+	    return intArr;
+	}
+	
+	public static boolean isAttackGroup(Hero attHero, Hero beAttHero, SkillTemplate skillTemplate) {
+		SkillType skillType = SkillUtil.getSkillType(skillTemplate.getId());
+		if (skillType == SkillType.A) {
+			return true;
+		} else if (skillType == SkillType.C) {
+			AttackGroupType attackGroupType = AttackGroupType.getType(skillTemplate.getAttgrp());
+			RoleRelation roleRelation = RoleRelation.getType(attHero, beAttHero);
+			boolean result = false;
+			switch (attackGroupType) {
+			case Enemy:
+				switch (roleRelation) {
+				case Foeman:
+					result = true;
+					break;
+				case Teammate:
+					result = false;
+					break;
+				case Self:
+					result = false;
+					break;
+				}
+				break;
+			case Comrade:
+				switch (roleRelation) {
+				case Foeman:
+					result = false;
+					break;
+				case Teammate:
+					result = true;
+					break;
+				case Self:
+					result = false;
+					break;
+				}
+				break;
+			case Team:
+				switch (roleRelation) {
+				case Foeman:
+					result = false;
+					break;
+				case Teammate:
+					result = true;
+					break;
+				case Self:
+					result = true;
+					break;
+				}
+				break;
+			case All:
+				switch (roleRelation) {
+				case Foeman:
+					result = true;
+					break;
+				case Teammate:
+					result = true;
+					break;
+				case Self:
+					result = true;
+					break;
+				}
+				break;
+			}
+			return result;
+		} else {
+			return false;
+		}
+	}
+}

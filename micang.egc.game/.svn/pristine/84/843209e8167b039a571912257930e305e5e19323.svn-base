@@ -1,0 +1,79 @@
+package com.game.service;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.common.entity.Member;
+import com.common.util.AssertUtil;
+import com.game.config.MemberConfig;
+import com.game.dao.MemberDao;
+
+@Service
+public class MemberService {
+	
+	@Autowired
+	private MemberDao memberDao;
+	
+//	private static final Logger logger = LoggerFactory.getLogger(MemberService.class);
+	
+	public List<Member> getByList(Long accountId) {
+		return memberDao.getByList(accountId);
+	}
+	
+	public Member getById(Long memberId) {
+		return memberDao.getById(memberId);
+	}
+
+	public Member add(Long accountId, Integer templateId) {
+		Boolean isExistMember = memberDao.isExistMember(accountId, templateId);
+		MemberConfig.map.containsKey(templateId);
+		AssertUtil.asWarnTrue(MemberConfig.map.containsKey(templateId), "该队员模板Id不存在");
+		AssertUtil.asWarnTrue(!isExistMember, "该队员已经存在");
+		List<Member> memberList = memberDao.getByList(accountId);
+		List<Member> defaultList = memberList.stream().filter(m -> m.getIsDefault()).collect(Collectors.toList());
+		boolean isDefault = defaultList.size() >= 5 ? false : true;
+		Member member = new Member();
+		member.setTemplateId(templateId);
+		member.setAccountId(accountId);
+		member.setStar((byte)0);
+		member.setExp(0);
+		member.setStage((byte)0);
+		member.setIsDefault(isDefault);
+		member.setLikeHero1(0);
+		member.setLikeVal1(0);
+		member.setLikeHero2(0);
+		member.setLikeVal2(0);
+		member.setLikeHero3(0);
+		member.setLikeVal3(0);
+		member.setLikeHero4(0);
+		member.setLikeVal4(0);
+		member.setLikeHero5(0);
+		member.setLikeVal5(0);
+		member.setMasterSkill(0);
+		member.setMaskerSkillLv(0);
+		member.setSlaveSkill1(0);
+		member.setSlaveSkillLv1(0);
+		member.setSlaveSkill2(0);
+		member.setSlaveSkillLv2(0);
+		member.setSlaveSkill3(0);
+		member.setSlaveSkillLv3(0);
+		member.setCharacter1(0);
+		member.setCharacterVal1(0);
+		member.setCharacter2(0);
+		member.setCharacterVal2(0);
+		member.setCharacter3(0);
+		member.setCharacterVal3(0);
+		memberDao.add(member);
+		return member;
+	}
+	
+	public void setDefault(Long accountId, Long memberId, Boolean isDefault) {
+		Member member = memberDao.getById(memberId);
+		AssertUtil.asWarnTrue(member.getAccountId().equals(accountId), "该队员不属于你");
+		member.setIsDefault(isDefault);
+		memberDao.update(member);
+	}
+}

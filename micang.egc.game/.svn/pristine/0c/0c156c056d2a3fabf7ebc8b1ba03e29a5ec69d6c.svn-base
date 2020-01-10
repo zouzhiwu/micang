@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.AuctionRecordDao">	
+	
+	<insert id="create" parameterType="com.common.entity.AuctionRecord" useGeneratedKeys="true" keyProperty="id">
+		insert into auction_record ( id
+			<if test="null != accountId">
+				, accountId
+			</if>
+			<if test="null != auctionId">
+				, auctionId
+			</if>
+			<if test="null != bidPrice">
+				, bidPrice
+			</if>
+		) values ( #{id}
+			<if test="null != accountId">
+				, #{accountId}
+			</if>
+			<if test="null != auctionId">
+				, #{auctionId}
+			</if>
+			<if test="null != bidPrice">
+				, #{bidPrice}
+			</if>
+		)
+	</insert>
+	
+	<select id="getById" parameterType="Long" resultType="com.common.entity.AuctionRecord">
+		select * from auction_record where id = #{id}
+	</select>
+	
+	<select id="getByAuctionId" parameterType="Long" resultType="com.common.entity.AuctionRecord">
+		select * from auction_record where auctionId = #{auctionId}
+	</select>
+	
+	<delete id="delete" parameterType="Long">
+		delete from auction_record where id = #{id}
+	</delete>
+	
+</mapper>  

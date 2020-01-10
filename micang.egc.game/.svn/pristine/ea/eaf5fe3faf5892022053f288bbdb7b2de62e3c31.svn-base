@@ -1,0 +1,164 @@
+package com.game.service;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.constant.HeroConstant;
+import com.common.entity.Hero;
+import com.common.entity.Location;
+import com.common.entity.Member;
+import com.common.entity.Player;
+import com.common.entity.Room;
+import com.common.enumerate.RoomState;
+import com.common.template.HeroTemplate;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.config.HeroConfig;
+import com.game.helper.MsgHelper;
+import com.game.job.FightJobManager;
+import com.game.model.Model;
+
+@Service
+public class FightService {
+	private static final Logger logger = LoggerFactory.getLogger(FightService.class);
+	
+	public void beginGame(Room room) {
+		// 设置房间状态为开始游戏
+		room.state = RoomState.Begin;
+		logger.info(String.format("房间%d开始游戏", room.id));
+		// 发送开始游戏通知
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_begin_game_notice);
+		MsgHelper.sendBroadcast(msg, room);
+		// 生成角色对象
+		initHeroAttr(room);
+		// 角色到初始位置
+		FightJobManager.createMoveInitplaceJob(room);
+	}
+	
+	public void initHeroAttr(Room room) {
+		byte code = 0;
+		for (int i = 0; i < 5; i++) {
+			Member member = room.bluePlayer.members[i];
+			Hero hero = room.bluePlayer.heros[i];
+			HeroTemplate heroTemplate = HeroConfig.map.get(hero.getTemplateId());
+			callAttrAddition(++code, member, hero, heroTemplate, HeroConstant.birthplace[0]);
+			room.heroMap.put(hero.code, hero);
+		}
+		for (int i = 0; i < 5; i++) {
+			Member member = room.redPlayer.members[i];
+			Hero hero = room.redPlayer.heros[i];
+			HeroTemplate heroTemplate = HeroConfig.map.get(hero.getTemplateId());
+			callAttrAddition(++code, member, hero, heroTemplate, HeroConstant.birthplace[1]);
+			room.heroMap.put(hero.code, hero);
+		}
+	}
+	
+	public void getFightData(Long accountId) {
+		Player player = Model.getInstance().playerMap.get(accountId);
+		AssertUtil.asWarnTrue(player != null, "player对象不存在");
+		Room room = Model.getInstance().roomMap.get(player.roomId);
+		// 发送开始游戏通知
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_get_data);
+		msg.putLong(room.bluePlayer.account.getId());
+		msg.putShort(room.bluePlayer.heros.length);
+		for (int i = 0; i < room.bluePlayer.heros.length; i++) {
+			Hero hero = room.bluePlayer.heros[i];
+			msg.putByte(hero.code);
+			msg.putInt(hero.hp);
+			msg.putInt(hero.pa);
+			msg.putInt(hero.ma);
+			msg.putInt(hero.pd);
+			msg.putInt(hero.md);
+			msg.putInt(hero.ats);
+			msg.putInt(hero.aoe);
+			msg.putInt(hero.mvs);
+			msg.putInt(hero.cd);
+			msg.putInt(hero.pcrt);
+			msg.putInt(hero.mcrt);
+			msg.putInt(hero.ppt);
+			msg.putInt(hero.mpt);
+			msg.putInt(hero.hi);
+			msg.putInt(hero.hr);
+			msg.putShort(hero.location.x);
+			msg.putShort(hero.location.y);
+			msg.putShort(hero.supplement);
+			msg.putShort(hero.money);
+			msg.putShort(hero.exp);
+			msg.putByte(hero.kill);
+			msg.putByte(hero.dead);
+			msg.putByte(hero.help);
+		}
+		msg.putLong(room.redPlayer.account.getId());
+		msg.putShort(room.redPlayer.heros.length);
+		for (int i = 0; i < room.redPlayer.heros.length; i++) {
+			Hero hero = room.redPlayer.heros[i];
+			msg.putByte(hero.code);
+			msg.putInt(hero.hp);
+			msg.putInt(hero.pa);
+			msg.putInt(hero.ma);
+			msg.putInt(hero.pd);
+			msg.putInt(hero.md);
+			msg.putInt(hero.ats);
+			msg.putInt(hero.aoe);
+			msg.putInt(hero.mvs);
+			msg.putInt(hero.cd);
+			msg.putInt(hero.pcrt);
+			msg.putInt(hero.mcrt);
+			msg.putInt(hero.ppt);
+			msg.putInt(hero.mpt);
+			msg.putInt(hero.hi);
+			msg.putInt(hero.hr);
+			msg.putShort(hero.location.x);
+			msg.putShort(hero.location.y);
+			msg.putShort(hero.supplement);
+			msg.putShort(hero.money);
+			msg.putShort(hero.exp);
+			msg.putByte(hero.kill);
+			msg.putByte(hero.dead);
+			msg.putByte(hero.help);
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	private void callAttrAddition(byte code, Member member, Hero hero, HeroTemplate heroTemplate, Location location) {
+		hero.code = code;
+		hero.hp = heroTemplate.getHp();
+		hero.pa = heroTemplate.getPa();
+		hero.ma = heroTemplate.getMa();
+		hero.pd = heroTemplate.getPd();
+		hero.md = heroTemplate.getMd();
+		hero.ats = heroTemplate.getAts();
+		hero.aoe = heroTemplate.getAoe();
+		hero.mvs = heroTemplate.getMvs();
+		hero.cd = heroTemplate.getCd();
+		hero.pcrt = heroTemplate.getPcrt();
+		hero.mcrt = heroTemplate.getMcrt();
+		hero.ppt = heroTemplate.getPpt();
+		hero.mpt = heroTemplate.getMpt();
+		hero.hi = heroTemplate.getHi();
+		hero.hr = heroTemplate.getHr();
+		hero.location = location;
+	}
+	
+	public void moveInitplace(Room room) {
+		for (int i = 0; i < HeroConstant.initplace.length; i++) {
+			Hero hero = room.heroMap.get((byte)(i + 1));
+			hero.location = HeroConstant.initplace[i];
+		}
+		// 通知客户端开始移动
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_init_place);
+		msg.putShort(room.heroMap.size());
+		room.heroMap.forEach((id, hero) -> {
+			msg.putByte(hero.code);
+			msg.putShort(hero.location.x);
+			msg.putShort(hero.location.y);
+		});
+		MsgHelper.sendBroadcast(msg, room);
+	}
+}

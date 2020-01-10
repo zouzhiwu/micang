@@ -1,0 +1,55 @@
+package com.game.model;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import com.common.entity.Account;
+import com.common.entity.Hero;
+import com.common.entity.Room;
+import com.common.enumerate.RoomState;
+
+
+public class Model {
+	private static Model instance;
+	
+	/*@Autowired
+	private MongoDBClientService mongoDBClientService;*/
+	
+//	private Map<Long, String> tokenMap = new ConcurrentHashMap<Long, String>();		// 令牌
+	public Map<Long, Hero> heroMap = new ConcurrentHashMap<Long, Hero>();		// 角色Map，真实玩家
+	public Map<Long, Account> accountMap = new ConcurrentHashMap<Long, Account>();	// 账户Map
+	public Map<Integer, Room> roomMap = new ConcurrentHashMap<Integer, Room>();	// 房间Map
+	private int maxRoomId = 0;
+	
+	public static Model getInstance() {
+		if (instance == null) {
+			instance = new Model();
+		}
+		return instance;
+	}
+	
+	/*public String putToken(Long accountId) {
+		String token = UuidHelper.getUuid();
+		tokenMap.put(accountId, token);
+		return token;
+	}
+	
+	public String removeToken(Long accountId) {
+		return tokenMap.remove(accountId);
+	}
+	
+	public String getToken(Long accountId) {
+		return tokenMap.get(accountId);
+	}*/
+	
+	public Room createRoom() {
+		maxRoomId++;
+		Room room = new Room();
+		room.id = maxRoomId;
+		room.mapId = 1;
+		room.state = RoomState.Ready;
+		roomMap.put(room.id, room);
+		return room;
+	}
+	
+}

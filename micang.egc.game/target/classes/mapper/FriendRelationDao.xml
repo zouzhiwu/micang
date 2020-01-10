@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.FriendRelationDao">	
+	
+	<insert id="create" parameterType="com.game.entity.FriendRelation" useGeneratedKeys="true" keyProperty="id">
+		insert into friend_relation ( accountId1, accountId2
+			<if test="null != relation">
+				, relation
+			</if>
+			<if test="null != giving">
+				, giving
+			</if>
+		) values ( #{accountId1}, #{accountId2}
+			<if test="null != relation">
+				, #{relation}
+			</if>
+			<if test="null != giving">
+				, #{giving}
+			</if>
+		)
+	</insert>
+	
+	<select id="findById" parameterType="Long" resultType="com.game.entity.FriendRelation">
+		select * from friend_relation where accountId1 = #{accountId1} and accountId2 = #{accountId2}
+	</select>
+	
+	<select id="findFriendByRelation" resultType="com.game.entity.FriendRelation">
+		select * from friend_relation where (accountId1 = #{accountId} or accountId2 = #{accountId}) and relation = #{relation}
+	</select>
+	
+	<select id="countFriend" resultType="java.lang.Integer">
+		select count(*) from friend_relation where (accountId1 = #{accountId} or accountId2 = #{accountId}) and relation = 1
+	</select>
+	
+	<select id="countApply" resultType="java.lang.Integer">
+		select count(*) from friend_relation where (accountId1 = #{accountId} and relation = 5)  or (accountId2 = #{accountId} and relation = 4)
+	</select>
+	
+	<select id="coountBlackList" resultType="java.lang.Integer">
+		select count(*) from friend_relation where (accountId1 = #{accountId} and relation = 2)  or (accountId2 = #{accountId} and relation = 3)
+	</select>
+	
+	<update id="update" parameterType="com.game.entity.FriendRelation">
+		update friend_relation 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != relation">
+				, relation = #{relation}
+			</if>
+			<if test="null != giving">
+				, giving = #{giving}
+			</if>
+		</trim>
+		where accountId1 = #{accountId1} and accountId2 = #{accountId2}
+	</update>
+	
+	<delete id="delById" parameterType="Long">
+		delete from friend_relation where accountId1 = #{accountId1} and accountId2 = #{accountId2}
+	</delete>
+</mapper>  

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.GuildAccountDao">	
+	
+	<insert id="create" parameterType="com.common.entity.GuildAccount" useGeneratedKeys="true" keyProperty="id">
+		insert into guild_account (id, guildId, accountId, role, cb) values (#{id}, #{guildId}, #{accountId}, #{role}, #{cb});
+	</insert>
+	
+	<select id="get" resultType="com.common.entity.GuildAccount">
+		select * from guild_account where guildId = #{guildId} and accountId = #{accountId}
+	</select>
+	
+	<select id="getByAccountId" resultType="com.common.entity.GuildAccount">
+		select * from guild_account where accountId = #{accountId}
+	</select>
+	
+	<select id="getById" resultType="com.common.entity.GuildAccount">
+		select * from guild_account where id = #{id}
+	</select>
+	
+	<select id="getGuildAccountCount" parameterType="Integer" resultType="Integer">
+		select count(*) from guild_account where guildId = #{guildId}
+	</select>
+	
+	<select id="getAccountList" parameterType="Integer" resultType="com.common.entity.GuildAccount">
+		select * from guild_account where guildId = #{guildId}
+	</select>
+	
+	<select id="getAccountInfoList" parameterType="Integer" resultType="com.common.entity.GuildAccountInfo">
+		select gm.guildId
+			, gm.accountId
+			, gm.role 
+			, m.nick
+			, m.exp
+		from guild_account gm left join account m 
+			on gm.accountId = m.id 
+		where guildId = #{guildId}
+	</select>
+	
+	<delete id="delete" parameterType="com.common.entity.GuildAccount">
+		delete from guild_account where guildId = #{guildId} and accountId = #{accountId}
+	</delete>
+	
+	<update id="update" parameterType="com.common.entity.GuildAccount">
+		update guild_account
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != guildId">
+				, guildId = #{guildId}
+			</if>
+			<if test="null != role">
+				, role = #{role}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<update id="updateCb">
+		update guild_account set cb = cb + #{addcb} where id = #{id}
+	</update>
+	
+</mapper>

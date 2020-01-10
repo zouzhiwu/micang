@@ -1,0 +1,15 @@
+package com.game.util;
+
+public class Params {
+	
+	
+	//type 1球员 2英雄 3俱乐部
+	public static Byte type_member = 1;
+	
+	public static Byte type_hero = 2;
+	
+	public static Byte type_club = 3;
+	
+	
+
+}

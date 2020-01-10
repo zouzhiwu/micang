@@ -1,0 +1,48 @@
+package com.game.fight.job;
+
+import java.util.List;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.JobKey;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.constant.FightConstant;
+import com.common.entity.OperateStep;
+import com.game.common.MessageCode;
+import com.game.job.JobScheduler;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class OperationNoticeJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(OperationNoticeJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		@SuppressWarnings("unchecked")
+		List<OperateStep> operateStepList = (List<OperateStep>)jobDataMap.get("operateStepList");
+		int index = (int)jobDataMap.get("index");
+		OperateStep operateStep = operateStepList.get(index);
+		logger.info(String.format("通知玩家%s执行%s操作", operateStep.getAccountId(), operateStep.getOperateType().getName()));
+		// 发送操作通知
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_operation_notice);
+		msg.putByte(operateStep.getOperateType().getIndex());
+		msg.putByte(FightConstant.operation_notice_cd_time);
+		msg.putByte((byte)index);
+		MsgSender.sendMsg(msg, operateStep.getAccountId());
+		JobKey jobKey = jobDetail.getKey();
+		if (JobScheduler.stopJob(jobKey)) {
+			JobScheduler.createOperationNoticeJob(jobKey, operateStepList, ++index);
+		}
+	}
+}

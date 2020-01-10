@@ -1,0 +1,33 @@
+package com.game.util;
+
+public class Params {
+	
+	
+	//type 1球员 2英雄 3俱乐部
+	public static Byte type_member = 1;
+	public static Byte type_hero = 2;
+	public static Byte type_club = 3;
+	
+	//升星类型 1激活 2一键激活 3升星
+	public static byte type_upstar_1 = 1;
+	public static byte type_upstar_2 = 2;
+	public static byte type_upstar_3 = 3;
+	
+	
+	//chapterInfo chapterBox (0没领取，1领取, 2未达成)
+	public static Integer chapterInfo_chapterBox_0 = 0;
+	public static Integer chapterInfo_chapterBox_1 = 1;
+	public static Integer chapterInfo_chapterBox_2 = 2;
+	
+	
+	//分割符
+	public static String fenge = "\\|";
+	//星星卡槽位总数
+	public static int starSeat10 = 10;
+
+	
+	
+	
+	
+
+}
