@@ -1,0 +1,124 @@
+package com.cb.handler;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.cb.action.MethodClazz;
+import com.cb.cache.ChannelCache;
+import com.cb.exception.ErrorException;
+import com.cb.exception.InfoException;
+import com.cb.lisener.AbsLisener;
+import com.cb.msg.IfsPkg;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler.Sharable;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+
+@Sharable
+public class MsgHandler extends ChannelInboundHandlerAdapter {
+private static final Logger logger = LoggerFactory.getLogger(MsgHandler.class);
+	
+	private AbsLisener listener;
+	
+	public MsgHandler(AbsLisener listener) {
+		this.listener = listener;
+	}
+	
+	@Override
+	public void channelRead(final ChannelHandlerContext ctx, final Object obj) throws Exception {
+		if (obj instanceof Message) {
+			new Thread(new Runnable() {
+				@Override
+				public void run() {
+					Message message = (Message) obj;
+					MethodClazz methodClazz = listener.actionMap.get(message.getMsgcd());
+					MsgSender.setMemberId(message.getAccountId());
+					Channel channel = ctx.channel();
+					if (null == methodClazz) {
+						logger.error(String.format("没有对应的指令%d", message.getMsgcd()));
+					} else {
+						dispenserMsg(methodClazz, message, channel);
+					}
+				}
+			}).start();
+		}
+	}
+	
+	 private void dispenserMsg(MethodClazz methodClazz, Message message, Channel channel) {
+		boolean isHasChannel;
+		if (message.getMsgcd() == listener.getLoginMsgcd()) {
+			isHasChannel = true;
+		} else {
+			isHasChannel = ChannelCache.hasChannel(message.getAccountId());
+		}
+		if (isHasChannel) {
+			try {
+				Method method = methodClazz.getMethod();
+				Object instance = methodClazz.getActionInstance();
+				Class<?> ifsPkgClazz = methodClazz.getIfsPkgClazz();
+				if (ifsPkgClazz == null) {
+					method.invoke(instance, message, channel);
+				} else {
+					IfsPkg reqInstance = (IfsPkg)ifsPkgClazz.newInstance();
+					reqInstance.deserialization(message);
+					method.invoke(instance, reqInstance, channel);
+				}
+			} catch (InvocationTargetException exception) {
+				Throwable throwable = exception.getTargetException();
+				if (throwable instanceof InfoException) {
+					InfoException ex = (InfoException) throwable;
+					logger.info(String.format("msgcd=%d from roleId=%d infomessage:%s", message.getMsgcd(),
+							message.getAccountId(), ex.getClientInfo()));
+					printInfo(exception);
+					try {
+						Message rtn = new Message(message);
+						rtn.setMsgcd(message.getMsgcd());
+						rtn.setErrorcd(ex.getErrorCode());
+						rtn.setErrorInfo(ex.getClientInfo());
+						MsgSender.sendMsg(rtn, channel);
+					} catch (Exception e) {
+						printInfo(e);
+					}
+				} else if (throwable instanceof ErrorException) {
+					printInfo(exception);
+				} else {
+					printInfo(exception);
+				}
+			} catch (Exception exception) {
+				printInfo(exception);
+			}
+		} else {
+			logger.error(String.format("msgcd=%d, accountId=%s, 没找到对应的通道", message.getMsgcd(), message.getAccountId()));
+		}
+	 }
+	
+	public static void printInfo(Exception e) {
+		StringWriter sw = new StringWriter();
+		PrintWriter pw = new PrintWriter(sw);
+		e.printStackTrace(pw);
+		String message = sw.toString();
+		if (e instanceof InfoException) {
+			logger.warn(message);
+		} else {
+			logger.error(message);
+		}
+	}
+	
+	@Override 
+	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+		logger.info(cause.toString());
+	}
+	
+	@Override
+	public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+		this.listener.channelInactive(ctx.channel());
+	}
+}

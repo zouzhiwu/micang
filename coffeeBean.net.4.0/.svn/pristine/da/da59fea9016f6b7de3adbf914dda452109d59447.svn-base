@@ -1,0 +1,8 @@
+package com.cb.msg;
+
+public interface IfsPkg {
+	
+	public void serialization(Message msg);
+	
+	public void deserialization(Message msg);
+}

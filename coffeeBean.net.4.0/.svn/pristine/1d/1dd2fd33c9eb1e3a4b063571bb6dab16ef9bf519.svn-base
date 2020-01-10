@@ -1,0 +1,24 @@
+package com.cb.msg;
+
+import io.netty.util.internal.StringUtil;
+
+public abstract class BasePkgS2C extends BasePkg {
+	protected short errorcd = 0;
+	protected String errorInfo = StringUtil.EMPTY_STRING;
+	
+	public short getErrorcd() {
+		return errorcd;
+	}
+
+	public void setErrorcd(short errorcd) {
+		this.errorcd = errorcd;
+	}
+
+	public String getErrorInfo() {
+		return errorInfo;
+	}
+
+	public void setErrorInfo(String errorInfo) {
+		this.errorInfo = errorInfo;
+	}
+}

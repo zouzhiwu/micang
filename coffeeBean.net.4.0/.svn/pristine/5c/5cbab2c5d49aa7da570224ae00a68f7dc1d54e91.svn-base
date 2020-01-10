@@ -1,0 +1,26 @@
+package com.cb.action;
+
+import java.lang.reflect.Method;
+
+public class MethodClazz {
+	
+	private Method method;
+	private Object actionInstance;
+	private Class<?> ifsPkgClazz;
+	
+	public MethodClazz(Method method, Object actionInstance, Class<?> ifsPkgClazz) {
+		this.method = method;
+		this.actionInstance = actionInstance;
+		this.ifsPkgClazz = ifsPkgClazz;
+	}
+	public Method getMethod() {
+		return method;
+	}
+	public Object getActionInstance() {
+		return actionInstance;
+	}
+	public Class<?> getIfsPkgClazz() {
+		return ifsPkgClazz;
+	}
+	
+}

@@ -1,0 +1,7 @@
+com\cb\test\TestClient.class
+com\cb\test\TestServer.class
+com\cb\test\ServerAction.class
+com\cb\test\ServerListener.class
+com\cb\test\ClientAction.class
+com\cb\test\ClientListener.class
+com\cb\test\MessageCode.class

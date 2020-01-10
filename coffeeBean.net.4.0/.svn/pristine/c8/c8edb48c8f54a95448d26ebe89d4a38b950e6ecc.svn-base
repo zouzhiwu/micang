@@ -1,0 +1,5 @@
+package com.cb.msg;
+
+public abstract class BasePkgC2S extends BasePkg {
+	
+}

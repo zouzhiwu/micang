@@ -1,0 +1,6 @@
+package com.cb.msg;
+
+public abstract class BasePkg {
+	
+	public abstract short getMsgcd();
+}
