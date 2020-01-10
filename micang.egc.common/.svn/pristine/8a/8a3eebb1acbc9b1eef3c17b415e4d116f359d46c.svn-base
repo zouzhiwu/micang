@@ -1,0 +1,101 @@
+package com.common.template;
+
+public class CharacterTemplate extends TemplateBase {
+	
+	
+	private String characterTxt;
+	private Integer quality;
+	private Integer characterIcon;
+	private String probability1;
+	private String character1;
+	private String probability2;
+	private String character2;
+	private Integer constant;
+	private String number;
+	private String yxt;
+	
+	
+	
+
+	public CharacterTemplate(Integer id, String name, String characterTxt, Integer quality, Integer characterIcon, String probability1,
+			String character1, String probability2, String character2, Integer constant, String number, String yxt) {
+		super.setId(id);
+		super.setName(name);
+		
+		this.characterTxt = characterTxt;
+		this.quality = quality;
+		this.characterIcon = characterIcon;
+		this.probability1 = probability1;
+		this.character1 = character1;
+		this.probability2 = probability2;
+		this.character2 = character2;
+		this.constant = constant;
+		this.number = number;
+		this.yxt = yxt;
+	}
+	public String getCharacterTxt() {
+		return characterTxt;
+	}
+	public void setCharacterTxt(String characterTxt) {
+		this.characterTxt = characterTxt;
+	}
+	public Integer getQuality() {
+		return quality;
+	}
+	public void setQuality(Integer quality) {
+		this.quality = quality;
+	}
+	public Integer getCharacterIcon() {
+		return characterIcon;
+	}
+	public void setCharacterIcon(Integer characterIcon) {
+		this.characterIcon = characterIcon;
+	}
+	public String getProbability1() {
+		return probability1;
+	}
+	public void setProbability1(String probability1) {
+		this.probability1 = probability1;
+	}
+	public String getCharacter1() {
+		return character1;
+	}
+	public void setCharacter1(String character1) {
+		this.character1 = character1;
+	}
+	public String getProbability2() {
+		return probability2;
+	}
+	public void setProbability2(String probability2) {
+		this.probability2 = probability2;
+	}
+	public String getCharacter2() {
+		return character2;
+	}
+	public void setCharacter2(String character2) {
+		this.character2 = character2;
+	}
+	public int getConstant() {
+		return constant;
+	}
+	public void setConstant(int constant) {
+		this.constant = constant;
+	}
+	public String getNumber() {
+		return number;
+	}
+	public void setNumber(String number) {
+		this.number = number;
+	}
+	public String getYxt() {
+		return yxt;
+	}
+	public void setYxt(String yxt) {
+		this.yxt = yxt;
+	}
+	
+	
+	
+	
+
+}

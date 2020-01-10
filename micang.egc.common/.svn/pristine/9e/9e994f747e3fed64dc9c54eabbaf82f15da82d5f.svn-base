@@ -1,0 +1,57 @@
+package com.common.enumerate;
+
+public enum FriendRelationType {
+	friends("好友", 1), 
+	aShieldB("a拉黑b", 2), 
+	bShieldA("b拉黑a", 3), 
+	aApplyB("a申请加b", 4),
+	bApplyA("b申请加a", 5), 
+	eachApply("互相申请", 6),
+	notGiving("互相不送", 7),
+	aGivingB("a送b体力", 8),
+	bGivingA("b送a体力", 9), 
+	eachGiving("互送体力", 10);
+	// 成员变量
+	private String name;
+	private Byte index;
+	
+	// 构造方法
+	private FriendRelationType(String name, int index) {
+		this.name = name;
+		this.index = (byte)index;
+	}
+	
+	public static String getName(int index) {
+		for (FriendRelationType dt : FriendRelationType.values()) {
+			if (dt.getIndex() == index) {
+				return dt.name;
+			}
+		}
+		return null;
+	}
+	
+	public static FriendRelationType getType(Byte index) {
+		for (FriendRelationType dt : FriendRelationType.values()) {
+			if (dt.getIndex() == index) {
+				return dt;
+			}
+		}
+		return null;
+	}
+	
+	public String getName() {
+		return name;
+	}
+	
+	public void setName(String name) {
+		this.name = name;
+	}
+	
+	public Byte getIndex() {
+		return index;
+	}
+	
+	public void setIndex(Byte index) {
+		this.index = index;
+	}
+}

@@ -1,0 +1,164 @@
+package com.common.entity;
+
+import com.common.enumerate.WorkType;
+
+public class Member {
+	private Long id;
+	private Long accountId;
+	private Integer templateId;
+	private Integer starSeat;//已经开启了多少卡槽位
+	private Integer exp;
+	private Byte stage;
+	private WorkType work;
+	//LikeHeroBean json格式
+	private String likeHeros;
+	private Integer masterSkill;
+	private Integer maskerSkillLv;
+	private Integer slaveSkill1;
+	private Integer slaveSkillLv1;
+	private Integer slaveSkill2;
+	private Integer slaveSkillLv2;
+	private Integer slaveSkill3;
+	private Integer slaveSkillLv3;
+	private Integer character1;
+	private Integer characterVal1;
+	private Integer character2;
+	private Integer characterVal2;
+	private Integer character3;
+	private Integer characterVal3;
+	public Long getId() {
+		return id;
+	}
+	public void setId(Long id) {
+		this.id = id;
+	}
+	public Long getAccountId() {
+		return accountId;
+	}
+	public void setAccountId(Long accountId) {
+		this.accountId = accountId;
+	}
+	public Integer getTemplateId() {
+		return templateId;
+	}
+	public void setTemplateId(Integer templateId) {
+		this.templateId = templateId;
+	}
+
+
+
+	public Integer getStarSeat() {
+		return starSeat;
+	}
+	public void setStarSeat(Integer starSeat) {
+		this.starSeat = starSeat;
+	}
+	public Integer getExp() {
+		return exp;
+	}
+	public void setExp(Integer exp) {
+		this.exp = exp;
+	}
+	public Byte getStage() {
+		return stage;
+	}
+	public void setStage(Byte stage) {
+		this.stage = stage;
+	}
+	public WorkType getWork() {
+		return work;
+	}
+	public void setWork(WorkType work) {
+		this.work = work;
+	}
+	public String getLikeHeros() {
+		return likeHeros;
+	}
+	public void setLikeHeros(String likeHeros) {
+		this.likeHeros = likeHeros;
+	}
+	public Integer getMasterSkill() {
+		return masterSkill;
+	}
+	public void setMasterSkill(Integer masterSkill) {
+		this.masterSkill = masterSkill;
+	}
+	public Integer getMaskerSkillLv() {
+		return maskerSkillLv;
+	}
+	public void setMaskerSkillLv(Integer maskerSkillLv) {
+		this.maskerSkillLv = maskerSkillLv;
+	}
+	public Integer getSlaveSkill1() {
+		return slaveSkill1;
+	}
+	public void setSlaveSkill1(Integer slaveSkill1) {
+		this.slaveSkill1 = slaveSkill1;
+	}
+	public Integer getSlaveSkillLv1() {
+		return slaveSkillLv1;
+	}
+	public void setSlaveSkillLv1(Integer slaveSkillLv1) {
+		this.slaveSkillLv1 = slaveSkillLv1;
+	}
+	public Integer getSlaveSkill2() {
+		return slaveSkill2;
+	}
+	public void setSlaveSkill2(Integer slaveSkill2) {
+		this.slaveSkill2 = slaveSkill2;
+	}
+	public Integer getSlaveSkillLv2() {
+		return slaveSkillLv2;
+	}
+	public void setSlaveSkillLv2(Integer slaveSkillLv2) {
+		this.slaveSkillLv2 = slaveSkillLv2;
+	}
+	public Integer getSlaveSkill3() {
+		return slaveSkill3;
+	}
+	public void setSlaveSkill3(Integer slaveSkill3) {
+		this.slaveSkill3 = slaveSkill3;
+	}
+	public Integer getSlaveSkillLv3() {
+		return slaveSkillLv3;
+	}
+	public void setSlaveSkillLv3(Integer slaveSkillLv3) {
+		this.slaveSkillLv3 = slaveSkillLv3;
+	}
+	public Integer getCharacter1() {
+		return character1;
+	}
+	public void setCharacter1(Integer character1) {
+		this.character1 = character1;
+	}
+	public Integer getCharacterVal1() {
+		return characterVal1;
+	}
+	public void setCharacterVal1(Integer characterVal1) {
+		this.characterVal1 = characterVal1;
+	}
+	public Integer getCharacter2() {
+		return character2;
+	}
+	public void setCharacter2(Integer character2) {
+		this.character2 = character2;
+	}
+	public Integer getCharacterVal2() {
+		return characterVal2;
+	}
+	public void setCharacterVal2(Integer characterVal2) {
+		this.characterVal2 = characterVal2;
+	}
+	public Integer getCharacter3() {
+		return character3;
+	}
+	public void setCharacter3(Integer character3) {
+		this.character3 = character3;
+	}
+	public Integer getCharacterVal3() {
+		return characterVal3;
+	}
+	public void setCharacterVal3(Integer characterVal3) {
+		this.characterVal3 = characterVal3;
+	}
+}

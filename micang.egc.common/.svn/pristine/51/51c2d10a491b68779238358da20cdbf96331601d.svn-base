@@ -1,0 +1,6 @@
+package com.common.constant;
+
+public interface UserRedisKeyPrefix {
+	/**用户个人记录**/
+	public final static String recordPrefix = "recordPrefix_";
+}

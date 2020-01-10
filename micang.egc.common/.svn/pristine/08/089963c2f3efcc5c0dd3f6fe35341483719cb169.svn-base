@@ -1,0 +1,203 @@
+package com.common.template;
+
+import com.common.template.TemplateBase;
+
+public class HeroTemplate extends TemplateBase {
+
+	private String icon;
+	private Byte work;
+	private Integer hp;
+	private Integer pa;
+	private Integer ma;
+	private Integer pd;
+	private Integer md;
+	private Short ats;
+	private Short aoe;
+	private Short mvs;
+	private Integer cd;
+	private Short pcrt;
+	private Short mcrt;
+	private Short ppt;
+	private Short mpt;
+	private Short hi;
+	private Short hr;
+	private Integer skillId;
+	private String skillAbout;
+	private String heroAbout;
+
+	public HeroTemplate(Integer id, String name, String icon, Byte work, Integer hp, Integer pa, Integer ma, Integer pd, Integer md, Short ats, Short aoe, Short mvs, Integer cd, Short pcrt, Short mcrt, Short ppt, Short mpt, Short hi, Short hr, Integer skillId, String skillAbout, String heroAbout) {
+		super.setId(id);
+		super.setName(name);
+		this.icon = icon;
+		this.work = work;
+		this.hp = hp;
+		this.pa = pa;
+		this.ma = ma;
+		this.pd = pd;
+		this.md = md;
+		this.ats = ats;
+		this.aoe = aoe;
+		this.mvs = mvs;
+		this.cd = cd;
+		this.pcrt = pcrt;
+		this.mcrt = mcrt;
+		this.ppt = ppt;
+		this.mpt = mpt;
+		this.hi = hi;
+		this.hr = hr;
+		this.skillId = skillId;
+		this.skillAbout = skillAbout;
+		this.heroAbout = heroAbout;
+	}
+	
+	public String getIcon() {
+		return icon;
+	}
+	public void setIcon(String icon) {
+		this.icon = icon;
+	}
+	public Byte getWork() {
+		return work;
+	}
+	public void setWork(Byte work) {
+		this.work = work;
+	}
+	public Integer getHp() {
+		return hp;
+	}
+	public void setHp(Integer hp) {
+		this.hp = hp;
+	}
+	public Integer getPa() {
+		return pa;
+	}
+	public void setPa(Integer pa) {
+		this.pa = pa;
+	}
+	public Integer getMa() {
+		return ma;
+	}
+	public void setMa(Integer ma) {
+		this.ma = ma;
+	}
+	public Integer getPd() {
+		return pd;
+	}
+	public void setPd(Integer pd) {
+		this.pd = pd;
+	}
+	public Integer getMd() {
+		return md;
+	}
+
+	public void setMd(Integer md) {
+		this.md = md;
+	}
+	public Short getAts() {
+		return ats;
+	}
+	public void setAts(Short ats) {
+		this.ats = ats;
+	}
+	public Short getAoe() {
+		return aoe;
+	}
+	public void setAoe(Short aoe) {
+		this.aoe = aoe;
+	}
+	public Short getMvs() {
+		return mvs;
+	}
+	public void setMvs(Short mvs) {
+		this.mvs = mvs;
+	}
+	public Integer getCd() {
+		return cd;
+	}
+	public void setCd(Integer cd) {
+		this.cd = cd;
+	}
+	public Short getPcrt() {
+		return pcrt;
+	}
+	public void setPcrt(Short pcrt) {
+		this.pcrt = pcrt;
+	}
+	public Short getMcrt() {
+		return mcrt;
+	}
+	public void setMcrt(Short mcrt) {
+		this.mcrt = mcrt;
+	}
+	public Short getPpt() {
+		return ppt;
+	}
+	public void setPpt(Short ppt) {
+		this.ppt = ppt;
+	}
+	public Short getMpt() {
+		return mpt;
+	}
+	public void setMpt(Short mpt) {
+		this.mpt = mpt;
+	}
+	public Short getHi() {
+		return hi;
+	}
+	public void setHi(Short hi) {
+		this.hi = hi;
+	}
+	public Short getHr() {
+		return hr;
+	}
+	public void setHr(Short hr) {
+		this.hr = hr;
+	}
+	public Integer getSkillId() {
+		return skillId;
+	}
+	public void setSkillId(Integer skillId) {
+		this.skillId = skillId;
+	}
+	public String getSkillAbout() {
+		return skillAbout;
+	}
+	public void setSkillAbout(String skillAbout) {
+		this.skillAbout = skillAbout;
+	}
+	public String getHeroAbout() {
+		return heroAbout;
+	}
+	public void setHeroAbout(String heroAbout) {
+		this.heroAbout = heroAbout;
+	}
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("[");
+		sb.append("id=" + super.getId());
+		sb.append(" name=" + super.getName());
+		sb.append(" icon=" + icon);
+		sb.append(" route=" + work);
+		sb.append(" hp=" + hp);
+		sb.append(" pa=" + pa);
+		sb.append(" ma=" + ma);
+		sb.append(" pd=" + pd);
+		sb.append(" md=" + md);
+		sb.append(" ats=" + ats);
+		sb.append(" aoe=" + aoe);
+		sb.append(" mvs=" + mvs);
+		sb.append(" cd=" + cd);
+		sb.append(" pcrt=" + pcrt);
+		sb.append(" mcrt=" + mcrt);
+		sb.append(" ppt=" + ppt);
+		sb.append(" mpt=" + mpt);
+		sb.append(" hi=" + hi);
+		sb.append(" hr=" + hr);
+		sb.append(" skillId=" + skillId);
+		sb.append(" skillAbout=" + skillAbout);
+		sb.append(" heroAbout=" + heroAbout);
+		sb.append("]");
+		return sb.toString();
+	}
+}

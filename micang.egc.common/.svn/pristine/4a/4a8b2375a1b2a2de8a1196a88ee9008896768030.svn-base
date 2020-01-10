@@ -1,0 +1,43 @@
+package com.common.template;
+
+import java.util.Map;
+
+public class DropGroupTemplate {
+	private Integer id;
+	private Map<Integer, Integer> groupProbability;
+	private Map<Integer, Integer> itemGroup;
+	private Map<Integer, Integer> memberGroup;
+	public Integer getId() {
+		return id;
+	}
+	public void setId(Integer id) {
+		this.id = id;
+	}
+	public Map<Integer, Integer> getGroupProbability() {
+		return groupProbability;
+	}
+	public void setGroupProbability(Map<Integer, Integer> groupProbability) {
+		this.groupProbability = groupProbability;
+	}
+	public Map<Integer, Integer> getItemGroup() {
+		return itemGroup;
+	}
+	public void setItemGroup(Map<Integer, Integer> itemGroup) {
+		this.itemGroup = itemGroup;
+	}
+	public Map<Integer, Integer> getMemberGroup() {
+		return memberGroup;
+	}
+	public void setMemberGroup(Map<Integer, Integer> memberGroup) {
+		this.memberGroup = memberGroup;
+	}
+	public DropGroupTemplate(Integer id, Map<Integer, Integer> groupProbability, Map<Integer, Integer> itemGroup,
+			Map<Integer, Integer> memberGroup) {
+		super();
+		this.id = id;
+		this.groupProbability = groupProbability;
+		this.itemGroup = itemGroup;
+		this.memberGroup = memberGroup;
+	}
+	
+}

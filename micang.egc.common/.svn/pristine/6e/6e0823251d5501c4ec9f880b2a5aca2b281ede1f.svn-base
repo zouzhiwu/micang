@@ -1,0 +1,58 @@
+package com.common.template;
+
+import java.util.Map;
+
+public class GachaTemplate {
+	private Integer id ;
+	private Short currencyType ;
+	private Integer needCurrency ;
+	private Short gachaTimes ;
+	private Map<Integer, Integer> jackpot;
+	private Integer freeGift ;
+	public GachaTemplate(Integer id, Short currencyType, Integer needCurrency, Short gachaTimes,
+			Map<Integer, Integer> jackpot, Integer freeGift) {
+		super();
+		this.id = id;
+		this.currencyType = currencyType;
+		this.needCurrency = needCurrency;
+		this.gachaTimes = gachaTimes;
+		this.jackpot = jackpot;
+		this.freeGift = freeGift;
+	}
+	public Integer getId() {
+		return id;
+	}
+	public void setId(Integer id) {
+		this.id = id;
+	}
+	public Short getCurrencyType() {
+		return currencyType;
+	}
+	public void setCurrencyType(Short currencyType) {
+		this.currencyType = currencyType;
+	}
+	public Integer getNeedCurrency() {
+		return needCurrency;
+	}
+	public void setNeedCurrency(Integer needCurrency) {
+		this.needCurrency = needCurrency;
+	}
+	public Short getGachaTimes() {
+		return gachaTimes;
+	}
+	public void setGachaTimes(Short gachaTimes) {
+		this.gachaTimes = gachaTimes;
+	}
+	public Map<Integer, Integer> getJackpot() {
+		return jackpot;
+	}
+	public void setJackpot(Map<Integer, Integer> jackpot) {
+		this.jackpot = jackpot;
+	}
+	public Integer getFreeGift() {
+		return freeGift;
+	}
+	public void setFreeGift(Integer freeGift) {
+		this.freeGift = freeGift;
+	}
+}

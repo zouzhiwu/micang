@@ -1,0 +1,36 @@
+package com.common.entity;
+
+public class Role {
+	
+	private Long accountId;
+	
+	private Integer exp;
+	
+	private Integer expPot;
+
+	public Long getAccountId() {
+		return accountId;
+	}
+
+	public void setAccountId(Long accountId) {
+		this.accountId = accountId;
+	}
+
+	public Integer getExp() {
+		return exp;
+	}
+
+	public void setExp(Integer exp) {
+		this.exp = exp;
+	}
+
+	public Integer getExpPot() {
+		return expPot;
+	}
+
+	public void setExpPot(Integer expPot) {
+		this.expPot = expPot;
+	}
+	
+
+}

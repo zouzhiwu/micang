@@ -1,0 +1,48 @@
+package com.common.enumerate;
+
+public enum CurrencyType implements BaseEnum {
+	Top("金币", (byte)1), Jun("钻石", (byte)2);
+	// 成员变量
+	private String name;
+	private byte index;
+
+	// 构造方法
+	private CurrencyType(String name, byte index) {
+		this.name = name;
+		this.index = index;
+	}
+
+	public static String getName(byte index) {
+		for (CurrencyType dt : CurrencyType.values()) {
+			if (dt.getIndex() == index) {
+				return dt.name;
+			}
+		}
+		return null;
+	}
+	
+	public static CurrencyType getType(byte index) {
+		for (CurrencyType dt : CurrencyType.values()) {
+			if (dt.getIndex() == index) {
+				return dt;
+			}
+		}
+		return null;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
+
+	public byte getIndex() {
+		return index;
+	}
+
+	public void setIndex(byte index) {
+		this.index = index;
+	}
+}

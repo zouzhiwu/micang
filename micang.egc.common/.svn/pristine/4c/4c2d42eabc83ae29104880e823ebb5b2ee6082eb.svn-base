@@ -1,0 +1,32 @@
+package com.common.template;
+
+public class CurrencyTemplate {
+	private Integer id;
+	private String txt;
+	private Integer numerical;
+	public Integer getId() {
+		return id;
+	}
+	public void setId(Integer id) {
+		this.id = id;
+	}
+	public String getTxt() {
+		return txt;
+	}
+	public void setTxt(String txt) {
+		this.txt = txt;
+	}
+	public Integer getNumerical() {
+		return numerical;
+	}
+	public void setNumerical(Integer numerical) {
+		this.numerical = numerical;
+	}
+	public CurrencyTemplate(Integer id, String txt, Integer numerical) {
+		super();
+		this.id = id;
+		this.txt = txt;
+		this.numerical = numerical;
+	}
+	
+}

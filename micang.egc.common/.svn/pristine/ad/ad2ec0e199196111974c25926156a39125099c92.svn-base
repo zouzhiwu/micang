@@ -1,0 +1,48 @@
+package com.common.enumerate;
+
+public enum ApplyAddFriendType {
+	code1("成功", 1000), code2("已经发送了申请", 1001), code3("你被拉黑了", 1002), code4("你把对方拉黑了", 1003), code5("好友id不存在", 1004), code6("对方列表已满", 1005);
+	// 成员变量
+	private String name;
+	private int index;
+
+	// 构造方法
+	private ApplyAddFriendType(String name, int index) {
+		this.name = name;
+		this.index = index;
+	}
+	
+	public static String getName(int index) {
+		for (ApplyAddFriendType dt : ApplyAddFriendType.values()) {
+			if (dt.getIndex() == index) {
+				return dt.name;
+			}
+		}
+		return null;
+	}
+	
+	public static ApplyAddFriendType getType(int index) {
+		for (ApplyAddFriendType dt : ApplyAddFriendType.values()) {
+			if (dt.getIndex() == index) {
+				return dt;
+			}
+		}
+		return null;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
+
+	public int getIndex() {
+		return index;
+	}
+
+	public void setIndex(int index) {
+		this.index = index;
+	}
+}

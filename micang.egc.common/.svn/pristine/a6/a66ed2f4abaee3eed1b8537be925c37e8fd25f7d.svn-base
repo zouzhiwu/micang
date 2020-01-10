@@ -1,0 +1,25 @@
+package com.common.template;
+
+
+import com.common.template.TemplateBase;
+
+public class CheckPointTemplate extends TemplateBase {
+	private Integer id;
+	private Integer chapterId;
+	public CheckPointTemplate(Integer id, Integer chapterId) {
+		this.id = id;
+		this.chapterId = chapterId;
+	}
+	public Integer getId() {
+		return id;
+	}
+	public void setId(Integer id) {
+		this.id = id;
+	}
+	public Integer getChapterId() {
+		return chapterId;
+	}
+	public void setChapterId(Integer chapterId) {
+		this.chapterId = chapterId;
+	}
+}

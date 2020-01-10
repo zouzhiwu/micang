@@ -1,0 +1,255 @@
+package com.common.template;
+
+public class CheckPointTemplate extends TemplateBase {
+
+	private Integer chapterId;
+	private Byte diffculty;
+	private Short plotId;
+	private String image;
+	private String icon;
+	private String title;
+	private String chapterContent;
+	private Byte teamLineup;
+	private Short exp;
+	private Short gold;
+	private String display;
+	private Integer reward;
+	private Integer lastLevelId;
+	private Integer nextLevelId;
+	private Short newspaperId;
+	private Integer posX;
+	private Integer posY;
+	private String npc;
+	private Integer task1;
+	private String taskTxt1;
+	private Integer task2;
+	private String taskTxt2;
+	private Integer task3;
+	private String taskTxt3;
+
+	public Integer getChapterId() {
+		return chapterId;
+	}
+
+	public void setChapterId(Integer chapterId) {
+		this.chapterId = chapterId;
+	}
+
+	public Byte getDiffculty() {
+		return diffculty;
+	}
+
+	public void setDiffculty(Byte diffculty) {
+		this.diffculty = diffculty;
+	}
+
+	public Short getPlotId() {
+		return plotId;
+	}
+
+	public void setPlotId(Short plotId) {
+		this.plotId = plotId;
+	}
+
+	public String getImage() {
+		return image;
+	}
+
+	public void setImage(String image) {
+		this.image = image;
+	}
+
+	public String getIcon() {
+		return icon;
+	}
+
+	public void setIcon(String icon) {
+		this.icon = icon;
+	}
+
+	public String getTitle() {
+		return title;
+	}
+
+	public void setTitle(String title) {
+		this.title = title;
+	}
+
+	public String getChapterContent() {
+		return chapterContent;
+	}
+
+	public void setChapterContent(String chapterContent) {
+		this.chapterContent = chapterContent;
+	}
+
+	public Byte getTeamLineup() {
+		return teamLineup;
+	}
+
+	public void setTeamLineup(Byte teamLineup) {
+		this.teamLineup = teamLineup;
+	}
+
+	public Short getExp() {
+		return exp;
+	}
+
+	public void setExp(Short exp) {
+		this.exp = exp;
+	}
+
+	public Short getGold() {
+		return gold;
+	}
+
+	public void setGold(Short gold) {
+		this.gold = gold;
+	}
+
+	public String getDisplay() {
+		return display;
+	}
+
+	public void setDisplay(String display) {
+		this.display = display;
+	}
+
+	public Integer getReward() {
+		return reward;
+	}
+
+	public void setReward(Integer reward) {
+		this.reward = reward;
+	}
+
+	public Integer getLastLevelId() {
+		return lastLevelId;
+	}
+
+	public void setLastLevelId(Integer lastLevelId) {
+		this.lastLevelId = lastLevelId;
+	}
+
+	public Integer getNextLevelId() {
+		return nextLevelId;
+	}
+
+	public void setNextLevelId(Integer nextLevelId) {
+		this.nextLevelId = nextLevelId;
+	}
+
+	public Short getNewspaperId() {
+		return newspaperId;
+	}
+
+	public void setNewspaperId(Short newspaperId) {
+		this.newspaperId = newspaperId;
+	}
+
+	public Integer getPosX() {
+		return posX;
+	}
+
+	public void setPosX(Integer posX) {
+		this.posX = posX;
+	}
+
+	public Integer getPosY() {
+		return posY;
+	}
+
+	public void setPosY(Integer posY) {
+		this.posY = posY;
+	}
+
+	public String getNpc() {
+		return npc;
+	}
+
+	public void setNpc(String npc) {
+		this.npc = npc;
+	}
+
+	public Integer getTask1() {
+		return task1;
+	}
+
+	public void setTask1(Integer task1) {
+		this.task1 = task1;
+	}
+
+	public String getTaskTxt1() {
+		return taskTxt1;
+	}
+
+	public void setTaskTxt1(String taskTxt1) {
+		this.taskTxt1 = taskTxt1;
+	}
+
+	public Integer getTask2() {
+		return task2;
+	}
+
+	public void setTask2(Integer task2) {
+		this.task2 = task2;
+	}
+
+	public String getTaskTxt2() {
+		return taskTxt2;
+	}
+
+	public void setTaskTxt2(String taskTxt2) {
+		this.taskTxt2 = taskTxt2;
+	}
+
+	public Integer getTask3() {
+		return task3;
+	}
+
+	public void setTask3(Integer task3) {
+		this.task3 = task3;
+	}
+
+	public String getTaskTxt3() {
+		return taskTxt3;
+	}
+
+	public void setTaskTxt3(String taskTxt3) {
+		this.taskTxt3 = taskTxt3;
+	}
+
+	public CheckPointTemplate(Integer id, Integer chapterId, Byte diffculty, Short plotId, String image, String icon,
+			String title, String chapterContent, Byte teamLineup, Short exp, Short gold, String display, Integer reward,
+			Integer lastLevelId, Integer nextLevelId, Short newspaperId, Integer posX, Integer posY, String npc,
+			Integer task1, String taskTxt1, Integer task2, String taskTxt2, Integer task3, String taskTxt3) {
+		super.setId(id);
+		super.setName("name" + id);
+
+		this.chapterId = chapterId;
+		this.diffculty = diffculty;
+		this.plotId = plotId;
+		this.image = image;
+		this.icon = icon;
+		this.title = title;
+		this.chapterContent = chapterContent;
+		this.teamLineup = teamLineup;
+		this.exp = exp;
+		this.gold = gold;
+		this.display = display;
+		this.reward = reward;
+		this.lastLevelId = lastLevelId;
+		this.nextLevelId = nextLevelId;
+		this.newspaperId = newspaperId;
+		this.posX = posX;
+		this.posY = posY;
+		this.npc = npc;
+		this.task1 = task1;
+		this.taskTxt1 = taskTxt1;
+		this.task2 = task2;
+		this.taskTxt2 = taskTxt2;
+		this.task3 = task3;
+		this.taskTxt3 = taskTxt3;
+	}
+
+}

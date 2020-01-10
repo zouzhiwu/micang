@@ -1,0 +1,1 @@
+mvn install:install-file -Dfile=micang.egc.common-1.0.0-SNAPSHOT.jar -DgroupId=com.qy -DartifactId=micang.egc.common -Dversion=1.0.0-SNAPSHOT -Dpackaging=jar

@@ -1,0 +1,42 @@
+package com.common.constant;
+
+public class ParameterConstant {
+	/**第一次出兵的游戏时间，单位：秒*/
+	public static final int soldier_create_time_id = 1;
+	
+	/**每波兵的间隔时间，单位：秒*/
+	public static final int soldier_create_interval_id = 2;
+	
+	/**每波小兵数量*/
+	public static final int soldier_every_count_id = 3;
+	
+	/**每隔x波小兵出一波炮兵*/
+	public static final int artiller_interval_count_id = 4;
+	
+	/**每波炮兵数量*/
+	public static final int artiller_every_count_id = 5;
+	
+	/**每路水晶被摧毁，对方出一波超级兵的数量*/
+	public static final int crystal_die_count_id = 6;
+	
+	/**所有水晶都被摧毁，对方增加超级兵数量（不包含每路被摧毁的数量）*/
+	public static final int crystal_all_die_count_id = 7;
+	
+	/**第一次刷小龙的游戏时间，单位：秒*/
+	public static final int create_small_dragon_time_id = 8;
+	
+	/**第一次刷大龙的游戏时间，单位：秒*/
+	public static final int create_big_dragon_time_id = 9;
+	
+	/**第一次刷野怪的游戏时间，单位：秒*/
+	public static final int create_monster_time_id = 10;
+	
+	/**小龙复活时间，单位：秒*/
+	public static final int small_dragon_revive_time_id = 11;
+	
+	/**大龙复活时间，单位：秒*/
+	public static final int big_dragon_revive_time_id = 12;
+	
+	/**野怪复活时间，单位：秒*/
+	public static final int monster_revive_time_id = 13;
+}

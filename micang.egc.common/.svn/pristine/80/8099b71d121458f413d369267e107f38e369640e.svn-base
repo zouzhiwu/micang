@@ -1,0 +1,218 @@
+package com.common.template;
+
+import com.common.template.TemplateBase;
+
+public class NodeTemplate extends TemplateBase {
+
+	private String icon;
+	private Byte type;
+	private Byte skillTarget;
+	private Integer hp;
+	private Integer pa;
+	private Integer ma;
+	private Integer pd;
+	private Integer md;
+	private Short ats;
+	private Short aoe;
+	private Short vr;
+	private Short mvs;
+	private Short gold;
+	private Short exp;
+	private Integer buff;
+	private Short birthTime;
+	private Byte birthCount;
+	private Byte triggerType;
+	private Short loopTime;
+	private Short reviveTime;
+	private Short x;
+	private Short y;
+
+	public NodeTemplate(Integer id, String name, String icon, Byte type, Byte skillTarget, Integer hp, Integer pa, Integer ma, Integer pd, Integer md, Short ats, Short aoe
+			, Short vr, Short mvs, Short gold, Short exp, Integer buff, Short birthTime, Byte birthCount, Byte triggerType, Short loopTime, Short reviveTime, Short x, Short y) {
+		super.setId(id);
+		super.setName(name);
+		this.icon = icon;
+		this.type = type;
+		this.skillTarget = skillTarget;
+		this.hp = hp;
+		this.pa = pa;
+		this.ma = ma;
+		this.pd = pd;
+		this.md = md;
+		this.ats = ats;
+		this.aoe = aoe;
+		this.vr = vr;
+		this.mvs = mvs;
+		this.gold = gold;
+		this.exp = exp;
+		this.buff = buff;
+		this.birthTime = birthTime;
+		this.birthCount = birthCount;
+		this.triggerType = triggerType;
+		this.loopTime = loopTime;
+		this.reviveTime = reviveTime;
+		this.x = x;
+		this.y = y;
+	}
+	
+	public String getIcon() {
+		return icon;
+	}
+	public void setIcon(String icon) {
+		this.icon = icon;
+	}
+	public Byte getType() {
+		return type;
+	}
+	public void setType(Byte type) {
+		this.type = type;
+	}
+	public Byte getSkillTarget() {
+		return skillTarget;
+	}
+	public void setSkillTarget(Byte skillTarget) {
+		this.skillTarget = skillTarget;
+	}
+	public Integer getHp() {
+		return hp;
+	}
+	public void setHp(Integer hp) {
+		this.hp = hp;
+	}
+	public Integer getPa() {
+		return pa;
+	}
+	public void setPa(Integer pa) {
+		this.pa = pa;
+	}
+	public Integer getMa() {
+		return ma;
+	}
+	public void setMa(Integer ma) {
+		this.ma = ma;
+	}
+	public Integer getPd() {
+		return pd;
+	}
+	public void setPd(Integer pd) {
+		this.pd = pd;
+	}
+	public Integer getMd() {
+		return md;
+	}
+	public void setMd(Integer md) {
+		this.md = md;
+	}
+	public Short getAts() {
+		return ats;
+	}
+	public void setAts(Short ats) {
+		this.ats = ats;
+	}
+	public Short getAoe() {
+		return aoe;
+	}
+	public void setAoe(Short aoe) {
+		this.aoe = aoe;
+	}
+	public Short getVr() {
+		return vr;
+	}
+	public void setVr(Short vr) {
+		this.vr = vr;
+	}
+	public Short getMvs() {
+		return mvs;
+	}
+	public void setMvs(Short mvs) {
+		this.mvs = mvs;
+	}
+	public Short getGold() {
+		return gold;
+	}
+	public void setGold(Short gold) {
+		this.gold = gold;
+	}
+	public Short getExp() {
+		return exp;
+	}
+	public void setExp(Short exp) {
+		this.exp = exp;
+	}
+	public Integer getBuff() {
+		return buff;
+	}
+	public void setBuff(Integer buff) {
+		this.buff = buff;
+	}
+	public Short getBirthTime() {
+		return birthTime;
+	}
+	public void setBirthTime(Short birthTime) {
+		this.birthTime = birthTime;
+	}
+	public Byte getBirthCount() {
+		return birthCount;
+	}
+	public void setBirthCount(Byte birthCount) {
+		this.birthCount = birthCount;
+	}
+	public Byte getTriggerType() {
+		return triggerType;
+	}
+	public void setTriggerType(Byte triggerType) {
+		this.triggerType = triggerType;
+	}
+	public Short getLoopTime() {
+		return loopTime;
+	}
+	public void setLoopTime(Short loopTime) {
+		this.loopTime = loopTime;
+	}
+	public Short getReviveTime() {
+		return reviveTime;
+	}
+	public void setReviveTime(Short reviveTime) {
+		this.reviveTime = reviveTime;
+	}
+	public Short getX() {
+		return x;
+	}
+	public void setX(Short x) {
+		this.x = x;
+	}
+	public Short getY() {
+		return y;
+	}
+	public void setY(Short y) {
+		this.y = y;
+	}
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("[");
+		sb.append("id=" + super.getId());
+		sb.append(" name=" + super.getName());
+		sb.append(" icon=" + icon);
+		sb.append(" type=" + type);
+		sb.append(" hp=" + hp);
+		sb.append(" pa=" + pa);
+		sb.append(" ma=" + ma);
+		sb.append(" ats=" + ats);
+		sb.append(" aoe=" + aoe);
+		sb.append(" vr=" + vr);
+		sb.append(" mvs=" + mvs);
+		sb.append(" gold=" + gold);
+		sb.append(" exp=" + exp);
+		sb.append(" buff=" + buff);
+		sb.append(" borthTime=" + birthTime);
+		sb.append(" borthCount=" + birthCount);
+		sb.append(" triggerType=" + triggerType);
+		sb.append(" loopTime=" + loopTime);
+		sb.append(" reviveTime=" + reviveTime);
+		sb.append(" x=" + x);
+		sb.append(" y=" + y);
+		sb.append("]");
+		return sb.toString();
+	}
+}

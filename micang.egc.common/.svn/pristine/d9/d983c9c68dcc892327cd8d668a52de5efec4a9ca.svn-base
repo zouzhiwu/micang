@@ -1,0 +1,181 @@
+package com.common.template;
+
+import com.common.template.TemplateBase;
+
+public class MemberTemplate extends TemplateBase {
+
+	private String smallIcon;
+	private String bigIcon;
+	private String image;
+	private String awata;
+	private Byte quality;
+	private Byte pos;
+	private Integer dynamic;
+	private Integer operation;
+	private Integer potential;
+	private Integer tough;
+	private Integer focus;
+	private Integer stageId;
+	private String likeHeros;
+	private Integer masterSkillId;
+	private String slaveSkillIds;
+	private Short fragmentCount;
+	private Integer characterGroupId;
+	private String desc;
+
+	public MemberTemplate(Integer id, String name, String smallIcon, String bigIcon, String image, String awata, Byte quality, Byte pos, Integer dynamic, Integer operation, Integer potential, Integer tough, Integer focus, Integer stageId, String likeHeros, Integer masterSkillId, String slaveSkillIds, Short fragmentCount, Integer characterGroupId, String desc) {
+		super.setId(id);
+		super.setName(name);
+		this.smallIcon = smallIcon;
+		this.bigIcon = bigIcon;
+		this.image = image;
+		this.awata = awata;
+		this.quality = quality;
+		this.pos = pos;
+		this.dynamic = dynamic;
+		this.operation = operation;
+		this.potential = potential;
+		this.tough = tough;
+		this.focus = focus;
+		this.stageId = stageId;
+		this.likeHeros = likeHeros;
+		this.masterSkillId = masterSkillId;
+		this.slaveSkillIds = slaveSkillIds;
+		this.fragmentCount = fragmentCount;
+		this.characterGroupId = characterGroupId;
+		this.desc = desc;
+	}
+	
+	
+	public String getSmallIcon() {
+		return smallIcon;
+	}
+	public void setSmallIcon(String smallIcon) {
+		this.smallIcon = smallIcon;
+	}
+	public String getBigIcon() {
+		return bigIcon;
+	}
+	public void setBigIcon(String bigIcon) {
+		this.bigIcon = bigIcon;
+	}
+	public String getImage() {
+		return image;
+	}
+	public void setImage(String image) {
+		this.image = image;
+	}
+	public String getAwata() {
+		return awata;
+	}
+	public void setAwata(String awata) {
+		this.awata = awata;
+	}
+	public Byte getQuality() {
+		return quality;
+	}
+	public void setQuality(Byte quality) {
+		this.quality = quality;
+	}
+	public Byte getPos() {
+		return pos;
+	}
+	public void setPos(Byte pos) {
+		this.pos = pos;
+	}
+	public Integer getDynamic() {
+		return dynamic;
+	}
+	public void setDynamic(Integer dynamic) {
+		this.dynamic = dynamic;
+	}
+	public Integer getOperation() {
+		return operation;
+	}
+	public void setOperation(Integer operation) {
+		this.operation = operation;
+	}
+	public Integer getPotential() {
+		return potential;
+	}
+	public void setPotential(Integer potential) {
+		this.potential = potential;
+	}
+	public Integer getTough() {
+		return tough;
+	}
+	public void setTough(Integer tough) {
+		this.tough = tough;
+	}
+	public Integer getFocus() {
+		return focus;
+	}
+	public void setFocus(Integer focus) {
+		this.focus = focus;
+	}
+	public Integer getStageId() {
+		return stageId;
+	}
+	public void setStageId(Integer stageId) {
+		this.stageId = stageId;
+	}
+	public String getLikeHeros() {
+		return likeHeros;
+	}
+	public void setLikeHeros(String likeHeros) {
+		this.likeHeros = likeHeros;
+	}
+	public Integer getMasterSkillId() {
+		return masterSkillId;
+	}
+	public void setMasterSkillId(Integer masterSkillId) {
+		this.masterSkillId = masterSkillId;
+	}
+	public String getSlaveSkillIds() {
+		return slaveSkillIds;
+	}
+	public void setSlaveSkillIds(String slaveSkillIds) {
+		this.slaveSkillIds = slaveSkillIds;
+	}
+	public Short getFragmentCount() {
+		return fragmentCount;
+	}
+	public void setFragmentCount(Short fragmentCount) {
+		this.fragmentCount = fragmentCount;
+	}
+	public Integer getCharacterGroupId() {
+		return characterGroupId;
+	}
+	public void setCharacterGroupId(Integer characterGroupId) {
+		this.characterGroupId = characterGroupId;
+	}
+
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("[");
+		sb.append("id=" + super.getId());
+		sb.append(" name=" + super.getName());
+		sb.append(" bigIcon=" + bigIcon);
+		sb.append(" smallIcon=" + smallIcon);
+		sb.append(" image=" + image);
+		sb.append(" awata=" + awata);
+		sb.append(" quality=" + quality);
+		sb.append(" route=" + pos);
+		sb.append(" dynamic=" + dynamic);
+		sb.append(" operation=" + operation);
+		sb.append(" potential=" + potential);
+		sb.append(" tough=" + tough);
+		sb.append(" focus=" + focus);
+		sb.append(" stageId=" + stageId);
+		sb.append(" likeHeros=" + likeHeros);
+		sb.append(" masterSkillId=" + masterSkillId);
+		sb.append(" slaveSkillIds=" + slaveSkillIds);
+		sb.append(" fragmentCount=" + fragmentCount);
+		sb.append(" characterGroupId=" + characterGroupId);
+		sb.append(" desc=" + desc);
+		sb.append("]");
+		return sb.toString();
+	}
+}
