@@ -1,0 +1,24 @@
+package com.game.dao;
+
+import java.util.List;
+
+import com.common.entity.RequestGuild;
+import com.common.entity.RequestGuildInfo;
+
+public interface RequestGuildDao {
+
+	public void add(RequestGuild requestGuild);
+
+	public void delete(Integer id);
+	
+	public void clearHistoricalRecord(Integer time);
+	
+	public RequestGuild getById(Integer id);
+	
+	public List<RequestGuild> getByAccountId(Long accountId);
+	
+	public void update(RequestGuild requestGuild);
+	
+	public List<RequestGuildInfo> getByGuildId(Integer guildId);
+	
+}

@@ -1,0 +1,51 @@
+package com.game.job.self;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.constant.HeroConstant;
+import com.common.entity.Hero;
+import com.common.enumerate.BuffStatus;
+import com.common.enumerate.SelfSkill;
+import com.game.helper.MsgHelper;
+import com.game.job.JobScheduler;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class SelfTreatJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(SelfTreatJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Integer index = jobDataMap.getInt("index");
+		Hero currHero = (Hero)jobDataMap.get("currHero");
+		if (currHero.hp > 0) {
+			// 计算治疗次数
+	    	int count = HeroConstant.self_treat_effcontime / HeroConstant.self_treat_hurtcycle;
+			int addHp = (int)(currHero.maxhp * HeroConstant.self_treat_add / 100.0f / count);
+	    	currHero.hp += addHp;
+	    	logger.info(String.format("玩家%d 自身治疗 需要补血%d次 第%d次扣血%d hp=%d ", currHero.accountId, count, index, addHp, currHero.hp));
+	    	if (currHero.hp > currHero.maxhp) {
+	    		currHero.hp = currHero.maxhp;
+	    	}
+	    	if (currHero.isNpc) {
+	    		currHero.treatHp += addHp;
+			}
+	    	// 广播加血
+	    	MsgHelper.broadcastHurt(currHero, currHero);
+			jobDataMap.put("index", ++index);
+			if (index >= count || currHero.hp >= currHero.maxhp) {
+				JobScheduler.stopJob(jobDetail.getKey());
+				MsgHelper.broadcastSelfSkillStatus(currHero, SelfSkill.Treat, BuffStatus.Stop);
+			}
+		}
+	}
+}

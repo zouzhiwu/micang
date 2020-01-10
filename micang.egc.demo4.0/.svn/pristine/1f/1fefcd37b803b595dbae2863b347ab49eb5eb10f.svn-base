@@ -1,0 +1,813 @@
+package com.game.helper;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections.MapUtils;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.constant.HeroConstant;
+import com.common.entity.Book;
+import com.common.entity.Box;
+import com.common.entity.Circle;
+import com.common.entity.Location;
+import com.common.entity.Account;
+import com.common.entity.Hero;
+import com.common.entity.Room;
+import com.common.entity.Trap;
+import com.common.entity.Vector3;
+import com.common.enumerate.BSkillType;
+import com.common.enumerate.BuffStatus;
+import com.common.enumerate.SelfSkill;
+import com.common.enumerate.TargetType;
+import com.common.helper.TimeHelper;
+import com.common.template.CircleTemplate;
+import com.common.template.SkillTemplate;
+import com.game.common.MessageCode;
+import com.game.job.JobScheduler;
+import com.game.util.GameUtil;
+
+public class MsgHelper {
+	
+	public static void sendBroadcast(Message message, List<Long> roleList) {
+		MsgSender.sendBroadcast(message, roleList, null);
+	}
+	
+	private static List<Long> filterReceiver(List<Hero> roleList) {
+		List<Long> receiverList = roleList.stream().filter(r -> {return !r.isNpc && r.isLoadFinish && !r.isExit && r.killTime == 0;}).map(Hero::getAccountId).collect(Collectors.toList());
+		return receiverList;
+	}
+	
+	public static void broadcastLocation(Hero currHero, List<Hero> roleList) {
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_move);
+				msg.putLong(currHero.accountId);
+				msg.putInt((int)(currHero.location.x * 100));
+				msg.putInt((int)(currHero.location.z * 100));
+				MsgSender.sendBroadcast(msg, receiverList, currHero.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastSpeedStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffSpeed.length : 0;
+				Integer skillTemplateId = BSkillType.Speed.getIndex();
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_speed);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putFloat(beAttHero.speed);	// 受到buff伤害的玩家速度
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastBlindStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffBlind.length : 0;
+				Integer skillTemplateId = BSkillType.Blind.getIndex();
+				// 广播受到致盲伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_blind);
+				msg.putLong(beAttHero.accountId);		// 受伤者Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastSilentStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffSilent.length : 0;
+				Integer skillTemplateId = BSkillType.Silent.getIndex();
+				// 广播受到沉默伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_silent);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastStopStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffStop.length : 0;
+				Integer skillTemplateId = BSkillType.Stop.getIndex();
+				// 广播受到禁步伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_stop);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastDizzyStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffDizzy.length : 0;
+				Integer skillTemplateId = BSkillType.Dizzy.getIndex();
+				// 广播受到晕眩伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_dizzy);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastDotStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffDot.length : 0;
+				Integer skillTemplateId = BSkillType.Dot.getIndex();
+				// 广播受到dot伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_dot);
+				msg.putLong(beAttHero.accountId);		// 收到buff伤害的玩家Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastLinkStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffLink.length : 0;
+				Integer skillTemplateId = BSkillType.Link.getIndex();
+				// 广播受到链接伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_link);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+
+	public static void broadcastClearStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffClear.length : 0;
+				Integer skillTemplateId = BSkillType.Clear.getIndex();
+				// 广播受到净化伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_clear);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+
+	public static void broadcastShieldStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffShield.length : 0;
+				Integer skillTemplateId = BSkillType.Shield.getIndex();
+				// 广播受到护盾伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_shield);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putInt(beAttHero.extraHp);	// 附加血量上限
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+
+	public static void broadcastTreatStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffTreat.length : 0;
+				Integer skillTemplateId = BSkillType.Treat.getIndex();
+				// 广播受到治疗伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_treat);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+
+	public static void broadcastHurtStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffHurt.length : 0;
+				Integer skillTemplateId = BSkillType.Hurt.getIndex();
+				// 广播受到伤害加深伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_hurt);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+
+	public static void broadcastPushStatus(Hero beAttHero, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffPush.length : 0;
+				Integer skillTemplateId = BSkillType.Push.getIndex();
+				// 广播受到远离伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_push);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				msg.putFloat(beAttHero.speed);	// 受伤的玩家当前速度
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+
+	public static void broadcastNearStatus(Hero beAttHero, Integer effectId, BuffStatus buffStatus) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(beAttHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				int effcontime = buffStatus == BuffStatus.Start ? beAttHero.buffNear.length : 0;
+				Integer skillTemplateId = BSkillType.Near.getIndex();
+				// 广播受到靠近伤害
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_buff_near);
+				msg.putLong(beAttHero.accountId);		// 受到buff伤害的玩家Id
+				msg.putInt(skillTemplateId);	// 技能模板Id
+				msg.putInt(effcontime);			// buff持续时长
+				msg.putInt(effectId);			// 特效Id
+				msg.putFloat(beAttHero.speed);	// 受伤的玩家当前速度
+				MsgSender.sendBroadcast(msg, receiverList, beAttHero.roomId);
+			}
+		}
+	}
+	
+	public static void sendBroadcast(Message message, List<Hero> roleList, Integer roomId) {
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				MsgSender.sendBroadcast(message, receiverList, roomId);
+			}
+		}
+	}
+	
+	public static void sendBroadcast(Message message, Map<Long, Hero> roleMap, Integer roomId) {
+		if (MapUtils.isNotEmpty(roleMap)) {
+			List<Hero> roleList = new ArrayList<Hero>(roleMap.values());
+			sendBroadcast(message, roleList, roomId);
+		}
+	}
+	
+	public static void sendBuffStatus(Hero currHero, List<Hero> inHeroList) {
+		Long currMilliTime = TimeHelper.getMilliTime();
+		for (Hero role : inHeroList) {
+			if (!role.isNpc && role.isLoadFinish) {
+				if (JobScheduler.isHasJob(role, BSkillType.Speed)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_speed);
+					msg.putLong(role.accountId);		// 受到buff伤害的玩家Id
+					msg.putFloat(role.speed);						// 受到buff伤害的玩家速度
+					msg.putInt(role.buffSpeed.skillTemplateId);		// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffSpeed.begin + role.buffSpeed.length));	// buff持续时长
+					MsgSender.sendMsg(msg, currHero.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Dot)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_dot);
+					msg.putLong(role.accountId);		// 受到buff伤害的玩家Id
+					msg.putInt(role.buffDot.skillTemplateId);	// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffDot.begin + role.buffDot.length));		// buff持续时长
+					MsgSender.sendMsg(msg, currHero.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Near)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_near);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffNear.skillTemplateId);		// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffNear.begin + role.buffNear.length));		// buff持续时长
+					msg.putInt(role.buffNear.effectId);				// 特效Id
+					msg.putFloat(role.speed);						// 受伤的玩家当前速度
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Push)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_push);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffPush.skillTemplateId);		// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffPush.begin + role.buffPush.length));		// buff持续时长
+					msg.putFloat(role.speed);	// 受伤的玩家当前速度
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Hurt)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_hurt);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffHurt.skillTemplateId);		// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffHurt.begin + role.buffHurt.length));		// buff持续时长
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Blind)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_blind);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffBlind.skillTemplateId);		// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffBlind.begin + role.buffBlind.length));		// buff持续时长
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Silent)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_silent);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffSilent.skillTemplateId);		// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffSilent.begin + role.buffSilent.length));		// buff持续时长
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Stop)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_stop);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffStop.skillTemplateId);		// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffStop.begin + role.buffStop.length));		// buff持续时长
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Dizzy)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_dizzy);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffDizzy.skillTemplateId);			// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffDizzy.begin + role.buffDizzy.length));		// buff持续时长
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Treat)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_treat);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffTreat.skillTemplateId);			// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffTreat.begin + role.buffTreat.length));		// buff持续时长
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Shield)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_shield);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffShield.skillTemplateId);		// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffShield.begin + role.buffShield.length));		// buff持续时长
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Clear)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_clear);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffClear.skillTemplateId);			// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffClear.begin + role.buffClear.length));		// buff持续时长
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+				if (JobScheduler.isHasJob(role, BSkillType.Link)) {
+					Message msg = new Message();
+					msg.setMsgcd(MessageCode.msg_game_buff_link);
+					msg.putLong(role.accountId);			// 受到buff伤害的玩家Id
+					msg.putInt(role.buffLink.skillTemplateId);		// 技能模板Id
+					msg.putInt((int)(currMilliTime - role.buffLink.begin + role.buffLink.length));		// buff持续时长
+					MsgSender.sendMsg(msg, role.accountId);
+				}
+			}
+		}
+	}
+	
+	public static void broadcastVisionHeroList(List<Hero> observerList, List<Hero> inHeroList, List<Hero> outHeroList, int roomId) {
+		if (CollectionUtils.isNotEmpty(observerList)) {
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_game_vision_role);
+			msg.putShort(inHeroList.size());
+			for (int i = 0; i < inHeroList.size(); i++) {
+				Hero role = inHeroList.get(i);
+				msg.putLong(role.accountId);
+				msg.putInt(role.hp);
+				msg.putFloat(role.direction);
+				msg.putFloat(role.speed);
+				msg.putFloat(role.location.x);
+				msg.putFloat(role.location.z);
+			}
+			msg.putShort(outHeroList.size());
+			for (int i = 0; i < outHeroList.size(); i++) {
+				Hero role = outHeroList.get(i);
+				msg.putLong(role.accountId);
+			}
+			StringBuffer sb = new StringBuffer();
+			StringBuffer inSB = new StringBuffer();
+			sb.append("inHeroList=");
+			inHeroList.forEach(r -> inSB.append(String.format(",%s", r.accountId)));
+			if (inSB.length() > 0) {
+				sb.append(inSB.deleteCharAt(0));
+			}
+			StringBuffer outSB = new StringBuffer();
+			sb.append(" inHeroList=");
+			outHeroList.forEach(r -> outSB.append(String.format(",%s", r.accountId)));
+			if (outSB.length() > 0) {
+				sb.append(outSB.deleteCharAt(0));
+			}
+			MsgHelper.sendBroadcast(msg, observerList, roomId);
+		}
+	}
+	
+	/**
+	 * 广播普攻动画
+	 */
+	public static void broadcastGeneralEffect(Hero attHero, TargetType targetType, long targetId) {
+		List<Hero> observerList = new ArrayList<Hero>(attHero.visionHeroList);
+		observerList.add(attHero);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_attack_general);
+		msg.putLong(attHero.accountId);	// 施法者Id
+		msg.putByte((byte)targetType.getIndex());	// 目标类型
+		msg.putLong(targetId);		// 玩家或宝箱Id
+		MsgHelper.sendBroadcast(msg, observerList, attHero.roomId);
+	}
+	
+	public static void broadcastStartEffect(byte idx, Vector3 skillDirection, Location skillLocation
+			, Hero attHero, int skillTemplateId, int effectId) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(attHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				// 广播特效
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_broadcast_effect);
+				msg.putByte(idx);					// index
+				msg.putInt(effectId);				// 特效Id
+				msg.putInt(skillTemplateId);		// 技能模板Id
+				msg.putLong(attHero.accountId);			// 施法者id
+				msg.putFloat(skillLocation.x);		// 特效坐标x
+				msg.putFloat(skillLocation.z);		// 特效坐标z
+				msg.putInt((int)(skillDirection.x * 1000000));		// 指示器方向 x
+				msg.putInt((int)(skillDirection.y * 1000000));		// 指示器方向 y
+				msg.putInt((int)(skillDirection.z * 1000000));		// 指示器方向 z
+				MsgHelper.sendBroadcast(msg, roleList, attHero.roomId);
+			}
+		}
+	}
+
+	/**
+	 * 广播伤害
+	 **/
+	public static void broadcastHurt(Hero attHero, Hero beAttHero) {
+		List<Hero> observerList = GameUtil.getVisionHeroList(attHero);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_hurt_notice);
+		msg.putLong(attHero.accountId);			// 施法玩家
+		msg.putLong(beAttHero.accountId);			// 能看到这个玩家的Id
+		msg.putInt(beAttHero.hp);			// 剩余血量
+		msg.putInt(beAttHero.extraHp);		// 受伤玩家附加剩余血量
+		MsgHelper.sendBroadcast(msg, observerList, attHero.roomId);
+	}
+	
+	public static void broadcastStartTrapEffect(Hero touchHero, Trap trap, SkillTemplate skillTemplate, int effectId) {
+		// 开始播放特效
+		List<Hero> observerList = new ArrayList<Hero>(touchHero.visionHeroList);
+		observerList.add(touchHero);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_broadcast_trap_effect);
+		msg.putInt(effectId);				// 特效Id
+		msg.putInt(skillTemplate.getId());	// 技能模板Id
+		msg.putFloat(trap.location.x);		// 特效坐标x
+		msg.putFloat(trap.location.z);		// 特效坐标z
+		MsgHelper.sendBroadcast(msg, observerList, touchHero.roomId);
+	}
+	
+	public static void broadcastSelfSkillStatus(Hero currHero, SelfSkill selfSkill, BuffStatus status) {
+		List<Hero> observerList = GameUtil.getVisionHeroList(currHero);
+		int effcontime = status == BuffStatus.Start ? HeroConstant.self_treat_effcontime * 1000 : 0;
+		// 广播自身技能
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_start_self_skill);
+		msg.putLong(currHero.accountId);				// 施法者
+		msg.putByte(selfSkill.getIndex());		// 自身技能idx
+		msg.putInt(effcontime);					// 持续时间
+		MsgHelper.sendBroadcast(msg, observerList, currHero.roomId);
+	}
+	
+	public static void broadcastStopEffect(Hero role, int effectId) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(role);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_broadcast_effect_finish);
+				msg.putInt(effectId);				// 特效Id
+				MsgHelper.sendBroadcast(msg, roleList, role.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastBeMove(Hero role, float speed) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(role);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				// 实时发给客户端位置
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_be_move);
+				msg.putLong(role.accountId);
+				msg.putFloat(speed);
+				msg.putInt((int)(role.location.x * 100));
+				msg.putInt((int)(role.location.z * 100));
+				MsgSender.sendBroadcast(msg, receiverList, role.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastGenerateBook(Room room, List<Hero> observerList, List<Book> bookList) {
+		if (CollectionUtils.isNotEmpty(observerList)) {
+			List<Long> receiverList = filterReceiver(observerList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				// 广播爆出的技能书
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_generate_book);
+				msg.putShort(bookList.size());
+				for (Book book : bookList) {
+					msg.putInt(book.code);				// 技能书code
+					msg.putInt(book.templateId);		// 技能书模板Id
+					msg.putFloat(book.location.x);		// 技能书坐标x
+					msg.putFloat(book.location.z);		// 技能书坐标z
+				}
+				MsgHelper.sendBroadcast(msg, observerList, room.id);
+			}
+		}
+	}
+	
+	public static void broadcastStopMove(Hero currHero) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(currHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				// 广播我的位置
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_stop_move);
+				msg.putLong(currHero.accountId);
+				msg.putInt((int)(currHero.location.x * 100));
+				msg.putInt((int)(currHero.location.z * 100));
+				MsgSender.sendBroadcast(msg, receiverList, currHero.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastBoxHurt(Room room, Hero attHero, Box box, int skillTemplateId) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(attHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_attack_box);
+				msg.putInt(skillTemplateId);				// 技能Id
+				msg.putLong(attHero.accountId);					// 施法玩家
+				msg.putShort(box.id);						// 宝箱Id
+				msg.putByte(box.hp);						// 剩余血量
+				MsgSender.sendBroadcast(msg, receiverList, attHero.roomId);
+			}
+		}
+	}
+	
+	public static void sendVisionBook(Hero currHero, List<Book> inBookList, List<Book> outBookList) {
+		// 发送消息范围内视野改变的宝箱列表
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_vision_book);
+		msg.putShort(inBookList.size());
+		for (Book book : inBookList) {
+			msg.putInt(book.code);
+			msg.putInt(book.templateId);
+			msg.putFloat(book.location.x);
+			msg.putFloat(book.location.z);
+		}
+		msg.putShort(outBookList.size());
+		for (Book book : outBookList) {
+			msg.putInt(book.code);
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	public static void sendVisionBox(Hero currHero, List<Box> inBoxList, List<Box> outBoxList) {
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_vision_box);
+		msg.putShort(inBoxList.size());
+		for (Box box : inBoxList) {
+			msg.putShort(box.id);
+			msg.putByte(box.hp);
+		}
+		msg.putShort(outBoxList.size());
+		for (Box box : outBoxList) {
+			msg.putShort(box.id);
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	public static void broadcastCircleHurt(Room room, Hero role) {
+		List<Hero> observerList = GameUtil.getVisionHeroList(role);
+		// 广播给视野内玩家受到毒圈伤害
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_circle_hurt_notice);
+		msg.setErrorcd(MessageCode.msg_status_success);
+		msg.putLong(role.accountId);		// 玩家Id
+		msg.putInt(role.hp);		// 剩余血量
+		MsgHelper.sendBroadcast(msg, observerList, room.id);
+	}
+	
+	public static List<Hero> broadcastDeath(Room room, Hero dead) {
+		List<Hero> observerList = GameUtil.getVisionHeroList(dead);
+//		observerList.stream().forEach(r -> logger.info(String.format("id=%s isNpc=%s isLoadFinish=%s", r.id, r.isNpc, r.isLoadFinish)));
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_death_notice);
+		msg.putLong(dead.accountId);				// 阵亡玩家Id
+		msg.putLong(dead.killerMemberId);	// 凶手Id，当凶手Id为0时表示不是玩家杀死的，可能是毒死或其他
+		MsgHelper.sendBroadcast(msg, observerList, room.id);
+		return observerList;
+	}
+	
+	public static void broadcastSelfFlash(Location location, Hero currHero) {
+		List<Hero> observerList = GameUtil.getVisionHeroList(currHero);
+		// 广播闪现技能
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_self_flash);
+		msg.putFloat(location.x);			// 特效坐标x
+		msg.putFloat(location.z);			// 特效坐标z
+		MsgHelper.sendBroadcast(msg, observerList, currHero.roomId);
+	}
+	
+	public static void sendBoxList(Hero currHero, Room room) {
+		// 发送视野范围内宝箱
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_box_list);
+		Set<Short> boxIdSet = room.boxMap.keySet();
+		msg.putShort((short)boxIdSet.size());
+		for (Iterator<Short> it = boxIdSet.iterator(); it.hasNext();) {
+			Box box = room.boxMap.get(it.next());
+			msg.putShort(box.id);
+			msg.putFloat(box.location.x);
+			msg.putFloat(box.location.z);
+			msg.putByte(box.hp);
+			msg.putByte(box.level);
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	public static void sendOnlineList(Hero currHero, Integer pageCount, List<Account> currPageList) {
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_online_list);
+		msg.putInt(pageCount);		// 页数
+		msg.putShort(currPageList.size());	// 当前页人数
+		for (Account account : currPageList) {
+			msg.putLong(account.getId());
+			msg.putString(account.getNick());
+			msg.putByte(account.getState());
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	public static void broadcastCircle(Room room, CircleTemplate bigTemplate, float smallRadius, Circle circle) {
+		// 通知玩家毒圈圆心点坐标和半径
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_circle_notice);
+		msg.putFloat(circle.center.x);			// 大圈圆心坐标x	
+		msg.putFloat(circle.center.z);			// 大圈圆心坐标z
+		msg.putFloat(circle.radius);			// 大圈半径
+		msg.putInt(bigTemplate.getStay());		// 停留时间
+		msg.putInt(bigTemplate.getLiftime());	// 缩圈时间
+		msg.putFloat(circle.smallCenter.x);		// 小圈圆心点坐标x
+		msg.putFloat(circle.smallCenter.z);		// 小圈圆心点坐标x
+		msg.putFloat(smallRadius);				// 小圈半径
+		MsgHelper.sendBroadcast(msg, room.heroMap, room.id);
+	}
+	
+	public static void getMyInfo(Room room, Hero currHero) {
+		// 进入游戏
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_room_get_my_info);
+		// 我的属性
+		msg.putLong(currHero.accountId);
+		msg.putInt(currHero.hp);
+		msg.putFloat(currHero.direction);
+		msg.putFloat(currHero.speed);
+		msg.putFloat(currHero.location.x);
+		msg.putFloat(currHero.location.z);
+		// TODO 添加聊天群Id
+		//msg.putString(room.tid);
+		// 所有玩家的固定属性
+		List<Hero> allHeroList = new ArrayList<Hero>(room.heroMap.size() + room.robotList.size() + room.aiList.size());
+		allHeroList.addAll(room.heroMap.values());
+		allHeroList.addAll(room.robotList);
+		allHeroList.addAll(room.aiList);
+		msg.putShort((short)allHeroList.size());
+		for (Hero hero : allHeroList) {
+			msg.putLong(hero.accountId);
+			msg.putString(hero.awtar);
+			msg.putString(hero.nick);
+			msg.putInt(hero.maxhp);
+			msg.putByte(hero.selfSkill[SelfSkill.Flash.getIndex()] > 0 ? SelfSkill.Flash.getIndex() : SelfSkill.Run.getIndex());
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	public static void broadcastCDTime(int cdtime, Room room, List<Long> roleIdList) {
+		if (CollectionUtils.isNotEmpty(roleIdList)) {
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_room_into_seting);
+			msg.putInt(cdtime);
+			MsgSender.sendBroadcast(msg, roleIdList, room.id);
+		}
+	}
+	
+	public static void broadcastEnterNotice(int cdtime, Room room, List<Long> roleIdList) {
+		if (CollectionUtils.isNotEmpty(roleIdList)) {
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_room_enter_notice);
+			msg.putInt(cdtime);
+			MsgSender.sendBroadcast(msg, roleIdList, room.id);
+		}
+	}
+	
+	public static void broadcastNpcLocation(Hero currHero) {
+		List<Hero> roleList = GameUtil.getVisionHeroList(currHero);
+		if (CollectionUtils.isNotEmpty(roleList)) {
+			List<Long> receiverList = filterReceiver(roleList);
+			if (CollectionUtils.isNotEmpty(receiverList)) {
+				// 广播NPC的位置
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_tcp_npc_move);
+				msg.putLong(currHero.accountId);
+				msg.putInt((int)(currHero.location.x * 100));
+				msg.putInt((int)(currHero.location.z * 100));
+				MsgSender.sendBroadcast(msg, receiverList, currHero.roomId);
+			}
+		}
+	}
+	
+	public static void broadcastShutdown(String content, List<Long> roleIdList) {
+		if (CollectionUtils.isNotEmpty(roleIdList)) {
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_room_broadcast);
+			msg.putString(content);
+			MsgSender.sendBroadcast(msg, roleIdList);
+		}
+	}
+	
+	public static void broadcastKick(List<Long> roleIdList) {
+		if (CollectionUtils.isNotEmpty(roleIdList)) {
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_room_kick);
+			MsgSender.sendBroadcast(msg, roleIdList);
+		}
+	}
+}

@@ -1,0 +1,365 @@
+package com.game.entity;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.OperateStep;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.RoomState;
+import com.common.enumerate.WorkType;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+import com.game.job.RoomJobManager;
+import com.game.model.Model;
+import com.game.node.AbsAttackNode;
+import com.game.node.AbsMoveNode;
+import com.game.node.BaseNode;
+import com.game.node.HeroNode;
+import com.game.node.HomeNode;
+import com.game.node.TroopsNode;
+
+public class Room {
+	private static final Logger logger = LoggerFactory.getLogger(Room.class);
+	/** 房间Id */
+	public int id;
+	
+	/** 被挑战者，蓝方 */
+	public Player bluePlayer;
+	
+	/** 挑战者，红方 */
+	public Player redPlayer;
+	
+	/** 房间状态，0-准备，1-开始，2-结算*/
+	public RoomState state;
+	
+	/** 操作步骤列表*/
+	public List<OperateStep> operateStepList;
+	
+	/** 第index步骤，从0开始*/
+	public Byte stepIndex;
+	
+	/** 选择队员JobKey*/
+	public JobKey chooseMemberJobKey;
+	
+	/** 自动操作JobKey*/
+	public JobKey autoOperationJobKey;
+	
+	/** 开始游戏JobKey*/
+	public JobKey beginGameJobKey;
+	
+	/** 自动出兵控制JobKey*/
+	public JobKey arsenalContrallerJobKey;
+	
+	/** 自动出兵JobKey*/
+	public JobKey arsenalJobKey;
+	
+	/** 显示战斗力JobKey*/
+	public JobKey showFightPowerJobKey;
+	
+	/** 显示阵容JobKey*/
+	public JobKey showLayoutJobKey;
+	
+	/** 英雄上线JobKey*/
+	public JobKey heroOnlineJobKey;
+	
+	/** 开始游戏JobKey*/
+	public JobKey moveInitplaceJobKey;
+	
+	/** 回收JobKey*/
+	public JobKey destroyJobKey;
+	
+	private Map<Short, BaseNode> nodeMap = new HashMap<Short, BaseNode>();
+	
+	private Lock lock = new ReentrantLock();
+	
+	/** 小兵，炮兵，超级兵的nodeId*/
+	public short troopsNodeId = 70;
+	
+	public HomeNode getBuleHomeNode() {
+		return (HomeNode)getNode((short)1);
+	}
+	
+	public HomeNode getRedHomeNode() {
+		return (HomeNode)getNode((short)2);
+	}
+	
+	public HomeNode getHomeNode(CampType camp) {
+		if (camp == CampType.Red) {
+			return getRedHomeNode();
+		} else {
+			return getBuleHomeNode();
+		}
+	}
+	
+	public HeroNode getHero(short nodeId) {
+		return (HeroNode)nodeMap.get(nodeId);
+	}
+	
+	public HeroNode getHero(CampType camp, WorkType workType) {
+		List<HeroNode> heroList = getHeroList(camp);
+		for (HeroNode heroNode : heroList) {
+			if (heroNode.heroTemplate.getWork() == workType.getIndex()) {
+				return heroNode;
+			}
+		}
+		return null;
+	}
+	
+	public BaseNode getNode(short nodeId) {
+		return (BaseNode)nodeMap.get(nodeId);
+	}
+	
+	public List<BaseNode> getAllList() {
+		return getNodeList(null, null);
+	}
+	
+	public List<HeroNode> getHeroList() {
+		return getNodeList(NodeType.Hero, null);
+	}
+	
+	public List<HeroNode> getHeroList(CampType camp) {
+		return getNodeList(NodeType.Hero, camp);
+	}
+	
+	public List<HeroNode> getHeroList(CampType camp, boolean isSortByWork) {
+		List<HeroNode> heroNodeList = getNodeList(NodeType.Hero, camp);
+		if (isSortByWork) {
+			Collections.sort(heroNodeList, new Comparator<HeroNode>() {
+				@Override
+				public int compare(HeroNode heroNode1, HeroNode heroNode2) {
+					int diff = heroNode1.heroTemplate.getWork() - heroNode2.heroTemplate.getWork();
+					if (diff > 0) {
+						return 1;
+					} else if (diff < 0) {
+						return -1;
+					} else {
+						return 0;
+					}
+				}
+			});
+		}
+		return heroNodeList;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T extends BaseNode> List<T> getNodeList(CampType camp) {
+		return (List<T>)getNodeList(null, camp);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T extends BaseNode> List<T> getNodeList(NodeType nodeType) {
+		return (List<T>)getNodeList(nodeType, null);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T extends BaseNode> List<T> getNodeList(NodeType nodeType, CampType camp) {
+		List<BaseNode> nodeList = new ArrayList<BaseNode>();
+		lock.lock();
+		try {
+			nodeMap.forEach((nodeId, node) -> {
+				if (nodeType == null && camp == null) {
+					nodeList.add(node);
+				} else if (nodeType == null && camp != null) {
+					if (camp == node.selfCamp) {
+						nodeList.add(node);
+					}
+				} else if (nodeType != null && camp == null) {
+					if (nodeType == node.getNodeType()) {
+						nodeList.add(node);
+					}
+				} else {
+					if (nodeType == node.getNodeType() && camp == node.selfCamp) {
+						nodeList.add(node);
+					}
+				}
+			});
+		} catch(Exception e){
+			logger.error(e.toString());
+        } finally {
+            lock.unlock();
+        }
+		return (List<T>)nodeList;
+	}
+	
+	public void putNode(BaseNode node) {
+		lock.lock();
+		try {
+			nodeMap.put(node.nodeId, node);
+		} catch(Exception e){
+			logger.error(e.toString());
+        } finally {
+            lock.unlock();
+        }
+	}
+	
+	public BaseNode remove(short nodeId) {
+		lock.lock();
+		BaseNode node = null;
+		try {
+			node = nodeMap.remove(nodeId);
+		} catch(Exception e){
+			logger.error(e.toString());
+        } finally {
+            lock.unlock();
+        }
+		return node;
+	}
+	
+	public void startChooseMember() {
+		RoomJobManager.createChooseMemberJob(this);
+	}
+	
+	public void stopChooseMember() {
+		if (JobScheduler.isHasJob(chooseMemberJobKey)) {
+			JobScheduler.stopJob(chooseMemberJobKey);
+		}
+	}
+	
+	public void startAutoOperation() {
+		RoomJobManager.createAutoOperationJob(this);
+	}
+	
+	public void stopAutoOperation() {
+		if (JobScheduler.isHasJob(autoOperationJobKey)) {
+			JobScheduler.stopJob(autoOperationJobKey);
+		}
+	}
+	
+	public void startBeginGame() {
+		FightJobManager.createBeginGameJob(this);
+	}
+	
+	public void stopBeginGame() {
+		if (JobScheduler.isHasJob(beginGameJobKey)) {
+			JobScheduler.stopJob(beginGameJobKey);
+		}
+	}
+	
+	public void startArsenalContraller(long delayTime, long repeatInterval) {
+		FightJobManager.createArsenalContrallerJob(this, delayTime, repeatInterval);
+	}
+	
+	public void stopArsenalContraller() {
+		if (JobScheduler.isHasJob(arsenalContrallerJobKey)) {
+			JobScheduler.stopJob(arsenalContrallerJobKey);
+		}
+	}
+	
+	public void startArsenal(List<List<TroopsNode>> buleTroopsNodeList, List<List<TroopsNode>> redTroopsNodeList) {
+		FightJobManager.createArsenalJob(this, buleTroopsNodeList, redTroopsNodeList);
+	}
+	
+	public void stopArsenal() {
+		if (JobScheduler.isHasJob(arsenalJobKey)) {
+			JobScheduler.stopJob(arsenalJobKey);
+		}
+	}
+	
+	public void startShowFightPower() {
+		RoomJobManager.createShowFightPowerJob(this);
+	}
+	
+	public void stopShowFightPower() {
+		if (JobScheduler.isHasJob(showFightPowerJobKey)) {
+			JobScheduler.stopJob(showFightPowerJobKey);
+		}
+	}
+	
+	public void startShowLayout(long delayTime) {
+		RoomJobManager.createShowLayoutJob(this, delayTime);
+	}
+	
+	public void stopShowLayout() {
+		if (JobScheduler.isHasJob(showLayoutJobKey)) {
+			JobScheduler.stopJob(showLayoutJobKey);
+		}
+	}
+	
+	public void startHeroOnline(long delayTime) {
+		FightJobManager.createHeroOnlineJob(this, delayTime);
+	}
+	
+	public void stopHeroOnline() {
+		if (JobScheduler.isHasJob(heroOnlineJobKey)) {
+			JobScheduler.stopJob(heroOnlineJobKey);
+		}
+	}
+	
+	public void startMoveInitplace() {
+		FightJobManager.createMoveInitplaceJob(this);
+	}
+	
+	public void stopMoveInitplace() {
+		if (JobScheduler.isHasJob(moveInitplaceJobKey)) {
+			JobScheduler.stopJob(moveInitplaceJobKey);
+		}
+	}
+	
+	public void startDestroy(long delayTime) {
+		RoomJobManager.createDestroyRoomJob(this, delayTime);
+	}
+	
+	public void stopDestroy() {
+		if (JobScheduler.isHasJob(destroyJobKey)) {
+			JobScheduler.stopJob(destroyJobKey);
+		}
+	}
+	
+	public void gameOver() {
+		// 关闭选择队员Job
+		stopChooseMember();
+		// 关闭选择英雄Job
+		stopAutoOperation();
+		// 关闭显示阵容Job
+		stopShowLayout();
+		// 关闭显示战斗力Job
+		stopShowFightPower();
+		// 关闭开始游戏Job
+		stopBeginGame();
+		// 关闭移动到初始位置Job
+		stopMoveInitplace();
+		// 关闭出兵控制Job
+		stopArsenalContraller();
+		// 关闭出兵Job
+		stopArsenal();
+		// 关闭英雄上线Job
+		stopHeroOnline();
+		
+		List<BaseNode> nodeList = getAllList();
+		for (BaseNode baseNode : nodeList) {
+			if (AbsAttackNode.class.isAssignableFrom(baseNode.getClass())) {
+				AbsAttackNode absAttackNode = (AbsAttackNode)baseNode;
+				// 停止更新视野
+				absAttackNode.stopUpdateVision();
+				// 停止攻击
+				absAttackNode.stopAttack();
+				// 如果该节点是英雄节点，则关闭相应的Job
+				if (baseNode instanceof HeroNode) {
+					HeroNode heroNode = (HeroNode)baseNode;
+					heroNode.stopFindGuider();
+				}
+			}
+			if (AbsMoveNode.class.isAssignableFrom(baseNode.getClass())) {
+				AbsMoveNode absMoveNode = (AbsMoveNode)baseNode;
+				logger.info("结束游戏停止移动");
+				absMoveNode.stopMove();
+			}
+		}
+	}
+	
+	public void destroy() {
+		Model.getInstance().roomMap.remove(this.id);
+		gameOver();
+	}
+}

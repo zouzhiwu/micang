@@ -1,0 +1,15 @@
+package com.game.util;
+
+import com.common.entity.Lvxp;
+
+public class LevelUtil {
+	public static Lvxp getLvxp(int exp) {
+		/*
+		 * int lv = 0; int xp = exp; for (int i = 1; i < LevelConfig.map.size(); i++) {
+		 * AttrConvertTemplate levelTemplate = LevelConfig.map.get(i); lv++; if (xp <
+		 * levelTemplate.getExp()) { break; } else { xp -= levelTemplate.getExp(); } }
+		 * Lvxp lvxp = new Lvxp(); lvxp.setLevel(lv); lvxp.setXp(xp); return lvxp;
+		 */
+		return null;
+	}
+}

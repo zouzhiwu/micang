@@ -1,0 +1,58 @@
+package com.demo.list;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.common.entity.Hero;
+
+public class RetainAll {
+	public static void main(String[] args) {
+		List<Hero> oldHeroList = new ArrayList<Hero>();
+		Hero role1 = new Hero();
+		role1.accountId = 1L;
+		Hero role2 = new Hero();
+		role2.accountId = 2L;
+		Hero role3 = new Hero();
+		role3.accountId = 3L;
+		oldHeroList.add(role1);
+		List<Hero> newHeroList = new ArrayList<Hero>();
+		newHeroList.add(role2);
+		newHeroList.add(role3);
+		List<Hero> inHeroList = getOutHero(oldHeroList, newHeroList);
+		inHeroList.forEach(r -> System.out.println(r.accountId));
+		List<Hero> inHeroList1 = getDiffrent(newHeroList, oldHeroList);
+		inHeroList1.forEach(r -> System.out.println(r.accountId));
+    }
+
+	public static List<Hero> getInHero(List<Hero> oldHeroList, List<Hero> newHeroList) {
+		/*List<Hero> result = new ArrayList<Hero>();
+		for (Hero role : newHeroList) {
+			// 如果新视野的玩家在老视野里没有，则玩家进入视野
+			if (!oldHeroList.contains(role)) {
+//				logger.info(String.format("role.id=%d的玩家进入视野", role.id));
+				result.add(role);
+			}
+		}
+		return result;*/
+		return getDiffrent(oldHeroList, newHeroList);
+	}
+	
+	public static List<Hero> getOutHero(List<Hero> oldHeroList, List<Hero> newHeroList) {
+		/*List<Hero> result = new ArrayList<Hero>();
+		for (Hero role : oldHeroList) {
+			// 如果老视野的玩家在新视野里没有，则玩家离开视野了
+			if (!newHeroList.contains(role)) {
+//				logger.info(String.format("role.id=%d的玩家离开视野", role.id));
+				result.add(role);
+			}
+		}
+		return result;*/
+		return getDiffrent(newHeroList, oldHeroList);
+	}
+	
+	public static List<Hero> getDiffrent(List<Hero> list1, List<Hero> list2) {
+		List<Hero> list = new ArrayList<>(list2);
+		list.removeAll(list1);
+        return list;
+    }
+}

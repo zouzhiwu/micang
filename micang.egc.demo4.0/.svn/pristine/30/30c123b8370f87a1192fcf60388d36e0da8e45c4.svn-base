@@ -1,0 +1,655 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.constant.HeroConstant;
+import com.common.constant.SkillConstant;
+import com.common.constant.TemplateConstant;
+import com.common.entity.Book;
+import com.common.entity.Box;
+import com.common.entity.Hero;
+import com.common.entity.Room;
+import com.common.entity.Skill;
+import com.common.enumerate.SelfSkill;
+import com.common.enumerate.SkillMethodType;
+import com.common.enumerate.SkillOperatType;
+import com.common.helper.RandomHelper;
+import com.common.template.SkillTemplate;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.config.AppConfig;
+import com.game.config.SkillConfig;
+import com.game.helper.MsgHelper;
+import com.game.model.Model;
+import com.game.util.GameUtil;
+import com.game.util.SkillUtil;
+import com.game.vision.VisionAdapter;
+
+@Service
+public class SkillService {
+	private static final Logger logger = LoggerFactory.getLogger(SkillService.class);
+	
+	public void setSelfSkill(Long accountId, byte selfSkillId) {
+		logger.info(String.format("玩家设置自身技能%d", selfSkillId));
+		SelfSkill selfSkill = SelfSkill.getType(selfSkillId);
+		AssertUtil.asWarnTrue(selfSkill == SelfSkill.Flash || selfSkill == SelfSkill.Run, "自身技能Id不正确");
+		Hero role = Model.getInstance().heroMap.get(accountId);
+		role.selfSkill[selfSkillId] = 1;
+	}
+	
+	public void operateSkill(Long accountId, byte operationType, byte mthdtype, byte frmidx, byte toidx) {
+		Hero currHero = Model.getInstance().heroMap.get(accountId);
+		SkillOperatType skillOperatType = SkillOperatType.getType(operationType);
+		SkillMethodType skillMethodType = SkillMethodType.getType(mthdtype);
+		operateSkill(currHero, skillOperatType, skillMethodType, frmidx, toidx);
+	}
+	
+	public void operateSkill(Hero currHero, SkillOperatType operationType, SkillMethodType skillMethodType, byte frmidx, byte toidx) {
+		synchronized (currHero) {
+			if (operationType == SkillOperatType.Set) {
+				setSkill(currHero, skillMethodType, frmidx, toidx);
+			} else {
+				delSkill(currHero, skillMethodType, frmidx);
+			}
+		}
+	}
+	
+	private void delSkill(Hero currHero, SkillMethodType skillMethodType, byte idx) {
+		logger.info(String.format("玩家%d不存在", currHero.accountId));
+		Skill skill = null;
+		List<Skill> list = null;
+		switch (skillMethodType) {
+		case Bag2A:
+			skill = currHero.skillBag.get(idx);
+			break;
+		case Bag2B:
+			skill = currHero.skillPanelA[idx];
+			break;
+		case A2Bag:
+			skill = currHero.skillPanelB[idx];
+			break;
+		default:
+			break;
+		}
+		AssertUtil.asWarnTrue(skill != null, String.format("mthdtype=%s idx=%s 对应的技能不存在", skillMethodType.getIndex(), idx));
+		switch (skillMethodType) {
+		case Bag2A:
+			currHero.skillBag.remove(idx);
+			list = new ArrayList<Skill>(currHero.skillBag.size());
+			list.addAll(currHero.skillBag);
+			break;
+		case Bag2B:
+			currHero.skillPanelA[idx] = null;
+			currHero.skillPanelC[idx] = null;
+			list = new ArrayList<Skill>(currHero.skillPanelA.length);
+			list.addAll(Arrays.asList(currHero.skillPanelA));
+			break;
+		case A2Bag:
+			currHero.skillPanelB[idx] = null;
+			currHero.skillPanelC[idx] = null;
+			list = new ArrayList<Skill>(currHero.skillPanelB.length);
+			list.addAll(Arrays.asList(currHero.skillPanelB));
+			break;
+		default:
+			break;
+		}
+		Room room = Model.getInstance().roomMap.get(currHero.roomId);
+		List<Skill> skillList = getSkillListForPanel(currHero);
+		Message message = new Message();
+		message.setMsgcd(MessageCode.msg_game_set_skill);
+		message.putByte(SkillOperatType.Delete.getIndex());	// 操作类型
+		message.putByte(skillMethodType.getIndex());			// method type: 1.从背包丢掉; 2.从A面板丢掉; 3.从B面板丢掉;
+		message.putByte(idx);				// index
+		message.putByte((byte)0);			// 没用到，对应toidx
+		message.putShort(list.size());
+		for (int i = 0; i < list.size(); i++) {
+			if (list.get(i) == null) {
+				message.putInt(0);
+			} else {
+				message.putInt(list.get(i).templateId);
+			}
+		}
+		message.putShort(skillList.size());
+		for (int i = 0; i < skillList.size(); i++) {
+			if (skillList.get(i) == null) {
+				message.putInt(0);
+			} else {
+				message.putInt(skillList.get(i).templateId);
+			}
+		}
+		MsgSender.sendMsg(message, currHero.accountId);
+		// 参数技能书
+		Book book = GameUtil.generateBook(currHero.location, skill.templateId, room);
+		List<Hero> visionHeroList = VisionAdapter.getVisionHeroList(book, room.heroMap, HeroConstant.not_debug_vision);
+		// 广播玩家生成技能书
+		List<Book> bookList = Arrays.asList(book);
+		MsgHelper.broadcastGenerateBook(room, visionHeroList, bookList);
+		// 让视野内玩家能看到这本书
+		for (Hero role : visionHeroList) {
+			if (!role.visionBookList.contains(book)) {
+				role.visionBookList.add(book);
+			}
+		}
+		printSkill(currHero);
+	}
+	
+	private void setSkill(Hero currHero, SkillMethodType skillMethodType, byte frmidx, byte toidx) {
+		switch (skillMethodType) {
+		case Bag2A:
+			bag2a(currHero, skillMethodType, frmidx, toidx);
+			break;
+		case Bag2B:
+			bag2b(currHero, skillMethodType, frmidx, toidx);
+			break;
+		case A2Bag:
+			a2bag(currHero, skillMethodType, frmidx, toidx);
+			break;
+		case B2Bag:
+			b2bag(currHero, skillMethodType, frmidx, toidx);
+			break;
+		case A2A:
+			a2a(currHero, skillMethodType, frmidx, toidx);
+			break;
+		case B2B:
+			b2b(currHero, skillMethodType, frmidx, toidx);
+			break;
+		default:
+			break;
+		}
+		printSkill(currHero);
+	}
+	
+	private void bag2a(Hero currHero, SkillMethodType skillMethodType, byte frmidx, byte toidx) {
+		Skill skill = currHero.skillBag.get(frmidx);
+		AssertUtil.asWarnTrue(skill != null, String.format("背包frmidx=%s 对应的技能不存在", frmidx));
+		if (currHero.skillPanelA[toidx] != null) {
+			currHero.skillBag.remove(frmidx);
+			currHero.skillBag.add(frmidx, currHero.skillPanelA[toidx]);
+		} else {
+			currHero.skillBag.remove(frmidx);
+		}
+		currHero.skillPanelA[toidx] = skill;
+		if (currHero.skillPanelA[toidx] != null && currHero.skillPanelB[toidx] != null) {
+			currHero.skillPanelC[toidx] = makec(currHero, toidx);
+		} else {
+			currHero.skillPanelC[toidx] = null;
+		}
+		List<Skill> bagList = new ArrayList<Skill>(currHero.skillBag.size());
+		bagList.addAll(currHero.skillBag);
+		List<Skill> aList = new ArrayList<Skill>(currHero.skillPanelA.length);
+		aList.addAll(Arrays.asList(currHero.skillPanelA));
+		List<Skill> skillList = getSkillListForPanel(currHero);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_set_skill);
+		msg.putByte(SkillOperatType.Set.getIndex());	// 操作类型
+		msg.putByte(skillMethodType.getIndex());
+		msg.putByte(frmidx);
+		msg.putByte(toidx);
+		msg.putShort(bagList.size());
+		for (int i = 0; i < bagList.size(); i++) {
+			msg.putInt(bagList.get(i).templateId);
+		}
+		msg.putShort(aList.size());
+		for (int i = 0; i < aList.size(); i++) {
+			if (aList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(aList.get(i).templateId);
+			}
+		}
+		msg.putShort(skillList.size());
+		for (int i = 0; i < skillList.size(); i++) {
+			if (skillList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(skillList.get(i).templateId);
+			}
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	/**
+	 * 获取技能面板上的C技能列表
+	 */
+	private List<Skill> getSkillListForPanel(Hero currHero) {
+		List<Skill> skillList = new ArrayList<Skill>(SkillConstant.skill_panle_count);
+		for (int i = 0; i < SkillConstant.skill_panle_count; i++) {
+			skillList.add(getSkillForPanel(currHero, i));
+		}
+		return skillList;
+	}
+	
+	private Skill getSkillForPanel(Hero currHero, int idx) {
+		if (currHero.skillPanelC[idx] != null) {
+			return currHero.skillPanelC[idx];
+		} else {
+			if (currHero.skillPanelA[idx] != null) {
+				return currHero.skillPanelA[idx];
+			} else {
+				if (currHero.skillPanelB[idx] != null) {
+					return currHero.skillPanelB[idx];
+				} else {
+					return null;
+				}
+			}
+		}
+	}
+	
+	private void bag2b(Hero currHero, SkillMethodType skillMethodType, byte frmidx, byte toidx) {
+		Skill skill = currHero.skillBag.get(frmidx);
+		AssertUtil.asWarnTrue(skill != null, String.format("背包frmidx=%s 对应的技能不存在", frmidx));
+		if (currHero.skillPanelB[toidx] != null) {
+			currHero.skillBag.remove(frmidx);
+			currHero.skillBag.add(frmidx, currHero.skillPanelB[toidx]);
+		} else {
+			currHero.skillBag.remove(frmidx);
+		}
+		currHero.skillPanelB[toidx] = skill;
+		if (currHero.skillPanelA[toidx] != null && currHero.skillPanelB[toidx] != null) {
+			currHero.skillPanelC[toidx] = makec(currHero, toidx);
+		} else {
+			currHero.skillPanelC[toidx] = null;
+		}
+		List<Skill> bagList = new ArrayList<Skill>(currHero.skillBag.size());
+		bagList.addAll(currHero.skillBag);
+		List<Skill> bList = new ArrayList<Skill>(currHero.skillPanelB.length);
+		bList.addAll(Arrays.asList(currHero.skillPanelB));
+		List<Skill> skillList = getSkillListForPanel(currHero);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_set_skill);
+		msg.putByte(SkillOperatType.Set.getIndex());	// 操作类型
+		msg.putByte(skillMethodType.getIndex());
+		msg.putByte(frmidx);
+		msg.putByte(toidx);
+		msg.putShort(bagList.size());
+		for (int i = 0; i < bagList.size(); i++) {
+			msg.putInt(bagList.get(i).templateId);
+		}
+		msg.putShort(bList.size());
+		for (int i = 0; i < bList.size(); i++) {
+			if (bList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(bList.get(i).templateId);
+			}
+		}
+		msg.putShort(skillList.size());
+		for (int i = 0; i < skillList.size(); i++) {
+			if (skillList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(skillList.get(i).templateId);
+			}
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	private void a2bag(Hero currHero, SkillMethodType skillMethodType, byte frmidx, byte toidx) {
+		Skill skill = currHero.skillPanelA[frmidx];
+		AssertUtil.asWarnTrue(skill != null, String.format("A面板frmidx=%s 对应的技能不存在", frmidx));
+		// 如果背包不存在toidx，则添加技能
+		if (toidx >= currHero.skillBag.size()) {
+			currHero.skillPanelA[frmidx] = null;
+			currHero.skillBag.add(skill);
+		} else {
+			currHero.skillPanelA[frmidx] = currHero.skillBag.get(toidx);
+			currHero.skillBag.remove(toidx);
+			currHero.skillBag.add(toidx, skill);
+		}
+		if (currHero.skillPanelA[frmidx] != null && currHero.skillPanelB[frmidx] != null) {
+			currHero.skillPanelC[frmidx] = makec(currHero, frmidx);
+		} else {
+			currHero.skillPanelC[frmidx] = null;
+		}
+		List<Skill> bagList = new ArrayList<Skill>(currHero.skillBag.size());
+		bagList.addAll(currHero.skillBag);
+		List<Skill> aList = new ArrayList<Skill>(currHero.skillPanelA.length);
+		aList.addAll(Arrays.asList(currHero.skillPanelA));
+		List<Skill> skillList = getSkillListForPanel(currHero);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_set_skill);
+		msg.putByte(SkillOperatType.Set.getIndex());	// 操作类型
+		msg.putByte(skillMethodType.getIndex());
+		msg.putByte(frmidx);
+		msg.putByte(toidx);
+		msg.putShort((short)aList.size());
+		for (int i = 0; i < aList.size(); i++) {
+			if (aList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(aList.get(i).templateId);
+			}
+		}
+		msg.putShort(bagList.size());
+		for (int i = 0; i < bagList.size(); i++) {
+			msg.putInt(bagList.get(i).templateId);
+		}
+		msg.putShort(skillList.size());
+		for (int i = 0; i < skillList.size(); i++) {
+			if (skillList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(skillList.get(i).templateId);
+			}
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	private void b2bag(Hero currHero, SkillMethodType skillMethodType, byte frmidx, byte toidx) {
+		Skill skill = currHero.skillPanelB[frmidx];
+		AssertUtil.asWarnTrue(skill != null, String.format("B面板frmidx=%s 对应的技能不存在", frmidx));
+		// 如果背包不存在toidx，则添加技能
+		if (toidx >= currHero.skillBag.size()) {
+			currHero.skillPanelB[frmidx] = null;
+			currHero.skillBag.add(skill);
+		} else {
+			currHero.skillPanelB[frmidx] = currHero.skillBag.get(toidx);
+			currHero.skillBag.remove(toidx);
+			currHero.skillBag.add(toidx, skill);
+		}
+		if (currHero.skillPanelA[frmidx] != null && currHero.skillPanelB[frmidx] != null) {
+			currHero.skillPanelC[frmidx] = makec(currHero, frmidx);
+		} else {
+			currHero.skillPanelC[frmidx] = null;
+		}
+		List<Skill> bagList = new ArrayList<Skill>(currHero.skillBag.size());
+		bagList.addAll(currHero.skillBag);
+		List<Skill> bList = new ArrayList<Skill>(currHero.skillPanelB.length);
+		bList.addAll(Arrays.asList(currHero.skillPanelB));
+		List<Skill> skillList = getSkillListForPanel(currHero);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_set_skill);
+		msg.putByte(SkillOperatType.Set.getIndex());	// 操作类型
+		msg.putByte(skillMethodType.getIndex());
+		msg.putByte(frmidx);
+		msg.putByte(toidx);
+		msg.putShort((short)bList.size());
+		for (int i = 0; i < bList.size(); i++) {
+			if (bList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(bList.get(i).templateId);
+			}
+		}
+		msg.putShort(bagList.size());
+		for (int i = 0; i < bagList.size(); i++) {
+			msg.putInt(bagList.get(i).templateId);
+		}
+		msg.putShort(skillList.size());
+		for (int i = 0; i < skillList.size(); i++) {
+			if (skillList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(skillList.get(i).templateId);
+			}
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	private void a2a(Hero currHero, SkillMethodType skillMethodType, byte frmidx, byte toidx) {
+		AssertUtil.asWarnTrue(frmidx != toidx, String.format("frmidx(%s)和toidx(%s)不能相等", frmidx, toidx));
+		Skill skill = currHero.skillPanelA[frmidx];
+		AssertUtil.asWarnTrue(skill != null, String.format("A面板frmidx=%s 对应的技能不存在", frmidx));
+		if (currHero.skillPanelA[toidx] == null) {
+			currHero.skillPanelA[frmidx] = null;
+			currHero.skillPanelA[toidx] = skill;
+		} else {
+			currHero.skillPanelA[frmidx] = currHero.skillPanelA[toidx];
+			currHero.skillPanelA[toidx] = skill;
+		}
+		if (currHero.skillPanelA[frmidx] != null && currHero.skillPanelB[frmidx] != null) {
+			currHero.skillPanelC[frmidx] = makec(currHero, frmidx);
+		} else {
+			currHero.skillPanelC[frmidx] = null;
+		}
+		if (currHero.skillPanelA[toidx] != null && currHero.skillPanelB[toidx] != null) {
+			currHero.skillPanelC[toidx] = makec(currHero, toidx);
+		} else {
+			currHero.skillPanelC[toidx] = null;
+		}
+		List<Skill> aList = new ArrayList<Skill>(currHero.skillPanelA.length);
+		aList.addAll(Arrays.asList(currHero.skillPanelA));
+		List<Skill> skillList = getSkillListForPanel(currHero);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_set_skill);
+		msg.putByte(SkillOperatType.Set.getIndex());	// 操作类型
+		msg.putByte(skillMethodType.getIndex());
+		msg.putByte(frmidx);
+		msg.putByte(toidx);
+		msg.putShort((short)aList.size());
+		for (int i = 0; i < aList.size(); i++) {
+			if (aList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(aList.get(i).templateId);
+			}
+		}
+		msg.putShort(skillList.size());
+		for (int i = 0; i < skillList.size(); i++) {
+			if (skillList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(skillList.get(i).templateId);
+			}
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	private void b2b(Hero currHero, SkillMethodType skillMethodType, byte frmidx, byte toidx) {
+		AssertUtil.asWarnTrue(frmidx != toidx, String.format("frmidx(%s)和toidx(%s)不能相等", frmidx, toidx));
+		Skill skill = currHero.skillPanelB[frmidx];
+		AssertUtil.asWarnTrue(skill != null, String.format("B面板frmidx=%s 对应的技能不存在", frmidx));
+		// 如果目标B面板上没有技能，则不需要调换源和目标技能，否则调换源和目标技能
+		if (currHero.skillPanelB[toidx] == null) {
+			logger.info(String.format("%d从%d到%d", skill.templateId, frmidx, toidx));
+			currHero.skillPanelB[frmidx] = null;
+			currHero.skillPanelB[toidx] = skill;
+		} else {
+			logger.info(String.format("%d从%d到%d,%d从%d到%d", skill.templateId, frmidx, toidx, currHero.skillPanelB[toidx].templateId, toidx, frmidx));
+			currHero.skillPanelB[frmidx] = currHero.skillPanelB[toidx];
+			currHero.skillPanelB[toidx] = skill;
+		}
+		// 如果源A面板和B面板上都有技能，则生成C技能，否则设置为空
+		if (currHero.skillPanelA[frmidx] != null && currHero.skillPanelB[frmidx] != null) {
+			currHero.skillPanelC[frmidx] = makec(currHero, frmidx);
+		} else {
+			currHero.skillPanelC[frmidx] = null;
+		}
+		if (currHero.skillPanelA[toidx] != null && currHero.skillPanelB[toidx] != null) {
+			currHero.skillPanelC[toidx] = makec(currHero, toidx);
+		} else {
+			currHero.skillPanelC[toidx] = null;
+		}
+		List<Skill> bList = new ArrayList<Skill>(currHero.skillPanelB.length);
+		bList.addAll(Arrays.asList(currHero.skillPanelB));
+		List<Skill> skillList = getSkillListForPanel(currHero);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_game_set_skill);
+		msg.putByte(SkillOperatType.Set.getIndex());	// 操作类型
+		msg.putByte(skillMethodType.getIndex());
+		msg.putByte(frmidx);
+		msg.putByte(toidx);
+		msg.putShort(bList.size());
+		for (int i = 0; i < bList.size(); i++) {
+			if (bList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(bList.get(i).templateId);
+			}
+		}
+		msg.putShort(skillList.size());
+		for (int i = 0; i < skillList.size(); i++) {
+			if (skillList.get(i) == null) {
+				msg.putInt(0);
+			} else {
+				msg.putInt(skillList.get(i).templateId);
+			}
+		}
+		MsgSender.sendMsg(msg, currHero.accountId);
+	}
+	
+	private Skill makec(Hero currHero, int idx) {
+		Skill askill = currHero.skillPanelA[idx];
+		AssertUtil.asWarnTrue(askill != null, String.format("A面板frmidx=%s 对应的技能不存在", idx));
+		Skill bskill = currHero.skillPanelB[idx];
+		AssertUtil.asWarnTrue(askill != null, String.format("B面板frmidx=%s 对应的技能不存在", idx));
+		SkillTemplate skillTemplate = SkillUtil.makeSkillTemplateC(askill.templateId, bskill.templateId);
+		Skill skill = new Skill(skillTemplate.getId());
+		return skill;
+	}
+	
+	private void printSkill(Hero role) {
+		StringBuilder panelA = new StringBuilder();
+		for (int i = 0; i < role.skillPanelA.length; i++) {
+			Skill skill = role.skillPanelA[i];
+			if (skill != null) {
+				SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+				panelA.append(String.format(" [%s]templateId=%s name=%s", i, skillTemplate.getId(), skillTemplate.getName()));
+			}
+		}
+		StringBuilder panelB = new StringBuilder();
+		for (int i = 0; i < role.skillPanelB.length; i++) {
+			Skill skill = role.skillPanelB[i];
+			if (skill != null) {
+				SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+				panelB.append(String.format(" [%s]templateId=%s name=%s", i, skillTemplate.getId(), skillTemplate.getName()));
+			}
+		}
+		StringBuilder panelC = new StringBuilder();
+		for (int i = 0; i < role.skillPanelC.length; i++) {
+			Skill skill = role.skillPanelC[i];
+			if (skill != null) {
+				SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+				panelC.append(String.format(" [%s]templateId=%s name=%s", i, skillTemplate.getId(), skillTemplate.getName()));
+			}
+		}
+		StringBuilder bag = new StringBuilder();
+		for (Skill skill : role.skillBag) {
+			SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+			bag.append(String.format(" templateId=%s name=%s", skillTemplate.getId(), skillTemplate.getName()));
+		}
+		logger.info("A面板技能：" + panelA.toString());
+		logger.info("B面板技能：" + panelB.toString());
+		logger.info("C面板技能：" + panelC.toString());
+		logger.info("背包技能：" + bag.toString());
+	}
+	
+	public List<Book> generateBook(Room room, Box box) {
+		List<Book> bookList = new ArrayList<Book>();
+		if (AppConfig.isDebug()) {
+			for (int i = 0; i < TemplateConstant.templateIdList.size(); i++) {
+				int templateId = TemplateConstant.templateIdList.get(i);
+				Book book = GameUtil.generateBook(box.location, templateId, room);
+				bookList.add(book);
+			}
+		} else {
+			int rd = RandomHelper.getRandom(1, 100);
+			int count;
+			if (box.level == 1) {
+				if (rd >= 1 && rd < 62) {
+					count = 1;
+				} else if (rd >= 63 && rd < 92) {
+					count = 2;
+				} else {
+					count = 3;
+				}
+			} else if (box.level == 2) {
+				if (rd >= 1 && rd < 62) {
+					count = 2;
+				} else if (rd >= 63 && rd < 92) {
+					count = 3;
+				} else {
+					count = 4;
+				}
+			} else {
+				if (rd >= 1 && rd < 62) {
+					count = 3;
+				} else {
+					count = 4;
+				}
+			}
+			for (int i = 0; i < count; i++) {
+				rd = RandomHelper.getRandom(1, 100);
+				if (rd > 50) {
+					int index = RandomHelper.getRandom(0, TemplateConstant.templateIdAList.size() - 1);
+					int templateId = TemplateConstant.templateIdAList.get(index);
+					Book book = GameUtil.generateBook(box.location, templateId, room);
+					bookList.add(book);
+				} else {
+					int index = RandomHelper.getRandom(0, TemplateConstant.templateIdBList.size() - 1);
+					int templateId = TemplateConstant.templateIdBList.get(index);
+					Book book = GameUtil.generateBook(box.location, templateId, room);
+					bookList.add(book);
+				}
+			}
+		}
+		return bookList;
+	}
+	
+	public void pickupBook(Long accountId, Integer bookCode) {
+		Hero currHero = Model.getInstance().heroMap.get(accountId);
+		Room room = Model.getInstance().roomMap.get(currHero.roomId);
+		Book book = room.bookMap.get(bookCode);
+		pickupBook(room, currHero, book);
+	}
+	
+	public void pickupBook(Room room, Hero currHero, Book book) {
+		AssertUtil.asWarnTrue(book != null, "技能书不存在");
+		logger.info(String.format("玩家%s捡技能书%s", currHero.accountId, book.code));
+		synchronized (currHero) {
+			synchronized (book) {
+				AssertUtil.asWarnTrue(book != null, String.format("bookCode=%s对应的技能书不存在", book.code));
+				logger.info(String.format("pickup book code=%d templateId=%d", book.code, book.templateId));
+				Skill skill = new Skill(book.templateId);
+				boolean isFull = SkillUtil.isFullForBag(currHero);
+				AssertUtil.asWarnTrue(!isFull, "背包已满，不能放入");
+				currHero.skillBag.add(skill);
+				byte idx = (byte)currHero.skillBag.indexOf(skill);
+				Message msg = new Message();
+				msg.setMsgcd(MessageCode.msg_game_pickup_book);
+				msg.putLong(currHero.accountId);	// 捡到技能的玩家Id
+				msg.putInt(book.code);		// 技能书code
+				msg.putByte(idx);			// 技能放入背包的idx
+				MsgHelper.sendBroadcast(msg, room.heroMap, room.id);
+				printSkill(currHero);
+			}
+		}
+	}
+	
+	public byte getIdxForSkill(Hero currHero, Skill skill) {
+		for (byte i = 0; i < currHero.skillPanelA.length; i++) {
+			if (skill.equals(currHero.skillPanelA[i])) {
+				return i;
+			}
+		}
+		for (byte i = 0; i < currHero.skillPanelB.length; i++) {
+			if (skill.equals(currHero.skillPanelB[i])) {
+				return i;
+			}
+		}
+		for (byte i = 0; i < currHero.skillPanelC.length; i++) {
+			if (skill.equals(currHero.skillPanelC[i])) {
+				return i;
+			}
+		}
+		return -1;
+	}
+	
+	public Skill getSkill(Hero role, int idx) {
+		Skill skill = null;
+		skill = role.skillPanelA[idx];
+		if (role.skillPanelC[idx] != null) {
+			skill = role.skillPanelC[idx];
+		}
+		return skill;
+	}
+	
+}

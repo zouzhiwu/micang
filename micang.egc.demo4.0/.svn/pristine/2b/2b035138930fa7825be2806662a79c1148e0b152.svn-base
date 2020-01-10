@@ -1,0 +1,54 @@
+package com.game.config;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.template.GuildTemplate;
+import com.game.util.PoiUtil;
+
+public class GuildConfig {
+	private final static String sheetName = "guild";
+	private static final Logger logger = LoggerFactory.getLogger(GuildConfig.class);
+	public static Map<Integer, GuildTemplate> map = new HashMap<Integer, GuildTemplate>();
+	
+	public static void init() {
+		InputStream in = GuildConfig.class.getClassLoader().getResourceAsStream("template/guild.xlsx");
+		try {
+			XSSFWorkbook workBook = new XSSFWorkbook(in);
+			XSSFSheet sheet = workBook.getSheet(sheetName);
+			int i = 0;
+			for (Iterator<Row> iterator = sheet.rowIterator(); iterator.hasNext();) {
+				XSSFRow row = (XSSFRow) iterator.next();
+				if (i >= 2) {
+					int index = 0;
+					Integer id = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					String name = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					Integer level = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer jb = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer num = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer size = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					GuildTemplate guildTemplate = new GuildTemplate(id, name, level, jb, num, size);
+					map.put(guildTemplate.getId(), guildTemplate);
+//					logger.info(skillTemplate.toString());
+				}
+				i++;
+			}
+			logger.info(String.format("team config loaded record %d", i - 2));
+			workBook.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+}

@@ -1,0 +1,52 @@
+package com.game.node;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+
+public abstract class BaseNode {
+	/**nodeId*/
+	public short nodeId;
+	
+	/**生命值(Hit Point)*/
+	public int hp;
+	
+    /**坐标位置 */
+    public Location location;
+    
+    /**己方阵营*/
+    public CampType selfCamp = CampType.Neutral;
+    
+    /**敌方阵营*/
+    public CampType enemyCamp = CampType.All;
+    
+	public NodeTemplate template;
+	
+	public Room room;
+    
+    /**获取节点类型*/
+    public abstract NodeType getNodeType();
+    
+    public abstract void die(BaseNode attackNode);
+    
+    public void setEnemyCamp() {
+    	switch (selfCamp) {
+		case Neutral:
+			enemyCamp = CampType.All;
+			break;
+		case Blue:
+			enemyCamp = CampType.Red;
+			break;
+		case Red:
+			enemyCamp = CampType.Blue;
+			break;
+		case All:
+			enemyCamp = CampType.All;
+			break;
+		default:
+			break;
+		}
+    }
+}

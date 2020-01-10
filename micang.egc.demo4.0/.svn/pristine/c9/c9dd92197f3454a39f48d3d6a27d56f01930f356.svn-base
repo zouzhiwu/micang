@@ -1,0 +1,20 @@
+package com.game.dao;
+
+import java.util.List;
+
+import com.game.entity.SysMail;
+
+public interface SysMailDao {
+	
+	public void create(SysMail sysMail);
+	
+	public void update(SysMail sysMail);
+
+	public SysMail findById(Long id);
+	
+	public void delById(Long id);
+	
+	public SysMail findTopOne();
+
+	public List<SysMail> findByStart(Long startIndex);
+}

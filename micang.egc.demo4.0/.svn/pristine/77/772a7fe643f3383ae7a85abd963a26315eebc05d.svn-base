@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.ChapterInfoDao">	
+	
+	<insert id="create" parameterType="com.game.entity.ChapterInfo" useGeneratedKeys="true" keyProperty="id">
+		insert into chapter_info ( id
+			<if test="null != accountId">
+				, accountId
+			</if>
+			<if test="null != chapterId">
+				, chapterId
+			</if>
+			<if test="null != difficulty">
+				, difficulty
+			</if>
+			<if test="null != points">
+				, points
+			</if>
+			<if test="null != starLeveBox1">
+				, starLeveBox1
+			</if>
+			<if test="null != starLeveBox2">
+				, starLeveBox2
+			</if>
+			<if test="null != starLeveBox3">
+				, starLeveBox3
+			</if>
+			<if test="null != chapterBox">
+				, chapterBox
+			</if>
+		) values ( #{id}
+			<if test="null != accountId">
+				, #{accountId}
+			</if>
+			<if test="null != chapterId">
+				, #{chapterId}
+			</if>
+			<if test="null != difficulty">
+				, #{difficulty}
+			</if>
+			<if test="null != points">
+				, #{points}
+			</if>
+			<if test="null != starLeveBox1">
+				, #{starLeveBox1}
+			</if>
+			<if test="null != starLeveBox2">
+				, #{starLeveBox2}
+			</if>
+			<if test="null != starLeveBox3">
+				, #{starLeveBox3}
+			</if>
+			<if test="null != chapterBox">
+				, #{chapterBox}
+			</if>
+			<if test="null != over">
+				, #{over}
+			</if>
+		)
+	</insert>
+	
+	<select id="findByChapterInfo" parameterType="com.game.entity.ChapterInfo" resultType="com.game.entity.ChapterInfo">
+		select * from chapter_info where 1=1
+			<if test="null != id">
+				and id = #{id}
+			</if>
+			<if test="null != accountId">
+				and accountId = #{accountId}
+			</if>
+			<if test="null != chapterId">
+				and  chapterId = #{chapterId}
+			</if>
+			<if test="null != difficulty">
+				and  difficulty = #{difficulty}
+			</if>
+			<if test="null != points">
+				and  points = #{points}
+			</if>
+			<if test="null != starLeveBox1">
+				and starLeveBox1 =  #{starLeveBox1}
+			</if>
+			<if test="null != starLeveBox2">
+				and  starLeveBox2 = #{starLeveBox2}
+			</if>
+			<if test="null != starLeveBox3">
+				and starLeveBox3 =  #{starLeveBox3}
+			</if>
+			<if test="null != chapterBox">
+				and chapterCountStar = #{chapterBox}
+			</if>
+			<if test="null != over">
+				and over = #{over}
+			</if>
+	</select>
+	
+	<select id="findById" parameterType="java.lang.Long" resultType="com.game.entity.ChapterInfo">
+		select * from chapter_info where  id = #{id}
+	</select>
+	
+	<update id="update" parameterType="com.game.entity.ChapterInfo">
+		update chapter_info 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != accountId">
+				, accountId = #{accountId}
+			</if>
+			<if test="null != chapterId">
+				,  chapterId = #{chapterId}
+			</if>
+			<if test="null != difficulty">
+				,  difficulty = #{difficulty}
+			</if>
+			<if test="null != points">
+				,  points = #{points}
+			</if>
+			<if test="null != starLeveBox1">
+				, starLeveBox1 =  #{starLeveBox1}
+			</if>
+			<if test="null != starLeveBox2">
+				,  starLeveBox2 = #{starLeveBox2}
+			</if>
+			<if test="null != starLeveBox3">
+				, starLeveBox3 =  #{starLeveBox3}
+			</if>
+			<if test="null != chapterBox">
+				, chapterBox = #{chapterBox}
+			</if>
+			<if test="null != over">
+				, over = #{over}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<delete id="delById" parameterType="Long">
+		delete from chapter_info where id = #{id}
+	</delete>
+</mapper>  

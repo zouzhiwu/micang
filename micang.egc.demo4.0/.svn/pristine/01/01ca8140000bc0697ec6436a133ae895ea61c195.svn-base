@@ -1,0 +1,173 @@
+package com.game.service;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.Friend;
+import com.common.entity.FriendInfo;
+import com.common.entity.Account;
+import com.common.entity.RequestFriend;
+import com.common.entity.RequestFriendInfo;
+import com.common.entity.Hero;
+import com.common.enumerate.RequestStatus;
+import com.common.helper.TimeHelper;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.dao.FriendDao;
+import com.game.dao.AccountDao;
+import com.game.dao.RequestFriendDao;
+import com.game.model.Model;
+
+@Service
+public class FriendService {
+	private static final Logger logger = LoggerFactory.getLogger(FriendService.class);
+	
+	@Autowired
+	private AccountDao accountDao;
+	@Autowired
+	private FriendDao friendDao;
+	@Autowired
+	private RequestFriendDao requestFriendDao;
+	
+	public RequestFriend request(Long accountId, Long beAccountId) {
+		logger.info(String.format("玩家%s请求玩家%s加好友", accountId, beAccountId));
+		AssertUtil.asWarnTrue(accountId.equals(beAccountId), "不能申请自己");
+		Account account = accountDao.getById(accountId);
+		AssertUtil.asWarnTrue(account != null, "我的成员信息不存在");
+		Account beAccount = accountDao.getById(beAccountId);
+		AssertUtil.asWarnTrue(beAccount != null, "对方的成员信息不存在");
+		RequestFriend rf = new RequestFriend();
+		rf.setAccountId(accountId);
+		rf.setBeAccountId(beAccountId);
+		rf.setIsAgree(0);
+		RequestFriend requestFriend = requestFriendDao.get(rf);
+		AssertUtil.asWarnTrue(requestFriend == null, "已经申请过了，等待对方响应");
+		RequestFriend addRequestFriend = new RequestFriend();
+		addRequestFriend.setAccountId(account.getId());
+		addRequestFriend.setBeAccountId(beAccount.getId());
+		addRequestFriend.setCreateTime(TimeHelper.getTime());
+		requestFriendDao.add(addRequestFriend);
+		Hero beHero = Model.getInstance().heroMap.get(beAccountId);
+		// 如果被申请的玩家在线，则发送通知
+		if (beHero != null) {
+			Message msg = new Message();
+			msg.setMsgcd(MessageCode.msg_friend_request_push);
+			msg.putLong(account.getId());
+			msg.putString(account.getNick());
+			MsgSender.sendMsg(msg, beHero.accountId);
+		}
+		return addRequestFriend;
+	}
+	
+	/**
+	 * 获取申请列表，包括我的申请列表和申请我的列表
+	 */
+	public void getRequestInfoList(Long accountId) {
+		AssertUtil.asWarnTrue(accountId != null && accountId > 0, "我的Id参数错误");
+		List<RequestFriendInfo> myRequestList = requestFriendDao.getMyRequestInfoList(accountId);
+		List<RequestFriendInfo> beRequestList = requestFriendDao.getBeRequestInfoList(accountId);
+		Message msg = new Message();
+		msg.setErrorcd(MessageCode.msg_status_success);
+		msg.putShort(myRequestList.size());
+		for (RequestFriendInfo requestFriendInfo : myRequestList) {
+			msg.putLong(requestFriendInfo.getAccountId());
+			msg.putString(requestFriendInfo.getNick());
+			msg.putByte(requestFriendInfo.getIsAgree().byteValue());
+			msg.putInt(requestFriendInfo.getCreateTime());
+		}
+		msg.putShort(beRequestList.size());
+		for (RequestFriendInfo requestFriendInfo : beRequestList) {
+			msg.putLong(requestFriendInfo.getAccountId());
+			msg.putString(requestFriendInfo.getNick());
+			msg.putByte(requestFriendInfo.getIsAgree().byteValue());
+			msg.putInt(requestFriendInfo.getCreateTime());
+		}
+		MsgSender.sendMsg(msg, accountId);
+	}
+	
+	public Friend response(Long accountId, Long requestId, Boolean isAgree) {
+		AssertUtil.asWarnTrue(accountId != null && accountId > 0, "我的Id参数错误");
+		AssertUtil.asWarnTrue(requestId != null && requestId > 0, "申请Id参数错误");
+		RequestFriend requestFriend = requestFriendDao.getById(requestId);
+		AssertUtil.asWarnTrue(requestFriend != null, "申请记录不存在");
+		AssertUtil.asWarnTrue(RequestStatus.getType(requestFriend.getIsAgree()) == RequestStatus.Nothing, "该记录已经应答过了");
+		if (isAgree) {
+			Account account = accountDao.getById(accountId);
+			AssertUtil.asWarnTrue(account != null, "我的成员信息不存在");
+			long beMemberId = requestFriend.getBeAccountId();
+			Account beMember = accountDao.getById(beMemberId);
+			AssertUtil.asWarnTrue(beMember != null, "对方的成员信息不存在");
+			Friend findFriendLeft = new Friend();
+			findFriendLeft.setAccountId(accountId);
+			findFriendLeft.setBeAccountId(beMemberId);
+			Friend friendLeft = friendDao.getByAccountId(findFriendLeft);
+			AssertUtil.asWarnTrue(friendLeft == null, String.format("玩家%s已经是玩家%s的好友，不需要添加", beMemberId, accountId));
+			Friend findFriendRight = new Friend();
+			findFriendRight.setAccountId(accountId);
+			findFriendRight.setBeAccountId(beMemberId);
+			Friend friendRight = friendDao.getByAccountId(findFriendRight);
+			AssertUtil.asWarnTrue(friendRight == null, String.format("玩家%s已经是玩家%s的好友，不需要添加", beMemberId, accountId));
+			Friend friend = new Friend();
+			friend.setAccountId(account.getId());
+			friend.setAlias(account.getNick());
+			friend.setBeAccountId(beMember.getId());
+			friend.setBeAlias(beMember.getNick());
+			friendDao.add(friend);
+			requestFriend.setIsAgree(RequestStatus.Agree.getIndex());
+			requestFriend.setUpdateTime(TimeHelper.getTime());
+			requestFriendDao.update(requestFriend);
+			return friend;
+		} else {
+			requestFriend.setIsAgree(RequestStatus.Refuse.getIndex());
+			requestFriend.setUpdateTime(TimeHelper.getTime());
+			requestFriendDao.update(requestFriend);
+			return null;
+		}
+	}
+	
+	public void updateAlias(Long friendId, Long accountId, String alias) {
+		Friend friend = friendDao.getById(friendId);
+		AssertUtil.asWarnTrue(friend != null, "好友记录不存在");
+		if (friend.getAccountId().longValue() == accountId) {
+			friend.setBeAlias(alias);
+		} else {
+			friend.setAlias(alias);
+		}
+		friend.setUpdateTime(TimeHelper.getTime());
+		friendDao.update(friend);
+	}
+	
+	public void delete(Long friendId, Long accountId) {
+		Friend friend = friendDao.getById(friendId);
+		AssertUtil.asWarnTrue(friend != null, "好友记录不存在");
+		AssertUtil.asWarnTrue(friend.getAccountId().longValue() == accountId.longValue() || friend.getBeAccountId().longValue() == accountId.longValue(), "这条记录不是我的好友记录");
+		friendDao.delete(friendId);
+	}
+	
+	public void getMyFriendInfoList(Long accountId) {
+		AssertUtil.asWarnTrue(accountId != null && accountId > 0, "我的Id参数错误");
+		List<FriendInfo> friendInfoList = friendDao.getMyFriendList(accountId);
+		Message msg = new Message();
+		msg.setErrorcd(MessageCode.msg_status_success);
+		msg.putShort(friendInfoList.size());
+		for (FriendInfo friendInfo : friendInfoList) {
+			msg.putLong(friendInfo.getId());
+			msg.putLong(friendInfo.getAccountId());
+			msg.putString(friendInfo.getAlias());
+			msg.putString(friendInfo.getPhoneNumber());
+		}
+		MsgSender.sendMsg(msg, accountId);
+	} 
+	
+	public void clearHistoricalRecord() {
+		int time = TimeHelper.getTime() - TimeHelper.DAY_S;
+		logger.info(String.format("time=%s", time));
+		requestFriendDao.clearHistoricalRecord(time);
+	}
+}

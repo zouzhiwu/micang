@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.PrivateMailDao">	
+	
+	<insert id="create" parameterType="com.game.entity.PrivateMail" useGeneratedKeys="true" keyProperty="id">
+		insert into private_mail ( accountId
+			<if test="null != mailList">
+				, mailList
+			</if>
+		) values ( #{accountId}
+			<if test="null != mailList">
+				, #{mailList}
+			</if>
+		)
+	</insert>
+	
+	<select id="findById" parameterType="Long" resultType="com.game.entity.PrivateMail">
+		select * from private_mail where accountId = #{accountId}
+	</select>
+	
+	<update id="update" parameterType="com.game.entity.PrivateMail">
+		update private_mail <trim prefix="set" prefixOverrides=","> 
+			<if test="null != mailList">
+				, mailList = #{mailList}
+			</if>
+		</trim> where accountId = #{accountId}
+	</update>
+</mapper>  

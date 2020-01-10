@@ -1,0 +1,126 @@
+package com.game.common;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.ZooDefs;
+import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.data.Stat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.common.entity.ServerAddress;
+import com.common.enumerate.ProfileType;
+import com.game.config.AppConfig;
+import com.game.factory.Server;
+import com.game.helper.JsonMapper;
+import com.game.util.ZkUtil;
+
+@Service
+public class ZookeeperClient {
+	private static final Logger logger = LoggerFactory.getLogger(ZookeeperClient.class);
+	private String connect_string;
+    private int session_timeout = 2000;
+    private String game_servers_path;
+    public String localhost = "localhost";
+    private Properties properties = new Properties();
+
+    private ZooKeeper zk = null;
+    private static ZookeeperClient instance;
+
+    public static ZookeeperClient getInstance() {
+		if (instance == null) {
+			instance = new ZookeeperClient();
+			instance.initProperties();
+			instance.connect_string = instance.properties.getProperty("connectString");
+			instance.session_timeout = Integer.parseInt(instance.properties.getProperty("sessionTimeout"));
+			instance.game_servers_path = instance.properties.getProperty("gameServersPath");
+			String localIp = instance.properties.getProperty("localIp");
+			instance.localhost = String.format("%s:%s", localIp, Server.gamePort);
+		}
+		return instance;
+	}
+    
+    public void initProperties() {
+    	ProfileType profile = AppConfig.getProfile();
+    	String configPath = AppConfig.getConfigPath();
+    	String appConfigPath = String.format("%s/zookeeper.properties", configPath, profile.getName());
+		try {
+			properties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream(appConfigPath));
+		} catch (IOException e) {
+			logger.error(e.toString());
+		}
+    }
+    
+    public void connect() {
+        try {
+			zk = new ZooKeeper(connect_string, session_timeout, new Watcher() {
+			    public void process(WatchedEvent watchedEvent) {
+		        	if (Event.KeeperState.SyncConnected == watchedEvent.getState() ) {
+		        		registerGameNode();
+		        	}
+			    }
+			});
+		} catch (IOException e) {
+			logger.error(e.toString());
+		}
+    }
+    
+    private void registerGameNode() {
+		if (!ZkUtil.exists(zk, game_servers_path)) {
+			ZkUtil.create(zk, game_servers_path, game_servers_path.getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+		}
+		String gameNode = game_servers_path + "/" + localhost;
+		if (!ZkUtil.exists(zk, gameNode)) {
+			Map<String, Integer> map = new HashMap<String, Integer>();
+			map.put("online", 0);
+			byte[] data = JsonMapper.getInstance().toJson(map).getBytes();
+			ZkUtil.create(zk, gameNode, data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
+		}
+    }
+    
+	public void delete() {
+		ZkUtil.delete(zk, game_servers_path, localhost);
+	}
+	
+	public boolean isMaster() {
+		List<ServerAddress> gameServerList = ZkUtil.getGameServerList(zk, game_servers_path);
+		if (CollectionUtils.isEmpty(gameServerList)) {
+			return false;
+		} else {
+			ServerAddress serverAddress = gameServerList.get(0);
+			String host = String.format("%s:%d", serverAddress.getIp(), serverAddress.getPort());
+			return localhost.equals(host);
+		}
+	}
+	
+	public boolean setOnline(int online) {
+		String gameNode = game_servers_path + "/" + localhost;
+		if (!ZkUtil.exists(zk, gameNode)) {
+			return false;
+		} else {
+			Map<String, Integer> map = new HashMap<String, Integer>();
+			map.put("online", online);
+			byte[] data = JsonMapper.getInstance().toJson(map).getBytes();
+			Stat stat = ZkUtil.setData(zk, gameNode, data);
+			return stat != null;
+		}
+	}
+	
+	public Integer getOnline() {
+		String gameNode = game_servers_path + "/" + localhost;
+		String str = ZkUtil.getData(zk, gameNode);
+		@SuppressWarnings("unchecked")
+		Map<String, Integer> map = JsonMapper.getInstance().fromJson(str, Map.class);
+		Integer online = map.get("online");
+		return online;
+	}
+	
+}

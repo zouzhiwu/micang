@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.ItemDao">	
+	
+	<insert id="create" parameterType="com.game.entity.Bag" useGeneratedKeys="true" keyProperty="id">
+		insert into bag ( id
+			<if test="null != itemBytes">
+				, itemBytes
+			</if>
+		) values ( #{id}
+			<if test="null != itemBytes">
+				, #{itemBytes}
+			</if>
+		)
+	</insert>
+	
+	<select id="findById" parameterType="Long" resultType="com.game.entity.Bag">
+		select * from bag where id = #{id}
+	</select>
+	
+	<update id="update" parameterType="com.game.entity.Bag">
+		update bag 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != itemBytes">
+				, itemBytes = #{itemBytes}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<delete id="delById" parameterType="Long">
+		delete from bag where id = #{id}
+	</delete>
+</mapper>  

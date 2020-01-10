@@ -1,0 +1,9 @@
+package com.common.entity;
+
+public class Monster {
+	public int id;
+	public int templateId;
+	public Player player;
+	
+	public int hp;
+}

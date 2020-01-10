@@ -1,0 +1,14 @@
+package com.game.dao;
+
+import java.util.List;
+
+import com.common.entity.RoomGroup;
+
+public interface RoomGroupDao {
+
+	public void create(RoomGroup roomGroup);
+
+	public void delete(String tid);
+	
+	public List<RoomGroup> getOutList(Integer time);
+}

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.GachaDao">	
+	
+	<insert id="create" parameterType="com.game.entity.Gacha" useGeneratedKeys="true" keyProperty="id">
+		insert into gacha ( accountId
+			<if test="null != gachaCount">
+				, gachaCount
+			</if>
+			<if test="null != lastDiamondNow">
+				, lastDiamondNow
+			</if>
+			<if test="null != lastHalfDiamondNow">
+				, lastHalfDiamondNow
+			</if>
+			<if test="null != lastGoldNow">
+				, lastGoldNow
+			</if>
+			<if test="null != lastTenGold">
+				, lastTenGold
+			</if>
+			<if test="null != freeGold">
+				, freeGold
+			</if>
+			<if test="null != freeDiamond">
+				, freeDiamond
+			</if>
+			<if test="null != halfDiamond">
+				, halfDiamond
+			</if>
+			<if test="null != tenGold">
+				, tenGold
+			</if>
+		) values ( #{accountId}
+			<if test="null != gachaCount">
+				, #{gachaCount}
+			</if>
+			<if test="null != lastDiamondNow">
+				, #{lastDiamondNow}
+			</if>
+			<if test="null != lastHalfDiamondNow">
+				, #{lastHalfDiamondNow}
+			</if>
+			<if test="null != lastGoldNow">
+				, #{lastGoldNow}
+			</if>
+			<if test="null != lastTenGold">
+				, #{lastTenGold}
+			</if>
+			<if test="null != freeGold">
+				, #{freeGold}
+			</if>
+			<if test="null != freeDiamond">
+				, #{freeDiamond}
+			</if>
+			<if test="null != halfDiamond">
+				, #{halfDiamond}
+			</if>
+			<if test="null != tenGold">
+				, #{tenGold}
+			</if>
+		)
+	</insert>
+	
+	<select id="findById" parameterType="Long" resultType="com.game.entity.Gacha">
+		select * from gacha where accountId = #{accountId}
+	</select>
+	
+	<update id="update" parameterType="com.game.entity.Gacha">
+		update gacha 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != gachaCount">
+				, gachaCount = #{gachaCount}
+			</if>
+			<if test="null != lastDiamondNow">
+				, lastDiamondNow = #{lastDiamondNow}
+			</if>
+			<if test="null != lastHalfDiamondNow">
+				, lastHalfDiamondNow = #{lastHalfDiamondNow}
+			</if>
+			<if test="null != lastGoldNow">
+				, lastGoldNow = #{lastGoldNow}
+			</if>
+			<if test="null != lastTenGold">
+				, lastTenGold = #{lastTenGold}
+			</if>
+			<if test="null != freeGold">
+				, freeGold = #{freeGold}
+			</if>
+			<if test="null != freeDiamond">
+				, freeDiamond = #{freeDiamond}
+			</if>
+			<if test="null != halfDiamond">
+				, halfDiamond = #{halfDiamond}
+			</if>
+			<if test="null != tenGold">
+				, tenGold = #{tenGold}
+			</if>
+		</trim>
+		where accountId = #{accountId}
+	</update>
+</mapper>  

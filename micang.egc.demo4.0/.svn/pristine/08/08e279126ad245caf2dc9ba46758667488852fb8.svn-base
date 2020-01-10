@@ -1,0 +1,103 @@
+package com.game.job.fight;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.JobKey;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.constant.FightConstant;
+import com.common.enumerate.WayType;
+import com.game.entity.Room;
+import com.game.job.JobScheduler;
+import com.game.node.TroopsNode;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class ArsenalJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(ArsenalJob.class);
+	@SuppressWarnings("unchecked")
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Room room = (Room)jobDataMap.get("room");
+		Integer index = (Integer)jobDataMap.get("index");
+		List<List<TroopsNode>> buleWayList = (List<List<TroopsNode>>)jobDataMap.get("buleTroopsNodeList");
+		List<TroopsNode> buleTopTroopsNodeList = buleWayList.get(WayType.Top.getIndex());
+		List<TroopsNode> buleMidTroopsNodeList = buleWayList.get(WayType.Mid.getIndex());
+		List<TroopsNode> buleDownTroopsNodeList = buleWayList.get(WayType.Down.getIndex());
+		
+		List<TroopsNode> troopsNodeList = new ArrayList<TroopsNode>();
+		if (buleTopTroopsNodeList.size() > index) {
+			TroopsNode troopsNode = buleTopTroopsNodeList.get(index);
+			troopsNodeList.add(troopsNode);
+		}
+		if (buleMidTroopsNodeList.size() > index) {
+			TroopsNode troopsNode = buleMidTroopsNodeList.get(index);
+			troopsNodeList.add(troopsNode);
+		}
+		if (buleDownTroopsNodeList.size() > index) {
+			TroopsNode troopsNode = buleDownTroopsNodeList.get(index);
+			troopsNodeList.add(troopsNode);
+		}
+		List<List<TroopsNode>> redWayList = (List<List<TroopsNode>>)jobDataMap.get("redTroopsNodeList");
+		List<TroopsNode> redTopTroopsNodeList = redWayList.get(WayType.Top.getIndex());
+		List<TroopsNode> redMidTroopsNodeList = redWayList.get(WayType.Mid.getIndex());
+		List<TroopsNode> redDownTroopsNodeList = redWayList.get(WayType.Down.getIndex());
+		if (redTopTroopsNodeList.size() > index) {
+			TroopsNode troopsNode = redTopTroopsNodeList.get(index);
+			troopsNodeList.add(troopsNode);
+		}
+		if (redMidTroopsNodeList.size() > index) {
+			TroopsNode troopsNode = redMidTroopsNodeList.get(index);
+			troopsNodeList.add(troopsNode);
+		}
+		if (redDownTroopsNodeList.size() > index) {
+			TroopsNode troopsNode = redDownTroopsNodeList.get(index);
+			troopsNodeList.add(troopsNode);
+		}
+		for (int i = 0; i < troopsNodeList.size(); i++) {
+			TroopsNode troopsNode = troopsNodeList.get(i);
+			troopsNode.startMove();
+			troopsNode.startUpdateVision();
+			room.putNode(troopsNode);
+		}
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < troopsNodeList.size(); i++) {
+			TroopsNode troopsNode = troopsNodeList.get(i);
+			if (troopsNode.template.getId() == FightConstant.bule_super_template_id) {
+				sb.append(",蓝方超级兵" + troopsNode.nodeId);
+			} else if (troopsNode.template.getId() == FightConstant.red_super_template_id) {
+				sb.append(",红方超级兵" + troopsNode.nodeId);
+			} else if (troopsNode.template.getId() == FightConstant.bule_soldier_template_id) {
+				sb.append(",蓝方小兵" + troopsNode.nodeId);
+			} else if (troopsNode.template.getId() == FightConstant.red_soldier_template_id) {
+				sb.append(",红方小兵" + troopsNode.nodeId);
+			} else if (troopsNode.template.getId() == FightConstant.bule_artillery_template_id) {
+				sb.append(",蓝方炮兵" + troopsNode.nodeId);
+			} else if (troopsNode.template.getId() == FightConstant.red_artillery_template_id) {
+				sb.append(",红方炮兵" + troopsNode.nodeId);
+			}
+		}
+		if (sb.length() > 0) {
+			sb.deleteCharAt(0);
+			logger.info("出兵：" + sb.toString());
+		}
+		jobDataMap.put("index", ++index);
+		if (index >= buleTopTroopsNodeList.size() && index >= buleMidTroopsNodeList.size() && index >= buleDownTroopsNodeList.size()) {
+			if (index >= redTopTroopsNodeList.size() && index >= redMidTroopsNodeList.size() && index >= redDownTroopsNodeList.size()) {
+				JobKey jobKey = jobDetail.getKey();
+				JobScheduler.stopJob(jobKey);
+			}
+		}
+	}
+}

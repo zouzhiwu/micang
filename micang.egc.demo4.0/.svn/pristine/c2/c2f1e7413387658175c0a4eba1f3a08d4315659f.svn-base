@@ -1,0 +1,45 @@
+package com.game.fight.job;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Member;
+import com.common.entity.Player;
+import com.common.entity.Room;
+import com.common.util.AssertUtil;
+import com.game.dao.MemberDao;
+import com.game.factory.Context;
+import com.game.model.Model;
+import com.game.service.FightService;
+
+@DisallowConcurrentExecution
+public class ChooseMemberJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(ChooseMemberJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Player player = (Player)jobDataMap.get("player");
+		logger.info(String.format("玩家%s选择默认上阵队员Job", player.account.getId()));
+		MemberDao memberDao = Context.getBean("memberDao");
+		// 获取所有队员列表
+		List<Member> memberList = memberDao.getByList(player.account.getId());
+		// 获取默认队员列表
+		List<Member> defaultMemberList = memberList.stream().filter(m -> m.getIsDefault()).collect(Collectors.toList());
+		AssertUtil.asWarnTrue(defaultMemberList.size() >= 5, "默认队员数量不足5人");
+		FightService fightService = Context.getBean("fightService");
+		player.members = fightService.setMemberPosition(defaultMemberList);
+		Room room = Model.getInstance().roomMap.get(player.account.roomId);
+		fightService.sendMemberInfo(room);
+	}
+}

@@ -1,0 +1,81 @@
+package com.game.entity.vo;
+
+import java.util.List;
+
+import com.game.entity.Item;
+
+public class UserMailVO {
+	
+	/**邮件id**/
+	private long id;
+	
+	/**标题**/
+	private String title;
+	
+	/**正文**/
+	private String Context;
+	
+	/**是否阅读**/
+	private boolean readType;
+	
+	/**是否领取附件**/
+	private boolean receiveType;
+	
+	/**附件内容**/
+	private List<Item> attachment;
+	
+	/**邮件发送时间**/
+	private int sendNow;
+	
+	/**邮件模板id**/
+	private int templateId;
+	
+	public long getId() {
+		return id;
+	}
+	public void setId(long id) {
+		this.id = id;
+	}
+	public String getTitle() {
+		return title;
+	}
+	public void setTitle(String title) {
+		this.title = title;
+	}
+	public String getContext() {
+		return Context;
+	}
+	public void setContext(String context) {
+		Context = context;
+	}
+	public boolean isReadType() {
+		return readType;
+	}
+	public void setReadType(boolean readType) {
+		this.readType = readType;
+	}
+	public boolean isReceiveType() {
+		return receiveType;
+	}
+	public void setReceiveType(boolean receiveType) {
+		this.receiveType = receiveType;
+	}
+	public List<Item> getAttachment() {
+		return attachment;
+	}
+	public void setAttachment(List<Item> attachment) {
+		this.attachment = attachment;
+	}
+	public int getSendNow() {
+		return sendNow;
+	}
+	public void setSendNow(int sendNow) {
+		this.sendNow = sendNow;
+	}
+	public int getTemplateId() {
+		return templateId;
+	}
+	public void setTemplateId(int templateId) {
+		this.templateId = templateId;
+	}
+}

@@ -1,0 +1,29 @@
+package com.game.job.fight;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+
+import com.common.helper.TimeHelper;
+import com.game.node.AbsMoveNode;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class MoveJob implements Job {
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		AbsMoveNode node = (AbsMoveNode)jobDataMap.get("node");
+		// 间隔时间
+		Long prevTime = (Long)jobDataMap.get("time");
+		long currTime = TimeHelper.getMilliTime();
+		long timeLength = currTime - prevTime;
+		node.move(timeLength);
+		jobDataMap.put("time", currTime);
+	}
+}

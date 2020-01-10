@@ -1,0 +1,26 @@
+package com.game.dao;
+
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
+import com.game.entity.Friend;
+
+public interface FriendDao {
+
+	public void create(Friend friend);
+	
+	public void update(Friend friend);
+
+	public Friend findById(@Param("accountId1")Long accountId1, @Param("accountId2")Long accountId2);
+	
+	public void delById(@Param("accountId1")Long accountId1, @Param("accountId2")Long accountId2);
+
+	public List<Friend> findFriendByRelation(@Param("accountId")Long acountId,@Param("relation") Integer relation);
+	
+	public Integer countFriend(@Param("accountId")Long acountId);
+	
+	public Integer countApply(@Param("accountId")Long acountId);
+
+	public int coountBlackList(Long accountId);
+}

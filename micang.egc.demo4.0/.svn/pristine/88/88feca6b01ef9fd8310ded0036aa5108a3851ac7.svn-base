@@ -1,0 +1,88 @@
+package com.game.node;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.MonsterType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+import com.game.entity.Task;
+import com.game.job.FightJobManager;
+import com.game.util.ParameterUtil;
+
+public class MonsterNode extends AbsUpdateVisionNode {
+	private static final Logger logger = LoggerFactory.getLogger(MonsterNode.class);
+	public MonsterNode(short nodeId, Room room, NodeTemplate template) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = CampType.Neutral;
+		setEnemyCamp();
+		this.hp = template.getHp();
+		this.pa = template.getPa();
+		this.ma = template.getMa();
+		MonsterType monsterType = MonsterType.getType(template.getMonsterType());
+		logger.info(String.format("创建 nodeId=%d %s %s", nodeId, this.selfCamp.getName(), monsterType.getName()));
+	}
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Monster;
+	}
+	
+	public void revive() {
+		long reviveTime = template.getGrowthInterval() * 1000;
+		// 累计复活次数
+		super.reviveCount++;
+		// 复活小龙Job
+		FightJobManager.createMonsterJob(room, reviveTime, template);
+	}
+	
+	@Override
+	public void dead(BaseNode attackNode) {
+		int gameTime = room.getGameTime();
+		logger.info(String.format("nodeId=%d 阵亡", this.nodeId));
+		stopAttack();
+		stopUpdateVision();
+		refreshAllNodeVision();
+		// 计算击杀野怪，小兵，建筑物的经验值收益
+		if (attackNode.getNodeType() == NodeType.Hero) {
+			int addExp = template.getExp();
+			if (template.getGrowthInterval() != 0 && template.getGrowthExp() != 0) {
+				int growthInterval = ParameterUtil.gameTime2realTime(template.getGrowthInterval() * 1000);
+				int growthCount = room.getGameTime() / growthInterval;
+				addExp += Math.round(growthCount * template.getGrowthExp() * 10);
+			}
+			HeroNode heroNode = (HeroNode)attackNode;
+			heroNode.exp += addExp;
+		}
+		// 如果没有超过限定复活时间，则复活
+		if (gameTime > template.getEndGrowthTime()) {
+			revive();
+		}
+	}
+
+	@Override
+	public void changeTask(Task newTask) {
+		this.task = newTask;
+		switch (this.task.type) {
+		case Wait:
+			break;
+		case Attack:
+			startAttack();
+			break;
+		default:
+			break;
+		}
+	}
+
+	@Override
+	public void onAiLogic() {
+		// TODO Auto-generated method stub
+		
+	}
+}

@@ -1,0 +1,46 @@
+package com.game.node;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+
+public class TowerNode extends AbsUpdateVisionNode {
+	private static final Logger logger = LoggerFactory.getLogger(TowerNode.class);
+	public TowerNode(short nodeId, Room room, NodeTemplate template) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = CampType.getType(template.getCampType());
+		setEnemyCamp();
+		this.hp = template.getHp();
+		this.pa = template.getPa();
+		this.ma = template.getMa();
+		logger.info(String.format("创建 nodeId=%d %s %s %s", nodeId, this.selfCamp.getName(), this.getNodeType().getName(), location));
+	}
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Tower;
+	}
+
+	@Override
+	public void die(BaseNode attackNode) {
+		logger.info(String.format("nodeId=%d阵亡", this.nodeId));
+		room.remove(this.nodeId);
+		stopAttack();
+		stopUpdateVision();
+		refreshAllNodeVision();
+	}
+
+	@Override
+	public void setTarget(Target target) {
+		// TODO Auto-generated method stub
+	}
+
+}

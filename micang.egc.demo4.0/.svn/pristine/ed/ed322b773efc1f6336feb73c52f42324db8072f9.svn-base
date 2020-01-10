@@ -1,0 +1,50 @@
+package com.game.job.trade;
+
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.helper.TimeHelper;
+import com.game.factory.Context;
+import com.game.job.JobScheduler;
+import com.game.service.TradeService;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class TestOperationTradeJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(TestOperationTradeJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Long tradeId = jobDataMap.getLong("tradeId");
+		@SuppressWarnings("unchecked")
+		Map<Long, Integer> accountMap = (Map<Long, Integer>)jobDataMap.get("accountMap");
+		Set<Long> accountSet = accountMap.keySet();
+		Integer time = TimeHelper.getTime();
+		for (Iterator<Long> it = accountSet.iterator(); it.hasNext();) {
+			Long accountId = it.next();
+			Integer operationTime = accountMap.get(it.next());
+			if (time - operationTime > 30) {
+				logger.info(String.format("玩家%s操作超时", accountId));
+				TradeService tradeService = Context.getBean("tradeService");
+				// 取消交易
+				tradeService.stopTrade(tradeId);
+				// 停止检测
+				JobScheduler.stopJob(jobDetail.getKey());
+				break;
+			}
+		}
+		
+	}
+}

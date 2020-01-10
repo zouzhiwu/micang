@@ -1,0 +1,20 @@
+package com.game.dao;
+
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
+import com.common.entity.GuildItem;
+
+public interface GuildItemDao {
+
+	public void create(GuildItem guildItem);
+
+	public List<GuildItem> getList(@Param("guildId")Integer guildId, @Param("recordIndex")Integer recordIndex, @Param("pageSize")Integer pageSize);
+	
+	public Integer getListSize(Integer guildId);
+	
+	public GuildItem getById(Long id);
+	
+	public void delete(Long id);
+}

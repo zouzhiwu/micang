@@ -1,0 +1,44 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import com.common.entity.Location;
+import com.common.entity.Node;
+import com.common.enumerate.MapNodeType;
+import com.common.util.MapUtil;
+import com.game.config.MapConfig;
+
+@Service
+public class MapService {
+	private static final Logger logger = LoggerFactory.getLogger(MapService.class);	
+	
+	public static List<Location> searchWay(short startx, short starty, short endx, short endy, MapNodeType mapNodeType) {
+		logger.info(String.format("searchWay startx=%d starty=%d endx=%d endy=%d", startx, starty, endx, endy));
+		Location startLocation = MapUtil.pngmap2bitmap(new Location(startx, starty));
+		Location endLocation = MapUtil.pngmap2bitmap(new Location(endx, endy));
+		logger.info(String.format("searchWay start=%s end=%s", startLocation, endLocation));
+		List<Location> locationList;
+		if (mapNodeType == MapNodeType.White) {
+			locationList = searchWay(startLocation.x, startLocation.y, endLocation.x, endLocation.y, MapConfig.whiteMap);
+		} else {
+			locationList = searchWay(startLocation.x, startLocation.y, endLocation.x, endLocation.y, MapConfig.grayMap);
+		}
+		return MapUtil.bitmap2pngmap(locationList);
+	}
+
+	public static List<Location> searchWay(short startx, short starty, short endx, short endy, byte[][] map) {
+		List<Node> nodeList = AStarService.searchWay(startx, starty, endx, endy, map);
+		List<Location> locationList = new ArrayList<Location>();
+		for (int i = 0; i < nodeList.size(); i++) {
+			Node node = nodeList.get(i);
+			Location location = new Location((short)(node.coord.x), (short)(node.coord.y));
+			locationList.add(location);
+		}
+		return locationList;
+	}
+}

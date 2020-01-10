@@ -1,0 +1,58 @@
+package com.game.util;
+
+import com.common.template.MemberTemplate;
+import com.game.config.MemberConfig;
+
+public class Params {
+	
+	
+	//type 1球员 2英雄 3俱乐部
+	public static Byte type_member = 1;
+	
+	public static Byte type_hero = 2;
+	
+	public static Byte type_club = 3;
+	
+	//升星类型 1激活 2一键激活 3升星
+	public static byte type_upstar_1 = 1;
+	public static byte type_upstar_2 = 2;
+	public static byte type_upstar_3 = 3;
+	
+	//分割符
+	public static String fenge = "\\|";
+	//星星卡槽位总数
+	public static int starSeat10 = 10;
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	//星星最大等级
+	public static Integer getStarMaxLevel(Integer templateId) {
+		int count = 0;
+		for (MemberTemplate memberTemplate: MemberConfig.list) {
+			if(memberIdToCut2(memberTemplate.getId()).equals(memberIdToCut2(templateId))) {
+				++count;
+			}
+		}
+		return count;
+	}
+	//获取星级
+	public static Byte getStar(Integer templateId) {
+		return MemberConfig.map.get(templateId).getStars().byteValue();
+	}
+	//升星后的template
+	public static Integer nextStartemplateId(Integer templateId) {
+		return ++templateId;
+	}
+	public static String memberIdToCut2(Integer templateId) {
+		String str = String.valueOf(templateId);
+		return String.valueOf(str).substring(0,str.length()-2);
+	}
+}

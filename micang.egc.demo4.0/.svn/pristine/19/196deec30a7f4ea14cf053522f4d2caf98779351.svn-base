@@ -1,0 +1,64 @@
+package com.game.action;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Action;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.game.common.MessageCode;
+import com.game.service.AuctionService;
+
+import io.netty.channel.Channel;
+
+@Service
+public class AuctionAction {
+
+	private static final Logger logger = LoggerFactory.getLogger(AuctionAction.class);
+
+	@Autowired
+	private AuctionService auctionService;
+	
+	@Action(MessageCode.msg_auction_list)
+	public void getList(Message message, Channel channel) throws Exception {
+		String itemName = message.getString();
+		Integer itemTypeId = (int)message.getByte();
+		Integer pageIndex = message.getInt();
+		Integer pageSize = message.getInt();
+		logger.info(String.format("RESV %d from accountId=%s itemName=%s itemTypeId=%s pageIndex=%s pageSize=%s"
+				, message.getMsgcd(), message.getAccountId(), itemName, itemTypeId, pageIndex, pageSize));
+		auctionService.getList(itemName, itemTypeId, pageIndex, pageSize);
+	}
+	
+	@Action(MessageCode.msg_auction_list_accountId)
+	public void getListByAccountId(Message message, Channel channel) throws Exception {
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		auctionService.getListByAccountId(message.getAccountId());
+	}
+	
+	@Action(MessageCode.msg_auction_sell)
+	public void sell(Message message, Channel channel) throws Exception {
+		Long itemId = message.getLong();
+		Integer startPrice = message.getInt();
+		Integer expectPrice = message.getInt();
+		Integer outMinuteTime = message.getInt();
+		logger.info(String.format("RESV %d from accountId=%s itemId=%s startPrice=%s expectPrice=%s outMinuteTime=%s"
+				, message.getMsgcd(), message.getAccountId(), itemId, startPrice, expectPrice, outMinuteTime));
+		auctionService.sell(message.getAccountId(), itemId, startPrice, expectPrice, outMinuteTime);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	@Action(MessageCode.msg_auction_bidding)
+	public void bidding(Message message, Channel channel) throws Exception {
+		Long auctionId = message.getLong();
+		Long bidPrice = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s auctionId=%s bidPrice=%s"
+				, message.getMsgcd(), message.getAccountId(), auctionId, bidPrice));
+		auctionService.bidding(message.getAccountId(), auctionId, bidPrice);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+}

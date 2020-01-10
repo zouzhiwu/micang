@@ -1,0 +1,46 @@
+package com.game.action;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Action;
+import com.cb.msg.Message;
+import com.game.common.MessageCode;
+import com.game.service.GoodsService;
+
+import io.netty.channel.Channel;
+
+@Service
+public class GoodsAction {
+
+	private static final Logger logger = LoggerFactory.getLogger(GoodsAction.class);
+
+	@Autowired
+	private GoodsService goodsService;
+	
+	/**
+	 * 获取商品列表
+	 */
+	@Action(MessageCode.msg_goods_list)
+	public void getListInfo(Message message, Channel channel) throws Exception {
+		Integer tabIndex = message.getInt();
+		Integer pageIndex = message.getInt();
+		Integer pageSize = message.getInt();
+		logger.info(String.format("RESV %d from accountId=%s tabIndex=%d, pageIndex=%d, pageSize=%d", message.getMsgcd(), message.getAccountId(), tabIndex, pageIndex, pageSize));
+		goodsService.getListInfo(tabIndex, pageIndex, pageSize);
+	}
+	
+	/**
+	 * 购买商品
+	 */
+	@Action(MessageCode.msg_goods_buy)
+	public void buy(Message message, Channel channel) throws Exception {
+		Integer goodsId = message.getInt();
+		Integer count = message.getInt();
+		Integer currencyId = (int)message.getByte();
+		logger.info(String.format("RESV %d from accountId=%s goodsId=%d, count=%d, currencyId=%d", message.getMsgcd(), message.getAccountId(), goodsId, count, currencyId));
+		goodsService.buy(message.getAccountId(), goodsId, count, currencyId);
+	}
+}

@@ -1,0 +1,16 @@
+package com.game.dao;
+
+import com.common.entity.Trade;
+
+public interface TradeDao {
+
+	public void create(Trade trade);
+
+	public void update(Trade trade);
+	
+	public void delete(Long id);
+	
+	public Trade getById(Long id);
+	
+	public Integer getTradingCount(Long accountId);
+}

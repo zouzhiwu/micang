@@ -1,0 +1,488 @@
+package com.game.service;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.Account;
+import com.common.entity.Guild;
+import com.common.entity.GuildAccount;
+import com.common.entity.GuildAccountInfo;
+import com.common.entity.GuildInfo;
+import com.common.entity.GuildItem;
+import com.common.entity.GuildLog;
+import com.common.entity.Item;
+import com.common.entity.Lvxp;
+import com.common.entity.RequestGuild;
+import com.common.entity.RequestGuildInfo;
+import com.common.enumerate.GuildRole;
+import com.common.enumerate.ItemType;
+import com.common.helper.TimeHelper;
+import com.common.template.GuildTemplate;
+import com.common.template.ItemTemplate;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.config.GuildConfig;
+import com.game.config.ItemConfig;
+import com.game.dao.AccountDao;
+import com.game.dao.GuildAccountDao;
+import com.game.dao.GuildDao;
+import com.game.dao.GuildItemDao;
+import com.game.dao.GuildLogDao;
+import com.game.dao.GuildOnlineCountDao;
+import com.game.dao.ItemDao;
+import com.game.dao.RequestGuildDao;
+import com.game.util.ItemUtil;
+import com.game.util.LevelUtil;
+
+@Service
+public class GuildService {
+	private static final Logger logger = LoggerFactory.getLogger(GuildService.class);
+	
+	@Autowired
+	private AccountDao accountDao;
+	@Autowired
+	private GuildDao guildDao;
+	@Autowired
+	private GuildAccountDao guildAccountDao;
+	@Autowired
+	private RequestGuildDao requestGuildDao;
+	@Autowired
+	private GuildLogDao guildLogDao;
+	@Autowired
+	private ItemDao itemDao;
+	@Autowired
+	private AccountService accountService;
+	@Autowired
+	private GuildItemDao guildItemDao;
+	@Autowired
+	private MailService mailService;
+	@Autowired
+	private GuildOnlineCountDao guildOnlineCountDao;
+	private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	
+	@Transactional
+	public Guild createGuild(Long accountId, String guildName, Integer toLevel) {
+		logger.info(String.format("玩家%s创建工会", accountId));
+		Account account = accountDao.getById(accountId);
+		int time = TimeHelper.getTime();
+		long jb = consumeJb(toLevel);
+		AssertUtil.asWarnTrue(account.getJb() >= jb, "钻石不够");
+		Integer guildSize = guildDao.isHasGuild(accountId);
+		AssertUtil.asWarnTrue(guildSize == null || guildSize == 0, "你已经加入工会，不能创建");
+		// 创建工会
+		Guild guild = new Guild();
+		guild.setName(guildName);
+		guild.setLevel(toLevel);
+		guild.setCreateTime(time);
+		guild.setUpdateTime(time);
+		guildDao.create(guild);
+		// 扣钻石
+		accountService.updateJb(accountId, -1 * jb, "创建工会");
+		// 创建会长
+		GuildAccount guildAccount = new GuildAccount();
+		guildAccount.setGuildId(guild.getId());
+		guildAccount.setAccountId(accountId);
+		guildAccount.setRole(GuildRole.Leader);
+		guildAccount.setCb(0);
+		guildAccountDao.create(guildAccount);
+		// 添加工会日志
+		GuildLog guildLog = new GuildLog();
+		guildLog.setCreateTime(time);
+		guildLog.setGuildId(guild.getId());
+		guildLog.setContent(String.format("%s %s创建工会", sdf.format(new Date(TimeHelper.getMilliTime())), account.getNick()));
+		guildLogDao.create(guildLog);
+		return guild;
+	}
+	
+	private int consumeJb(Integer toLevel) {
+		// 消耗的钻石
+		int jb = 0;
+		for (Iterator<GuildTemplate> it = GuildConfig.map.values().iterator(); it.hasNext();) {
+			GuildTemplate guildTemplate = it.next();
+			if (guildTemplate.getLevel() <= toLevel) {
+				jb += guildTemplate.getJb();
+			}
+		}
+		return jb;
+	}
+	
+	@Transactional
+	public void upgradeGuild(Long accountId, Integer guildId, Integer toLevel) {
+		Account account = accountDao.getById(accountId);
+		long jb = consumeJb(toLevel);
+		AssertUtil.asWarnTrue(account.getJb() >= jb, "钻石不够");
+		// 更新工会
+		Guild guild = getById(guildId);
+		AssertUtil.asWarnTrue(guild != null, "你没加入工会");
+		AssertUtil.asWarnTrue(toLevel > guild.getLevel(), "等级参数错误");
+		guild.setLevel(toLevel);
+		guildDao.update(guild);
+		// 扣钻石
+		accountService.updateJb(accountId, -1 * jb, "升级工会");
+		// 添加工会日志
+		GuildLog guildLog = new GuildLog();
+		guildLog.setCreateTime(TimeHelper.getTime());
+		guildLog.setGuildId(guild.getId());
+		guildLog.setContent(String.format("%s 热烈庆祝本工会等级至%s级", sdf.format(new Date(TimeHelper.getMilliTime())), toLevel));
+		guildLogDao.create(guildLog);
+	}
+	
+	public Guild getById(Integer guildId) {
+		Integer time = TimeHelper.getTime() - 2 *  TimeHelper.HOUR_S;
+		Guild guild = guildDao.getById(guildId, time);
+		return guild;
+	}
+	
+	@Transactional
+	public void setNotices(Long accountId, Integer guildId, String notices) {
+		Guild guild = getById(guildId);
+		AssertUtil.asWarnTrue(guild != null, "工会不存在");
+		GuildAccount guildAccount = guildAccountDao.getByAccountId(accountId);
+		AssertUtil.asWarnTrue(guildAccount != null, "你不是工会成员");
+		AssertUtil.asWarnTrue(guildAccount.getGuildId().equals(guildId), "你没有加入该工会");
+		AssertUtil.asWarnTrue(guildAccount.getRole() != GuildRole.Member, "你没有权限");
+		Integer time = TimeHelper.getTime();
+		guild.setNotices(notices);
+		guild.setUpdateTime(time);
+		guildDao.update(guild);
+		Account account = accountDao.getById(accountId);
+		// 添加工会日志
+		GuildLog guildLog = new GuildLog();
+		guildLog.setCreateTime(time);
+		guildLog.setGuildId(guild.getId());
+		guildLog.setContent(String.format("%s %s发布新的公告", sdf.format(new Date(TimeHelper.getMilliTime())), account.getNick()));
+		guildLogDao.create(guildLog);
+	}
+	
+	public void updateGuildVal() {
+		guildOnlineCountDao.updateVal();
+		guildOnlineCountDao.clear();
+	}
+	
+	public void clearHistoricalRecord() {
+		int requestTime = TimeHelper.getTime() - TimeHelper.DAY_S;
+		logger.info(String.format("requestTime=%s", requestTime));
+		requestGuildDao.clearHistoricalRecord(requestTime);
+	}
+	
+	public List<GuildInfo> getByName(String name) {
+		AssertUtil.asWarnTrue(StringUtils.isNotEmpty(name), "工会名不能为空");
+		List<GuildInfo> guildInfoList = guildDao.getByName(name);
+		for (GuildInfo guildInfo : guildInfoList) {
+			GuildTemplate guildTemplate = GuildConfig.map.get(guildInfo.getLevel());
+			guildInfo.setSize(guildTemplate.getSize());
+		}
+		return guildInfoList;
+	}
+	
+	public List<GuildInfo> getGuildInfoList() {
+		Integer time = TimeHelper.getTime() - 2 *  TimeHelper.HOUR_S;
+		List<GuildInfo> guildInfoList = guildDao.getInfoList(time);
+		for (GuildInfo guildInfo : guildInfoList) {
+			GuildTemplate guildTemplate = GuildConfig.map.get(guildInfo.getLevel());
+			guildInfo.setSize(guildTemplate.getSize());
+		}
+		return guildInfoList;
+	}
+	
+	public void updateGuildHero(Long accountId, Integer guildId, Long beAccountId, Byte roleIndex) {
+		GuildRole guildRole = GuildRole.getType(roleIndex);
+		AssertUtil.asWarnTrue(guildRole != null, "角色不存在");
+		GuildAccount leaderGuildAccount = guildAccountDao.get(guildId, accountId);
+		AssertUtil.asWarnTrue(leaderGuildAccount.getRole().getIndex() > guildRole.getIndex(), "权限不够");
+		GuildAccount beGuildAccount = guildAccountDao.get(guildId, beAccountId);
+		AssertUtil.asWarnTrue(leaderGuildAccount.getRole().getIndex() > beGuildAccount.getRole().getIndex(), "权限不够");
+		GuildAccount guildAccount = new GuildAccount();
+		guildAccount.setGuildId(guildId);
+		guildAccount.setRole(guildRole);
+		guildAccount.setAccountId(beAccountId);
+		guildAccountDao.update(guildAccount);
+		Account beAccount = accountDao.getById(beAccountId);
+		String content;
+		if (roleIndex > beGuildAccount.getRole().getIndex()) {
+			content = String.format("%s 恭喜玩家[%s]升为[%s]", sdf.format(new Date(TimeHelper.getMilliTime())), beAccount.getNick(), guildRole.getName());
+		} else {
+			content = String.format("%s 玩家[%s]降为[%s]", sdf.format(new Date(TimeHelper.getMilliTime())), beAccount.getNick(), guildRole.getName());
+		}
+		GuildLog guildLog = new GuildLog();
+		guildLog.setCreateTime(TimeHelper.getTime());
+		guildLog.setGuildId(guildId);
+		guildLog.setContent(content);
+		guildLogDao.create(guildLog);
+	}
+	
+	public void getMyGuild(Long accountId) {
+		Guild guild = guildDao.getByAccountId(accountId);
+		List<GuildAccountInfo> guildAccountInfoList = guildAccountDao.getAccountInfoList(guild.getId());
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_guild_account_list);
+		msg.putInt(guild.getId());
+		msg.putString(guild.getName());
+		msg.putInt(guild.getLevel());
+		msg.putInt(guild.getVal());
+		msg.putInt(guild.getCreateTime());
+		msg.putString(guild.getNotices());
+		msg.putShort(guildAccountInfoList.size());
+		for (GuildAccountInfo guildAccountInfo : guildAccountInfoList) {
+			msg.putLong(guildAccountInfo.getAccountId());
+			msg.putByte(guildAccountInfo.getRole().getIndex());
+			msg.putString(guildAccountInfo.getNick());
+			Lvxp lvxp = LevelUtil.getLvxp(guildAccountInfo.getExp());
+			msg.putInt(lvxp.getLevel());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	public RequestGuild request(Long accountId, Integer guildId) {
+		List<RequestGuild> requestList = requestGuildDao.getByAccountId(accountId);
+		AssertUtil.asWarnTrue(CollectionUtils.isEmpty(requestList) || requestList.size() < 3, "申请工会次数太多");
+		boolean isHas = requestList.stream().anyMatch(r -> r.getGuildId() == guildId);
+		AssertUtil.asWarnTrue(isHas == false, "你已经申请过该工会");
+		Guild guild = getById(guildId);
+		GuildTemplate guildTemplate = GuildConfig.map.get(guild.getLevel());
+		List<GuildAccount> accountList = guildAccountDao.getAccountList(guildId);
+		AssertUtil.asWarnTrue(CollectionUtils.isEmpty(accountList) || accountList.size() < guildTemplate.getNum(), "超过上限人数");
+		Boolean isJoin = accountList.stream().anyMatch(gm -> accountId.equals(gm.getAccountId()));
+		AssertUtil.asWarnTrue(!isJoin, "你已经加入工会");
+		RequestGuild requestGuild = new RequestGuild();
+		Integer time = TimeHelper.getTime();
+		requestGuild.setGuildId(guildId);
+		requestGuild.setAccountId(accountId);
+		requestGuild.setIsAgree(0);
+		requestGuild.setCreateTime(time);
+		requestGuild.setUpdateTime(time);
+		requestGuildDao.add(requestGuild);
+		return requestGuild;
+	}
+	
+	public List<RequestGuild> getMyRequestList(Long accountId) {
+		List<RequestGuild> requestList = requestGuildDao.getByAccountId(accountId);
+		return requestList;
+	}
+	
+	public List<RequestGuildInfo> getRequestInfoList(Long accountId) {
+		Guild guild = guildDao.getByAccountId(accountId);
+		List<GuildAccount> accountList = guildAccountDao.getAccountList(guild.getId());
+		Optional<GuildAccount> op = accountList.stream().filter(gm -> accountId.equals(gm.getAccountId())).findFirst();
+		AssertUtil.asWarnTrue(op.isPresent(), "你没有权限查看，管理员以上级别才有权限");
+		GuildAccount guildAccount = op.get();
+		AssertUtil.asWarnTrue(guildAccount.getRole() != GuildRole.Member, "你的权限不足，管理员以上级别才有权限");
+		List<RequestGuildInfo> requestInfoList = requestGuildDao.getByGuildId(guild.getId());
+		return requestInfoList;
+	}
+	
+	@Transactional
+	public synchronized void response(Long accountId, Integer requestId, Boolean isAgree) {
+		RequestGuild requestGuild = requestGuildDao.getById(requestId);
+		AssertUtil.asWarnTrue(requestGuild != null, "申请不存在");
+		AssertUtil.asWarnTrue(requestGuild.getIsAgree() == 0, "已经审批过了");
+		// 获取工会对象
+		Guild guild = getById(requestGuild.getGuildId());
+		// 获取模板
+		GuildTemplate guildTemplate = GuildConfig.map.get(guild.getLevel());
+		List<GuildAccount> accountList = guildAccountDao.getAccountList(requestGuild.getGuildId());
+		AssertUtil.asWarnTrue(CollectionUtils.isEmpty(accountList) || accountList.size() < guildTemplate.getNum(), "超过上限人数");
+		// 更新状态
+		requestGuild.setIsAgree(isAgree ? 1 : 2);
+		requestGuild.setUpdateTime(TimeHelper.getTime());
+		requestGuildDao.update(requestGuild);
+		if (isAgree) {
+			GuildAccount guildAccount = guildAccountDao.getByAccountId(requestGuild.getAccountId());
+			if (guildAccount == null) {
+				guildAccount = new GuildAccount();
+				guildAccount.setGuildId(requestGuild.getGuildId());
+				guildAccount.setAccountId(requestGuild.getAccountId());
+				guildAccount.setRole(GuildRole.Member);
+				guildAccount.setCb(0);
+				guildAccountDao.create(guildAccount);
+			} else {
+				guildAccount.setAccountId(requestGuild.getAccountId());
+				guildAccount.setRole(GuildRole.Member);
+				guildAccountDao.update(guildAccount);
+			}
+			// 获取玩家对象
+			Account account = accountDao.getById(requestGuild.getAccountId());
+			// 写入日志
+			GuildLog guildLog = new GuildLog();
+			guildLog.setCreateTime(TimeHelper.getTime());
+			guildLog.setGuildId(requestGuild.getGuildId());
+			guildLog.setContent(String.format("%s 欢迎玩家[%s]加入工会", sdf.format(new Date(TimeHelper.getMilliTime())), account.getNick()));
+			guildLogDao.create(guildLog);
+		}
+		requestGuildDao.delete(requestId);
+	}
+	
+	@Transactional
+	public synchronized void kick(Long accountId, Long beAccountId) {
+		Guild guild = guildDao.getByAccountId(accountId);
+		AssertUtil.asWarnTrue(guild != null, "你没有加入工会，不能踢人");
+		// 获取操作者对象权限
+		GuildAccount guildAccount = guildAccountDao.get(guild.getId(), accountId);
+		// 获取被操作者对象权限
+		GuildAccount beGuildAccount = guildAccountDao.get(guild.getId(), beAccountId);
+		AssertUtil.asWarnTrue(guildAccount.getRole().getIndex() > beGuildAccount.getRole().getIndex(), "你的权限不够踢对方");
+		beGuildAccount.setGuildId(0);
+		guildAccountDao.update(beGuildAccount);
+		// 贡献值减半
+		updateCb(beGuildAccount.getId(), -1 * (beGuildAccount.getCb() / 2));
+		// 踢人
+		// 获取被踢玩家对象
+		Account account = accountDao.getById(beGuildAccount.getAccountId());
+		// 写入日志
+		GuildLog guildLog = new GuildLog();
+		guildLog.setCreateTime(TimeHelper.getTime());
+		guildLog.setGuildId(beGuildAccount.getGuildId());
+		guildLog.setContent(String.format("%s 玩家[%s]被请出工会", sdf.format(new Date(TimeHelper.getMilliTime())), account.getNick()));
+		guildLogDao.create(guildLog);
+	}
+	
+	@Transactional
+	public synchronized void out(Long accountId) {
+		Guild guild = guildDao.getByAccountId(accountId);
+		AssertUtil.asWarnTrue(guild != null, "你没有加入工会，不能踢人");
+		// 获取操作者对象权限
+		GuildAccount guildAccount = guildAccountDao.get(guild.getId(), accountId);
+		AssertUtil.asWarnTrue(guildAccount != null, "你不是工会成员");
+		Integer count = guildAccountDao.getGuildAccountCount(guild.getId());
+		if (guildAccount.getRole() == GuildRole.Leader) {
+			AssertUtil.asWarnTrue(count > 1, "会长退出公会前必须是是最后一个人");
+		}
+		guildAccount.setGuildId(0);
+		guildAccountDao.update(guildAccount);
+		// 贡献值清零
+		updateCb(guildAccount.getId(), -guildAccount.getCb());
+		// 踢人
+		// 获取被踢玩家对象
+		Account account = accountDao.getById(accountId);
+		// 写入日志
+		GuildLog guildLog = new GuildLog();
+		guildLog.setCreateTime(TimeHelper.getTime());
+		guildLog.setGuildId(guildAccount.getGuildId());
+		guildLog.setContent(String.format("%s 玩家[%s]退出工会", sdf.format(new Date(TimeHelper.getMilliTime())), account.getNick()));
+		guildLogDao.create(guildLog);
+		// 如果全部成员退出公会，则删除工会
+		if (count > 1) {
+			guildDao.delete(guild.getId());
+		}
+	}
+	
+	@Transactional
+	public void changeLeader(Long accountId, Long beAccountId) {
+		Guild guild = guildDao.getByAccountId(accountId);
+		AssertUtil.asWarnTrue(guild != null, "你没有加入工会");
+		// 获取操作者对象权限
+		GuildAccount guildAccount = guildAccountDao.get(guild.getId(), accountId);
+		AssertUtil.asWarnTrue(guildAccount != null, "你不是工会成员");
+		AssertUtil.asWarnTrue(guildAccount.getRole() == GuildRole.Leader, "你不是会长");
+		GuildAccount beGuildAccount = guildAccountDao.get(guild.getId(), beAccountId);
+		AssertUtil.asWarnTrue(beGuildAccount != null, "对方不是工会成员");
+		// 对方变成新会长
+		beGuildAccount.setRole(GuildRole.Leader);
+		guildAccountDao.update(beGuildAccount);
+		// 原会长变成会员
+		guildAccount.setRole(GuildRole.Member);
+		guildAccountDao.update(guildAccount);
+		// 获取老会长玩家对象
+		Account account = accountDao.getById(accountId);
+		// 获取新会长玩家对象
+		Account beAccount = accountDao.getById(beAccountId);
+		// 写入日志
+		GuildLog guildLog = new GuildLog();
+		guildLog.setCreateTime(TimeHelper.getTime());
+		guildLog.setGuildId(beGuildAccount.getGuildId());
+		guildLog.setContent(String.format("%s 玩家[%s]成为新会长，老会长%s卸任", sdf.format(new Date(TimeHelper.getMilliTime())), beAccount.getNick(), account.getNick()));
+		guildLogDao.create(guildLog);
+	}
+	
+	public List<GuildLog> getLogByGuildId(Integer guildId) {
+		List<GuildLog> guildLogList = guildLogDao.getByGuildId(guildId);
+		return guildLogList;
+	}
+	
+	@Transactional
+	public void sellItem(Long accountId, Long itemId) {
+		Item item = itemDao.getById(itemId);
+		AssertUtil.asWarnTrue(item != null, "该物品不存在");
+		AssertUtil.asWarnTrue(item.getAccountId().equals(accountId), "该物品不属于你");
+		itemDao.delete(itemId);
+		// 获取道具模板
+		ItemTemplate itemTemplate = ItemConfig.map.get(item.getTemplateId());
+		ItemType itemType = ItemUtil.getItemType(itemTemplate.getId());
+		AssertUtil.asWarnTrue(itemType == ItemType.Scroll || itemType == ItemType.Amulet, "工会里只能交易卷轴和护符");
+		Guild guild = guildDao.getByAccountId(accountId);
+		AssertUtil.asWarnTrue(guild != null, "你没有加入工会");
+		GuildAccount guildAccount = guildAccountDao.get(guild.getId(), accountId);
+		AssertUtil.asWarnTrue(guildAccount != null, "你不是工会成员");
+		// 修改贡献值
+		Integer cb = updateCb(guildAccount.getId(), itemTemplate.getCb());
+		// 向工会仓库添加道具
+		GuildItem guildItem = new GuildItem();
+		guildItem.setGuildId(guild.getId());
+		guildItem.setItemTemplateId(item.getTemplateId());
+		guildItem.setSellerId(accountId);
+		guildItem.setCreateTime(TimeHelper.getTime());
+		guildItemDao.create(guildItem);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_guild_sell_item);
+		msg.putInt(cb);
+		MsgSender.sendMsg(msg);
+	}
+	
+	public void getGuildItemList(Integer guildId, Integer pageIndex, Integer pageSize) {
+		Integer recordIndex = pageIndex * pageSize;
+		List<GuildItem> itemList = guildItemDao.getList(guildId, recordIndex, pageSize);
+		Integer itemListSize = guildItemDao.getListSize(guildId);
+		Integer pageCount = (itemListSize / pageSize) + (itemListSize % pageSize > 0 ? 1 : 0);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_guild_item_list);
+		msg.putInt(pageCount);
+		for (GuildItem guildItem : itemList) {
+			msg.putLong(guildItem.getId());
+			msg.putInt(guildItem.getItemTemplateId());
+			msg.putInt(guildItem.getCreateTime());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	@Transactional
+	public synchronized void buyItem(Long accountId, Long guildItemId) {
+		Guild guild = guildDao.getByAccountId(accountId);
+		AssertUtil.asWarnTrue(guild != null, "你没有加入工会");
+		GuildItem guildItem = guildItemDao.getById(guildItemId);
+		// 获取道具模板
+		ItemTemplate itemTemplate = ItemConfig.map.get(guildItem.getItemTemplateId());
+		GuildAccount guildAccount = guildAccountDao.get(guild.getId(), accountId);
+		AssertUtil.asWarnTrue(guildAccount != null, "你不是工会成员");
+		AssertUtil.asWarnTrue(guildAccount.getCb() >= itemTemplate.getCb(), "贡献值不足");
+		// 修改贡献值
+		Integer cb = updateCb(guildAccount.getId(), -itemTemplate.getCb());
+		// 删除工会仓库道具
+		guildItemDao.delete(guildItem.getId());
+		// 购买的道具放入邮箱
+		mailService.create(accountId, String.format("购买商品%s", itemTemplate.getName()), itemTemplate.getId());
+		// 发送消息
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_guild_buy_item);
+		msg.putInt(cb);
+		MsgSender.sendMsg(msg);
+	}
+	
+	public Integer updateCb(Integer guildAccountId, Integer addcb) {
+		guildAccountDao.updateCb(guildAccountId, addcb);
+		GuildAccount guildAccount = guildAccountDao.getById(guildAccountId);
+		return guildAccount.getCb();
+	}
+}

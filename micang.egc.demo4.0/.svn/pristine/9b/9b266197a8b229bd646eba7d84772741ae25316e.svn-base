@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.GuildOnlineCountDao">	
+	
+	<insert id="create" parameterType="com.common.entity.GuildOnlineCount" useGeneratedKeys="true" keyProperty="id">
+		insert into guild_online_count (host, guildId, count, createTime) values (#{host}, #{guildId}, #{count}, #{createTime});
+	</insert>
+	
+	<delete id="clear">
+		truncate table guild_online_count
+	</delete>
+	
+	<select id="updateVal">
+		update guild t1 inner join (
+			select t.guildId, max(t.cnt) as count from (
+				select guildId, sum(count) as cnt from guild_online_count group by guildId, createTime ) t
+			group by guildId
+			order by count desc
+		) t2 on t1.id = t2.guildId
+		set t1.val = t1.val + t2.count;
+	</select>
+	
+</mapper>

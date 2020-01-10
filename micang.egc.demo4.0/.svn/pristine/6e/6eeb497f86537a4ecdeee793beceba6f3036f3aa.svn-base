@@ -1,0 +1,17 @@
+package com.game.job.skill;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class SwordsmanJumpJob implements Job {
+	
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+	
+	}
+}

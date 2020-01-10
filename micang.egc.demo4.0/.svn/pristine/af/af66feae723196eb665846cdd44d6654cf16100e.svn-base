@@ -1,0 +1,387 @@
+package com.game.entity;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.OperateStep;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.RoomState;
+import com.common.enumerate.WorkType;
+import com.common.helper.TimeHelper;
+import com.game.helper.UuidHelper;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+import com.game.job.RoomJobManager;
+import com.game.model.Model;
+import com.game.node.AbsAttackNode;
+import com.game.node.AbsMoveNode;
+import com.game.node.AbsUpdateVisionNode;
+import com.game.node.BaseNode;
+import com.game.node.HeroNode;
+import com.game.node.HomeNode;
+import com.game.node.TroopsNode;
+
+public class Room {
+	private static final Logger logger = LoggerFactory.getLogger(Room.class);
+	/** JobKey组 */
+	public String groupName = UuidHelper.getUuid();
+	
+	/** 房间Id */
+	public int id;
+	
+	/** 被挑战者，蓝方 */
+	public Player bluePlayer;
+	
+	/** 挑战者，红方 */
+	public Player redPlayer;
+	
+	/** 房间状态，0-准备，1-开始，2-结算*/
+	public RoomState state;
+	
+	/**游戏创建时间戳，单位：毫秒*/
+	public long createTimes;
+	
+	/** 操作步骤列表*/
+	public List<OperateStep> operateStepList;
+	
+	/** 第index步骤，从0开始*/
+	public Byte stepIndex;
+	
+	/** 选择队员JobKey*/
+	public JobKey chooseMemberJobKey;
+	
+	/** 自动操作JobKey*/
+	public JobKey autoOperationJobKey;
+	
+	/** 开始游戏JobKey*/
+	public JobKey beginGameJobKey;
+	
+	private Map<Short, BaseNode> nodeMap = new HashMap<Short, BaseNode>();
+	
+	/** 移动节点列表*/
+	private List<AbsMoveNode> moveNodeList = new CopyOnWriteArrayList<AbsMoveNode>();
+	
+	/** 视野节点列表*/
+	private List<AbsUpdateVisionNode> updateVisionNodeList = new CopyOnWriteArrayList<AbsUpdateVisionNode>();
+	
+	/** 攻击节点列表*/
+	private List<AbsAttackNode> attackNodeList = new CopyOnWriteArrayList<AbsAttackNode>();
+	
+	private Lock lock = new ReentrantLock();
+	
+	/** 节点Id*/
+	private AtomicInteger nodeId = new AtomicInteger(0);
+	
+	public short getNewNodeId() {
+		return (short)nodeId.incrementAndGet();
+	}
+	
+	public HomeNode getBuleHomeNode() {
+		return getHomeNode(CampType.Blue);
+	}
+	
+	public HomeNode getRedHomeNode() {
+		return getHomeNode(CampType.Red);
+	}
+	
+	public HomeNode getHomeNode(CampType camp) {
+		List<HomeNode> homeNodeList = getNodeList(NodeType.Home, camp);
+		if (homeNodeList.size() > 0) {
+			return (HomeNode)homeNodeList.get(0);
+		} else {
+			return null;
+		}
+	}
+	
+	public HeroNode getHero(short nodeId) {
+		return (HeroNode)nodeMap.get(nodeId);
+	}
+	
+	public HeroNode getHero(CampType camp, WorkType workType) {
+		List<HeroNode> heroList = getHeroList(camp);
+		for (HeroNode heroNode : heroList) {
+			if (heroNode.heroTemplate.getWork() == workType.getIndex()) {
+				return heroNode;
+			}
+		}
+		return null;
+	}
+	
+	public BaseNode getNode(short nodeId) {
+		return (BaseNode)nodeMap.get(nodeId);
+	}
+	
+	public List<BaseNode> getAllList() {
+		return getNodeList(null, null);
+	}
+	
+	public List<HeroNode> getHeroList() {
+		return getNodeList(NodeType.Hero, null);
+	}
+	
+	public List<HeroNode> getHeroList(CampType camp) {
+		return getNodeList(NodeType.Hero, camp);
+	}
+	
+	public List<HeroNode> getHeroList(CampType camp, boolean isSortByWork) {
+		List<HeroNode> heroNodeList = getNodeList(NodeType.Hero, camp);
+		if (isSortByWork) {
+			Collections.sort(heroNodeList, new Comparator<HeroNode>() {
+				@Override
+				public int compare(HeroNode heroNode1, HeroNode heroNode2) {
+					int diff = heroNode1.heroTemplate.getWork() - heroNode2.heroTemplate.getWork();
+					if (diff > 0) {
+						return 1;
+					} else if (diff < 0) {
+						return -1;
+					} else {
+						return 0;
+					}
+				}
+			});
+		}
+		return heroNodeList;
+	}
+	
+	public void stopJobGroup() {
+		JobScheduler.stopGroup(groupName);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T extends BaseNode> List<T> getNodeList(CampType camp) {
+		return (List<T>)getNodeList(null, camp);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T extends BaseNode> List<T> getNodeList(NodeType nodeType) {
+		return (List<T>)getNodeList(nodeType, null);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T extends BaseNode> List<T> getNodeList(NodeType nodeType, CampType camp) {
+		List<BaseNode> nodeList = new ArrayList<BaseNode>();
+		lock.lock();
+		try {
+			nodeMap.forEach((nodeId, node) -> {
+				if (nodeType == null && camp == null) {
+					nodeList.add(node);
+				} else if (nodeType == null && camp != null) {
+					if (camp == node.selfCamp) {
+						nodeList.add(node);
+					}
+				} else if (nodeType != null && camp == null) {
+					if (nodeType == node.getNodeType()) {
+						nodeList.add(node);
+					}
+				} else {
+					if (nodeType == node.getNodeType() && camp == node.selfCamp) {
+						nodeList.add(node);
+					}
+				}
+			});
+		} catch(Exception e){
+			logger.error(e.toString());
+        } finally {
+            lock.unlock();
+        }
+		return (List<T>)nodeList;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T extends AbsMoveNode> List<T> getMoveNodeList() {
+		List<AbsMoveNode> nodeList = new ArrayList<AbsMoveNode>();
+		lock.lock();
+		try {
+			nodeMap.forEach((nodeId, node) -> {
+				if (AbsMoveNode.class.isAssignableFrom(node.getClass())) {
+					nodeList.add((AbsMoveNode)node);
+				}
+			});
+		} catch(Exception e){
+			logger.error(e.toString());
+        } finally {
+            lock.unlock();
+        }
+		return (List<T>)nodeList;
+	}
+	
+	public void putNode(BaseNode node) {
+		lock.lock();
+		try {
+			nodeMap.put(node.nodeId, node);
+		} catch(Exception e){
+			logger.error(e.toString());
+        } finally {
+            lock.unlock();
+        }
+	}
+	
+	public BaseNode remove(short nodeId) {
+		lock.lock();
+		BaseNode node = null;
+		try {
+			node = nodeMap.remove(nodeId);
+		} catch(Exception e){
+			logger.error(e.toString());
+        } finally {
+            lock.unlock();
+        }
+		return node;
+	}
+	
+	public void startChooseMember() {
+		RoomJobManager.createChooseMemberJob(this);
+	}
+	
+	public void stopChooseMember() {
+		if (JobScheduler.isHasJob(chooseMemberJobKey)) {
+			JobScheduler.stopJob(chooseMemberJobKey);
+		}
+	}
+	
+	public void startAutoOperation() {
+		RoomJobManager.createAutoOperationJob(this);
+	}
+	
+	public void stopAutoOperation() {
+		if (JobScheduler.isHasJob(autoOperationJobKey)) {
+			JobScheduler.stopJob(autoOperationJobKey);
+		}
+	}
+	
+	public void startBeginGame() {
+		FightJobManager.createBeginGameJob(this);
+	}
+	
+	public void stopBeginGame() {
+		if (JobScheduler.isHasJob(beginGameJobKey)) {
+			JobScheduler.stopJob(beginGameJobKey);
+		}
+	}
+	
+	public void startArsenalContraller(long delayTime, long repeatInterval) {
+		FightJobManager.createArsenalContrallerJob(this, delayTime, repeatInterval);
+	}
+	
+	public void startArsenal(List<List<TroopsNode>> buleTroopsNodeList, List<List<TroopsNode>> redTroopsNodeList) {
+		FightJobManager.createArsenalJob(this, buleTroopsNodeList, redTroopsNodeList);
+	}
+	
+	public void startShowFightPower() {
+		RoomJobManager.createShowFightPowerJob(this);
+	}
+	
+	public void startShowLayout(long delayTime) {
+		RoomJobManager.createShowLayoutJob(this, delayTime);
+	}
+	
+	public void startHeroOnline(long delayTime) {
+		FightJobManager.createHeroOnlineJob(this, delayTime);
+	}
+	
+	public void startMoveInitplace() {
+		FightJobManager.createMoveInitplaceJob(this);
+	}
+	
+	public void startSyncLocation(long delayTime) {
+		FightJobManager.createSyncLocationJob(this, delayTime);
+	}
+	
+	public void startDestroy(long delayTime) {
+		RoomJobManager.createDestroyRoomJob(this, delayTime);
+	}
+	
+	public void gameOver() {
+		logger.info(String.format("游戏结束，回收房间%d", id));
+		// 关闭该房间相关Job
+		stopJobGroup();
+	}
+	
+	public void destroy() {
+		Model.getInstance().roomMap.remove(this.id);
+		gameOver();
+	}
+	
+	public int getGameTime() {
+		return (int)(TimeHelper.getMilliTime() - this.createTimes);
+	}
+	
+	public boolean addMoveNode(AbsMoveNode node) {
+		if (!moveNodeList.contains(node)) {
+			return moveNodeList.add(node);
+		} else {
+			return false;
+		}
+	}
+	
+	public boolean removeMoveNode(AbsMoveNode node) {
+		return moveNodeList.remove(node);
+	}
+	
+	public boolean addAttackNode(AbsAttackNode node) {
+		if (!attackNodeList.contains(node)) {
+			return attackNodeList.add(node);
+		} else {
+			return false;
+		}
+	}
+	
+	public boolean removeAttackNode(AbsAttackNode node) {
+		return attackNodeList.remove(node);
+	}
+	
+	public void startMove(long delayTime) {
+		FightJobManager.createMoveJob(delayTime, this);
+	}
+	
+	public boolean addUpdateVisionNode(AbsUpdateVisionNode node) {
+		if (!updateVisionNodeList.contains(node)) {
+			return updateVisionNodeList.add(node);
+		} else {
+			return false;
+		}
+	}
+	
+	public boolean removeUpdateVisionNode(AbsUpdateVisionNode node) {
+		return updateVisionNodeList.remove(node);
+	}
+	
+	public void startUpdateVision(long delayTime) {
+		FightJobManager.createUpdateVisionJob(delayTime, this);
+	}
+	
+	public void startAttack(long delayTime) {
+		FightJobManager.createAttackJob(delayTime, this);
+	}
+	
+	public void onAttack() {
+		attackNodeList.forEach(node -> {
+			node.onAttack(node.pa, node.ma);
+		});
+	}
+	
+	public void onUpdateVision() {
+		updateVisionNodeList.forEach(node -> {
+			node.onUpdateVision();
+		});
+	}
+	
+	public void onMove() {
+		moveNodeList.forEach(node -> {
+			node.onMove();
+		});
+	}
+}

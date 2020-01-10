@@ -1,0 +1,116 @@
+package com.game.service;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.Hero;
+import com.common.entity.Item;
+import com.common.entity.Role;
+import com.common.enumerate.EquipType;
+import com.common.template.CriticalTemplate;
+import com.common.template.ItemTemplate;
+import com.common.util.AssertUtil;
+import com.game.common.MessageCode;
+import com.game.config.CriticalConfig;
+import com.game.config.ItemConfig;
+import com.game.dao.RoleDao;
+import com.game.util.ItemUtil;
+
+@Service
+public class RoleService {
+	
+	@Autowired
+	private RoleDao roleDao;
+	@Autowired
+	private ItemService itemService;
+	
+	private static final Logger logger = LoggerFactory.getLogger(RoleService.class);
+	
+	public Role createRole(Long accountId, Integer roleTemplateId, Boolean isChecked) {
+		// 创建角色
+		Role role = new Role();
+		role.setAccountId(accountId);
+		role.setTemplateId(roleTemplateId);
+		role.setIsChecked(isChecked ? 1 : 0);
+		roleDao.create(role);
+		return role;
+	}
+	
+	@Transactional
+	public void setDefault(Long accountId, Long roleId) {
+		logger.info(String.format("玩家%s设置默认角色为%s", accountId, roleId));
+		List<Role> roleList = roleDao.getList(accountId);
+		Optional<Role> op = roleList.stream().filter(r -> r.getIsChecked() == 1).findFirst();
+		AssertUtil.asWarnTrue(op.isPresent(), "没找到前一个默认的角色");
+		Boolean isExist = roleList.stream().anyMatch(r -> r.getId().equals(roleId));
+		AssertUtil.asWarnTrue(isExist, "角色Id不存在");
+		Role role = op.get();
+		if (!role.getId().equals(roleId)) {
+			// 将前一个默认角色设置为0
+			roleDao.setChecked(role.getId(), 0);
+			role = roleDao.getById(roleId);
+			AssertUtil.asWarnTrue(role != null, "没找到默认的角色");
+			// 设置新的角色为默认
+			roleDao.setChecked(role.getId(), 1);
+		}
+	}
+	
+	public void getRoleList(Long accountId) {
+		List<Role> roleList = roleDao.getList(accountId);
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_role_list);
+		msg.putShort(roleList.size());
+		for (Role role : roleList) {
+			msg.putLong(role.getId());
+			msg.putLong(role.getTemplateId());
+			msg.putBoolean(role.getIsChecked() == 1);
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	public Role getDefault(Long accountId) {
+		Role role = roleDao.getDefault(accountId);
+		return role;
+	}
+	
+	public void calEquipAddition(Role role, Hero hero) {
+		List<Item> itemList = itemService.getListWithProp(role.getAccountId(), role.getId());
+		for (Item item : itemList) {
+			ItemTemplate itemTemplate = ItemConfig.map.get(item.getTemplateId());
+			EquipType equipType = ItemUtil.getEquipType(itemTemplate.getId());
+			// 如果是技能装备，则血量加成或伤害加成，否则属性加成
+			if (equipType == EquipType.Skill) {
+				String str = String.valueOf(itemTemplate.getId());
+				int type = Integer.parseInt(str.substring(6, 7));
+				int lv = ItemUtil.getItemLevel(itemTemplate.getId());
+				CriticalTemplate criticalTemplate = CriticalConfig.map.get(20000000);
+				// 伤害加成 = 单个装备最大阈值/（最大等级20*（最大等级20+1）/2）*当前装备等级*(当前装备等级+1）/2
+				int value = (int)(criticalTemplate.getVal() / 210.0f * lv * (lv + 1) / 2);
+				// 如果是治疗或回复，则血量加成，否则伤害加成
+				if (type == 11 || type == 12) {
+					hero.addHp = value;
+				} else {
+					hero.addHurt = value;
+				}
+			} else {
+				int lv = ItemUtil.getItemLevel(itemTemplate.getId());
+				String str = String.valueOf(itemTemplate.getId());
+				int criticalId = Integer.parseInt(str.substring(3, 7));
+				CriticalTemplate criticalTemplate = CriticalConfig.map.get(criticalId);
+				// 伤害加成 = 单个装备最大阈值/（最大等级20*（最大等级20+1）/2）*当前装备等级*(当前装备等级+1）/2
+				int value = (int)(criticalTemplate.getVal() / 210.0f * lv * (lv + 1) / 2);
+				hero.maxhp += value;
+				hero.hp = hero.maxhp;
+			}
+		}
+	}
+
+}

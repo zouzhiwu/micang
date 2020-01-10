@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.MemberDao">	
+	
+	<insert id="add" parameterType="com.common.entity.Member" useGeneratedKeys="true" keyProperty="id">
+		insert into member ( id
+			<if test="null != accountId">
+				, accountId
+			</if>
+			<if test="null != templateId">
+				, templateId
+			</if>
+			<if test="null != star">
+				, star
+			</if>
+			<if test="null != exp">
+				, exp
+			</if>
+			<if test="null != stage">
+				, stage
+			</if>
+			<if test="null != work">
+				, work
+			</if>
+			<if test="null != likeHero1">
+				, likeHero1
+			</if>
+			<if test="null != likeVal1">
+				, likeVal1
+			</if>
+			<if test="null != likeHero2">
+				, likeHero2
+			</if>
+			<if test="null != likeVal2">
+				, likeVal2
+			</if>
+			<if test="null != likeHero3">
+				, likeHero3
+			</if>
+			<if test="null != likeVal3">
+				, likeVal3
+			</if>
+			<if test="null != likeHero4">
+				, likeHero4
+			</if>
+			<if test="null != likeVal4">
+				, likeVal4
+			</if>
+			<if test="null != likeHero5">
+				, likeHero5
+			</if>
+			<if test="null != likeVal5">
+				, likeVal5
+			</if>
+			<if test="null != masterSkill">
+				, masterSkill
+			</if>
+			<if test="null != maskerSkillLv">
+				, maskerSkillLv
+			</if>
+			<if test="null != slaveSkill1">
+				, slaveSkill1
+			</if>
+			<if test="null != slaveSkillLv1">
+				, slaveSkillLv1
+			</if>
+			<if test="null != slaveSkill2">
+				, slaveSkill2
+			</if>
+			<if test="null != slaveSkillLv2">
+				, slaveSkillLv2
+			</if>
+			<if test="null != slaveSkill3">
+				, slaveSkill3
+			</if>
+			<if test="null != slaveSkillLv3">
+				, slaveSkillLv3
+			</if>
+			<if test="null != character1">
+				, character1
+			</if>
+			<if test="null != characterVal1">
+				, characterVal1
+			</if>
+			<if test="null != character2">
+				, character2
+			</if>
+			<if test="null != characterVal2">
+				, characterVal2
+			</if>
+			<if test="null != character3">
+				, character3
+			</if>
+			<if test="null != characterVal3">
+				, characterVal3
+			</if>
+		) values ( #{id}
+			<if test="null != accountId">
+				, #{accountId}
+			</if>
+			<if test="null != templateId">
+				, #{templateId}
+			</if>
+			<if test="null != star">
+				, #{star}
+			</if>
+			<if test="null != exp">
+				, #{exp}
+			</if>
+			<if test="null != stage">
+				, #{stage}
+			</if>
+			<if test="null != work">
+				, #{work}
+			</if>
+			<if test="null != likeHero1">
+				, #{likeHero1}
+			</if>
+			<if test="null != likeVal1">
+				, #{likeVal1}
+			</if>
+			<if test="null != likeHero2">
+				, #{likeHero2}
+			</if>
+			<if test="null != likeVal2">
+				, #{likeVal2}
+			</if>
+			<if test="null != likeHero3">
+				, #{likeHero3}
+			</if>
+			<if test="null != likeVal3">
+				, #{likeVal3}
+			</if>
+			<if test="null != likeHero4">
+				, #{likeHero4}
+			</if>
+			<if test="null != likeVal4">
+				, #{likeVal4}
+			</if>
+			<if test="null != likeHero5">
+				, #{likeHero5}
+			</if>
+			<if test="null != likeVal5">
+				, #{likeVal5}
+			</if>
+			<if test="null != masterSkill">
+				, #{masterSkill}
+			</if>
+			<if test="null != maskerSkillLv">
+				, #{maskerSkillLv}
+			</if>
+			<if test="null != slaveSkill1">
+				, #{slaveSkill1}
+			</if>
+			<if test="null != slaveSkillLv1">
+				, #{slaveSkillLv1}
+			</if>
+			<if test="null != slaveSkill2">
+				, #{slaveSkill2}
+			</if>
+			<if test="null != slaveSkillLv2">
+				, #{slaveSkillLv2}
+			</if>
+			<if test="null != slaveSkill3">
+				, #{slaveSkill3}
+			</if>
+			<if test="null != slaveSkillLv3">
+				, #{slaveSkillLv3}
+			</if>
+			<if test="null != character1">
+				, #{character1}
+			</if>
+			<if test="null != characterVal1">
+				, #{characterVal1}
+			</if>
+			<if test="null != character2">
+				, #{character2}
+			</if>
+			<if test="null != characterVal2">
+				, #{characterVal2}
+			</if>
+			<if test="null != character3">
+				, #{character3}
+			</if>
+			<if test="null != characterVal3">
+				, #{characterVal3}
+			</if>
+		)
+	</insert>
+	
+	<select id="getById" parameterType="Long" resultType="com.common.entity.Member">
+		select * from member where id = #{id}
+	</select>
+	
+	<update id="update" parameterType="com.common.entity.Member">
+		update member 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != star">
+				, star = #{star}
+			</if>
+			<if test="null != exp">
+				, exp = #{exp}
+			</if>
+			<if test="null != stage">
+				, stage = #{stage}
+			</if>
+			<if test="null != work">
+				, work = #{work}
+			</if>
+			<if test="null != likeHero1">
+				, likeHero1 = #{likeHero1}
+			</if>
+			<if test="null != likeVal1">
+				, likeVal1 = #{likeVal1}
+			</if>
+			<if test="null != likeHero2">
+				, likeHero2 = #{likeHero2}
+			</if>
+			<if test="null != likeVal2">
+				, likeVal2 = #{likeVal2}
+			</if>
+			<if test="null != likeHero3">
+				, likeHero3 = #{likeHero3}
+			</if>
+			<if test="null != likeVal3">
+				, likeVal3 = #{likeVal3}
+			</if>
+			<if test="null != likeHero4">
+				, likeHero4 = #{likeHero4}
+			</if>
+			<if test="null != likeVal4">
+				, likeVal4 = #{likeVal4}
+			</if>
+			<if test="null != likeHero5">
+				, likeHero5 = #{likeHero5}
+			</if>
+			<if test="null != likeVal5">
+				, likeVal5 = #{likeVal5}
+			</if>
+			<if test="null != masterSkill">
+				, masterSkill = #{masterSkill}
+			</if>
+			<if test="null != maskerSkillLv">
+				, maskerSkillLv = #{maskerSkillLv}
+			</if>
+			<if test="null != slaveSkill1">
+				, slaveSkill1 = #{slaveSkill1}
+			</if>
+			<if test="null != slaveSkillLv1">
+				, slaveSkillLv1 = #{slaveSkillLv1}
+			</if>
+			<if test="null != slaveSkill2">
+				, slaveSkill2 = #{slaveSkill2}
+			</if>
+			<if test="null != slaveSkillLv2">
+				, slaveSkillLv2 = #{slaveSkillLv2}
+			</if>
+			<if test="null != slaveSkill3">
+				, slaveSkill3 = #{slaveSkill3}
+			</if>
+			<if test="null != slaveSkillLv3">
+				, slaveSkillLv3 = #{slaveSkillLv3}
+			</if>
+			<if test="null != character1">
+				, character1 = #{character1}
+			</if>
+			<if test="null != characterVal1">
+				, characterVal1 = #{characterVal1}
+			</if>
+			<if test="null != character2">
+				, character2 = #{character2}
+			</if>
+			<if test="null != characterVal2">
+				, characterVal2 = #{characterVal2}
+			</if>
+			<if test="null != character3">
+				, character3 = #{character3}
+			</if>
+			<if test="null != characterVal3">
+				, characterVal3 = #{characterVal3}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<select id="getByList" parameterType="Long" resultType="com.common.entity.Member">
+		select * from member where accountId = #{accountId}
+	</select>
+	
+	<select id="isExistMember" resultType="Boolean">
+		select if(count(1) &gt; 0, 'true', 'false') from member where accountId = #{accountId} and templateId = #{memberTemplateId}
+	</select>
+	
+	<select id="getWorkMemberList" resultType="com.common.entity.Member">
+		select * from member where accountId = #{accountId} and work != 0;
+	</select>
+	
+	<select id="getByWork" resultType="com.common.entity.Member">
+		select * from member where accountId = #{accountId} and work != #{work};
+	</select>
+</mapper>  

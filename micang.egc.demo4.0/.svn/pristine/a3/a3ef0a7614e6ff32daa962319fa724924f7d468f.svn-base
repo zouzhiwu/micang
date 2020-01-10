@@ -1,0 +1,136 @@
+package com.game.node;
+
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.MapNodeType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.TargetType;
+import com.common.util.GameUtil;
+import com.game.service.MapService;
+
+/**
+ * 具备移动性质的抽象节点
+ */
+public abstract class AbsMoveNode extends AbsAttackNode {
+	private static final Logger logger = LoggerFactory.getLogger(AbsMoveNode.class);
+	
+	/**移动JobKey */
+	public JobKey moveJobKey;
+	
+	public abstract void startMove();
+	
+	public abstract void stopMove();
+	
+	/**攻击速度 */
+	public short ats;
+	
+	/**移动速度 */
+	public short mvs;
+	
+	@Override
+	public void setTarget(Target target) {
+		stopMove();
+    	this.target = target;
+        this.way.clear();
+        autoSearchWay();
+        startMove();
+    }
+	
+    public void move(long timeLength) {
+        if (way.size() > 0) {
+            Location subTargetLocation = way.get(0);
+            if (subTargetLocation != null) {
+            	// 如果当前位置和节点位置小于等于0.1，则视为到达目标位置，删除目标位置，否则移动到目标位置
+                if (GameUtil.distance(this.location, subTargetLocation) <= 0.5f) {
+                    way.remove(subTargetLocation);
+                    this.location.x = subTargetLocation.x;
+                    this.location.y = subTargetLocation.y;
+                } else {
+                	// 更新位置
+                	float time = timeLength / 1000.0f;
+        			updateLocation(mvs, time, subTargetLocation);
+                }
+                // 如果当前位置和目标位置小于射程，则攻击，否则继续移动
+                if (GameUtil.distance(this.location, target.location) <= aoe) {
+                    way.clear();
+                    stopMove();
+                    startAttack();
+                }
+            }
+        } else {
+        	stopMove();
+        	// 如果目标是位置，说明到达目标，清空目标对象
+        	if (this.target.type == TargetType.Location) {
+        		this.target = null;
+        	} else {
+        		// 如果当前位置和目标位置小于射程，则攻击，否则继续移动
+                if (GameUtil.distance(this.location, target.location) <= aoe) {
+                    startAttack();
+                }
+        	}
+        }
+    }
+    
+    private void updateLocation(short mvs, float timeLength, Location targetLocation) {
+    	double angle = Math.atan2(targetLocation.y - this.location.y, targetLocation.x - this.location.x);
+    	double addx = Math.cos(angle) * mvs * timeLength;
+    	double addy = Math.sin(angle) * mvs * timeLength;
+        this.location.x += (short)addx;
+        this.location.y += (short)addy;
+        logger.info(String.format("nodeId=%d location=%s", this.nodeId, this.location));
+    }
+    
+	public void autoSearchWay() {
+		Location targetLocation = target.location;
+    	float distance = GameUtil.distance(targetLocation, this.location);
+		logger.info(String.format("nodeId=%s 自动寻路 location=%s targetLocation=%s distance=%s aoe=%s", this.nodeId, this.location, targetLocation, distance, aoe));
+    	// 如果当前位置与目标位置距离超过射程，则寻路
+    	if (distance > aoe) {
+    		NodeType nodeType = getNodeType();
+    		switch (nodeType) {
+			case Hero:
+				this.way = MapService.searchWay(this.location, targetLocation, MapNodeType.White);
+				break;
+			case Troops:
+				this.way = MapService.searchWay(this.location, targetLocation, MapNodeType.Gray);
+				break;
+			default:
+				break;
+			}
+//    		printWayList(way);
+    	} else {
+    		this.stopMove();
+    	}
+    }
+	
+//	private void printWayList(List<Location> way) {
+//		if (way.size() == 0) {
+//			logger.info("way.size=" + way.size());
+//		} else {
+//			StringBuilder sb = new StringBuilder();
+//			for (int i = 0; i < way.size(); i++) {
+//				Location location = way.get(i);
+//				sb.append(String.format(",%s", location.toString()));
+//			}
+//			sb.deleteCharAt(0);
+//			logger.info("wayList:" + sb.toString());
+//		}
+//	}
+	
+//	private void printVisionList() {
+//		if (visionList.size() == 0) {
+//			logger.info("visionList.size=" + visionList.size());
+//		} else {
+//			StringBuilder sb = new StringBuilder();
+//			for (int i = 0; i < visionList.size(); i++) {
+//				BaseNode node = visionList.get(i);
+//				sb.append(String.format(",%s", node.nodeId));
+//			}
+//			sb.deleteCharAt(0);
+//			logger.info("visionList:" + sb.toString());
+//		}
+//	}
+}

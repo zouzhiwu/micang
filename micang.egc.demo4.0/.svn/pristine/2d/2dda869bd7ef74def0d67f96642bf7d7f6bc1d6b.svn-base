@@ -1,0 +1,35 @@
+package com.game.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.common.entity.Role;
+import com.game.dao.RoleDao;
+
+@Service
+public class RoleService {
+
+	@Autowired
+	private RoleDao roleDao;
+	
+	public void add(Role role) {
+		roleDao.add(role);
+	}
+	
+	public void update(Role role) {
+		roleDao.update(role);
+	}
+	
+	public Role getById(Long id) {
+		return roleDao.getById(id);
+	}
+	
+	public void updateGb(Long accountId, Long add) {
+		roleDao.updateGb(accountId, add);
+	}
+	public void updateJb(Long accountId, Long add) {
+		roleDao.updateJb(accountId, add);
+	}
+	
+	
+}

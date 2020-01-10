@@ -1,0 +1,1263 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.common.constant.BoxConstant;
+import com.common.constant.CircleConstant;
+import com.common.constant.HeroConstant;
+import com.common.constant.RoomConstant;
+import com.common.constant.TemplateConstant;
+import com.common.entity.Account;
+import com.common.entity.Book;
+import com.common.entity.Box;
+import com.common.entity.Buff;
+import com.common.entity.Circle;
+import com.common.entity.Hero;
+import com.common.entity.Link;
+import com.common.entity.Location;
+import com.common.entity.Room;
+import com.common.entity.SingTime;
+import com.common.entity.Skill;
+import com.common.entity.Target;
+import com.common.entity.Trap;
+import com.common.entity.Vector3;
+import com.common.enumerate.ASkillType;
+import com.common.enumerate.AccountState;
+import com.common.enumerate.BSkillType;
+import com.common.enumerate.BuffStatus;
+import com.common.enumerate.LeesinStage;
+import com.common.enumerate.SelfSkill;
+import com.common.enumerate.TargetType;
+import com.common.enumerate.TaskStatus;
+import com.common.helper.RandomHelper;
+import com.common.helper.TimeHelper;
+import com.common.template.CircleTemplate;
+import com.common.template.SkillTemplate;
+import com.common.util.AssertUtil;
+import com.game.config.AppConfig;
+import com.game.config.CircleConfig;
+import com.game.config.SkillConfig;
+import com.game.dao.AccountDao;
+import com.game.helper.HandleHelper;
+import com.game.helper.HandleHelper.StopRoomJobHandle;
+import com.game.helper.MsgHelper;
+import com.game.helper.UuidHelper;
+import com.game.job.JobManager;
+import com.game.job.JobScheduler;
+import com.game.model.Model;
+import com.game.util.GameUtil;
+import com.game.vision.VisionAdapter;
+
+@Service
+public class GameService {
+	private final static Logger logger = LoggerFactory.getLogger(GameService.class);
+	public final static int general_interval_time = 500;	// 普攻的间隔时间，单位毫秒
+
+	@Autowired
+	private SkillService skillService;
+	@Autowired
+	private PhysicService physicService;
+	@Autowired
+	private RoomService roomService;
+	@Autowired
+	private AccountDao accountDao;
+	
+	private StopRoomJobHandle stopAutoMoveHandle = (room, isDeath, cnt) -> {
+		stopRoomJob(room, isDeath, cnt);
+	};
+	
+	public void attackGeneral(Long attId) {
+		Hero attHero = Model.getInstance().heroMap.get(attId);
+		SkillTemplate skillTemplate = SkillConfig.map.get(TemplateConstant.template_id_10000);
+		long time = TimeHelper.getMilliTime();
+		AssertUtil.asWarnTrue(time >= attHero.generalTime + skillTemplate.getCdt(), "该技能CD未冷却");
+		AssertUtil.asWarnTrue(time >= attHero.publicSkillTime + skillTemplate.getPubcdt(), "该技能公共CD未冷却");
+		Room room = Model.getInstance().roomMap.get(attHero.roomId);
+		Hero minHero = VisionAdapter.getMinDistanceHero(attHero.visionHeroList, attHero.location);
+		Box minBox = VisionAdapter.getMinDistanceBox(attHero.visionBoxList, attHero.location);
+		double minHeroDistance = HeroConstant.defaultDistance;
+		if (minHero != null) {
+			minHeroDistance = GameUtil.distance(attHero.location, minHero.location);
+		}
+		double minBoxDistance = HeroConstant.defaultDistance;
+		if (minBox != null) {
+			minBoxDistance = GameUtil.distance(attHero.location, minBox.location);
+		}
+		if (minHeroDistance > skillTemplate.getLen()) {
+			minHero = null;
+		}
+		if (minBoxDistance > skillTemplate.getLen()) {
+			minBox = null;
+		}
+		if (minHeroDistance > minBoxDistance) {
+			if (minBox == null) {
+				MsgHelper.broadcastGeneralEffect(attHero, TargetType.Location, 0L);
+			} else {
+				Box beAttBox = minBox;
+				Target target = new Target(beAttBox);
+				attHero.generalTime = time;
+				attHero.publicSkillTime = time;
+				JobScheduler.createAttackGeneralJob(room, attHero, target);
+			}
+		} else {
+			if (minHero == null) {
+				MsgHelper.broadcastGeneralEffect(attHero, TargetType.Location, 0L);
+			} else {
+				Hero beAttHero = minHero;
+				Target target = new Target(beAttHero);
+				attHero.generalTime = time;
+				attHero.publicSkillTime = time;
+				JobScheduler.createAttackGeneralJob(room, attHero, target);
+			}
+		}
+	}
+	
+	public void attackGeneralHero(Room room, Hero attHero, Hero beAttHero) {
+		SkillTemplate skillTemplate = SkillConfig.map.get(TemplateConstant.template_id_10000);
+		Long milliTime = TimeHelper.getMilliTime();
+		int hurt = skillTemplate.getHurt();
+		// 如果有伤害加深，则累加伤害
+		if (JobScheduler.isHasJob(beAttHero, BSkillType.Hurt)) {
+			// 伤害加深技能
+			SkillTemplate hurtSkillTemplate = SkillConfig.map.get(beAttHero.buffHurt.skillTemplateId);
+			// 计算伤害加深值
+			int addHurt = (int)(hurt * hurtSkillTemplate.getValue() / 100.00);
+			hurt += addHurt;
+		}
+		logger.info(String.format("isHasJob=%s", JobScheduler.isHasJob(beAttHero, BSkillType.Link)));
+		// 如果有链接，则把伤害分摊，否则直接计算伤害
+		if (JobScheduler.isHasJob(beAttHero, BSkillType.Link)) {
+			Link link = room.linkMap.get(beAttHero.buffLink.effectId);
+			logger.info(String.format("link=%s effectId=%s", link, beAttHero.buffLink.effectId));
+			// 如果有护盾，则先扣护盾血量再分摊
+			if (JobScheduler.isHasJob(beAttHero, BSkillType.Shield)) {
+				if (beAttHero.extraHp > 0) {
+					if (beAttHero.extraHp >= hurt) {
+						beAttHero.extraHp -= hurt;
+						logger.info(String.format("room.id=%s beAttHero.id=%d hurt=%s hp=%s extraHp=%s", room.id, beAttHero.accountId, hurt, beAttHero.hp, beAttHero.extraHp));
+						hurt = 0;
+					} else {
+						logger.info(String.format("room.id=%s beAttHero.id=%d hurt=%s hp=%s extraHp=%s", room.id, beAttHero.accountId, hurt, beAttHero.hp, beAttHero.extraHp));
+						hurt -= beAttHero.extraHp;
+						beAttHero.extraHp = 0;
+					}
+					// 广播伤害
+					MsgHelper.broadcastHurt(attHero, beAttHero);
+				}
+				if (hurt > 0) {
+					if (link != null) {
+						shareHurt(room, attHero, beAttHero, skillTemplate, milliTime, link.effectId, hurt, link);
+					}
+				}
+			} else {
+				if (link != null) {
+					shareHurt(room, attHero, beAttHero, skillTemplate, milliTime, link.effectId, hurt, link);
+				}
+			}
+		} else {
+			calcHurt(attHero, room, hurt, milliTime, beAttHero, true, skillTemplate);
+		}
+	}
+	
+	public List<Book> attackGeneralBox(Room room, Hero attHero, Box box) {
+		SkillTemplate skillTemplate = SkillConfig.map.get(TemplateConstant.template_id_10000);
+		return handleBoxHurt(room, attHero, box, skillTemplate.getId(), BoxConstant.hurt);
+	}
+	
+	public List<Book> attackGeneralBox(Long attId, short boxId) {
+		Hero attHero = Model.getInstance().heroMap.get(attId);
+		Room room = Model.getInstance().roomMap.get(attHero.roomId);
+		Box box = room.boxMap.get(boxId);
+		return attackGeneralBox(room, attHero, box);
+	}
+
+	public List<Book> handleBoxHurt(Room room, Hero attHero, Box box, int skillTemplateId, int addHurt) {
+		if (addHurt > 0) {
+			GameUtil.beHurt(box, addHurt);
+			logger.info(String.format("box.id=%d hp=%s", box.id, box.hp));
+			if (box.hp <= 0) {
+				// 广播宝箱受到攻击
+				MsgHelper.broadcastBoxHurt(room, attHero, box, skillTemplateId);
+				return destroyBox(room, box);
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 销毁宝箱
+	 */
+	private List<Book> destroyBox(Room room, Box box) {
+		room.boxMap.remove(box.id);
+		Set<Long> heroIdSet = room.heroMap.keySet();
+		// 删除能够看到这个宝箱的玩家视野引用
+		for (Iterator<Long> it = heroIdSet.iterator(); it.hasNext();) {
+			Long heroId = it.next();
+			Hero hero = room.heroMap.get(heroId);
+			if (hero != null) {
+				hero.visionBoxList.remove(box);
+			}
+		}
+		// 生成技能书
+		List<Book> bookList = skillService.generateBook(room, box);
+		for (Book book : bookList) {
+			room.bookMap.put(book.code, book);
+		}
+		logger.info(String.format("bookList.size=%s", bookList.size()));
+		// 广播玩家生成技能书
+		List<Hero> visionHeroList = VisionAdapter.getVisionList(box.location, room.heroMap, HeroConstant.not_debug_vision);
+		MsgHelper.broadcastGenerateBook(room, visionHeroList, bookList);
+		// 让视野内玩家能看到这本书
+		for (Hero hero : visionHeroList) {
+			for (Book book : bookList) {
+				if (!hero.visionBookList.contains(book)) {
+					hero.visionBookList.add(book);
+				}
+			}
+		}
+		return bookList;
+	}
+	
+	public void attackSkill(Hero attHero, Skill skill, byte idx, Vector3 skillDirection, Location skillLocation, int effectId) {
+		logger.info(String.format("attId=%d skill.templateId=%d", attHero.accountId, skill.templateId));
+		Room room = Model.getInstance().roomMap.get(attHero.roomId);
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(attHero, BSkillType.Silent), "玩家已经处于沉默状态");
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		// 如果不是NPC玩家，则累计技能使用次数
+		if (!attHero.isNpc) {
+			attHero.incrementSkillIdCount(skill.templateId);
+		}
+		physicService.attackSkill(room, attHero, skill, skillDirection, skillLocation, effectId, idx);
+		ASkillType aSkillType = ASkillType.getType(skillTemplate.getAid());
+		// 如果是陷阱，则创建一个陷阱
+		if (aSkillType == ASkillType.Trap) {
+			createTrap(attHero, skill, skillLocation, effectId);
+		}
+	}
+	
+	public void stopReSing(Long accountId, Integer templateId) {
+		Hero currHero = Model.getInstance().heroMap.get(accountId);
+		ASkillType aSkillType = ASkillType.getType(templateId);
+		AssertUtil.asWarnTrue(aSkillType != null, "终止的必须是光法或努努大的模板Id");
+		// 光法或努努大JobKey
+		JobKey jobKey = JobScheduler.generaterReSingJobKey(currHero, aSkillType);
+		// 如果有光法，则更新光法触发时间为当前时间
+		if (JobScheduler.isHasJob(jobKey)) {
+			JobScheduler.updateJob(jobKey);
+		}
+	}
+	
+	public void toss(Long accountId, long targetAccountId, byte idx, Location skillLocation) {
+		Hero attHero = Model.getInstance().heroMap.get(accountId);
+		AssertUtil.asWarnTrue(attHero != null, "玩家不存在");
+		Skill skill = skillService.getSkill(attHero, idx);
+		Hero targetHero = Model.getInstance().heroMap.get(targetAccountId);
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		AssertUtil.asWarnTrue(skillTemplate.getAid() == TemplateConstant.template_id_12200, "使用的技能不是小小丢");
+		int cdt = skillTemplate.getCdt() - (int)(skillTemplate.getCdt() * attHero.roleTemplate.getCdtime() / 100.0f);
+		long time = TimeHelper.getMilliTime();
+		AssertUtil.asWarnTrue(time >= skill.triggertime + cdt, "技能CD时间未到");
+		AssertUtil.asWarnTrue(time >= attHero.publicSkillTime + skillTemplate.getPubcdt(), "该技能公共CD未冷却");
+		// 查找附近最近的玩家作为目标
+		Hero tossHero = VisionAdapter.getMinDistanceHero(attHero.visionHeroList, attHero.location);
+		if (tossHero != null) {
+			float d = GameUtil.distance(attHero.location, tossHero.location);
+			// 如果最近的目标大于2米，则目标作废
+			if (d > 2) {
+				tossHero = null;
+			}
+		}
+		// 如果抓到一个玩家，则把他丢到空中
+		if (tossHero != null) {
+			tossHero.location.y = 100;
+			Room room = Model.getInstance().roomMap.get(attHero.roomId);
+			// 生成特效Id
+			int effectId = room.effectId.incrementAndGet();
+			// 创建一个job，时间到了就把抓到的玩家落到目标地，被砸中的玩家掉血
+			JobScheduler.createTossJob(room, attHero, tossHero, targetHero, skillTemplate, effectId, skillLocation);
+		}
+	}
+	
+	public void leblanc(Long accountId, byte idx, Location targetLocation) {
+		Hero attHero = Model.getInstance().heroMap.get(accountId);
+		AssertUtil.asWarnTrue(attHero != null, "玩家不存在");
+		Room room = Model.getInstance().roomMap.get(attHero.roomId);
+		Skill skill = skillService.getSkill(attHero, idx);
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		AssertUtil.asWarnTrue(skillTemplate.getAid() == TemplateConstant.template_id_12400, "使用的技能不是乐芙兰");
+		int cdt = skillTemplate.getCdt() - (int)(skillTemplate.getCdt() * attHero.roleTemplate.getCdtime() / 100.0f);
+		long time = TimeHelper.getMilliTime();
+		AssertUtil.asWarnTrue(time >= skill.triggertime + cdt, "技能CD时间未到");
+		AssertUtil.asWarnTrue(time >= attHero.publicSkillTime + skillTemplate.getPubcdt(), "该技能公共CD未冷却");
+		JobScheduler.createLeblancMoveJob(room, attHero, skillTemplate, targetLocation);
+		JobKey jobKey = JobScheduler.generaterLeblancWaitJobKey(attHero);
+		if (JobScheduler.isHasJob(jobKey)) {
+			JobDetail jobDetail = JobScheduler.getJobDetail(jobKey);
+			JobDataMap jobDataMap = jobDetail.getJobDataMap();
+			Location sourceLocation = (Location)jobDataMap.get("sourceLocation");
+			attHero.location = sourceLocation;
+			JobScheduler.stopJob(jobKey);
+		} else {
+			JobScheduler.createLeblancMoveJob(room, attHero, skillTemplate, targetLocation);
+		}
+	}
+	
+	public void yasuo(Long accountId, byte idx, Location direction) {
+		Hero attHero = Model.getInstance().heroMap.get(accountId);
+		Location srcLocation = attHero.location;
+		Skill skill = skillService.getSkill(attHero, idx);
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		AssertUtil.asWarnTrue(skillTemplate.getAid() == TemplateConstant.template_id_12500, "使用的技能不是亚索");
+		int cdt = skillTemplate.getCdt() - (int)(skillTemplate.getCdt() * attHero.roleTemplate.getCdtime() / 100.0f);
+		long time = TimeHelper.getMilliTime();
+		AssertUtil.asWarnTrue(time >= skill.triggertime + cdt, "技能CD时间未到");
+		AssertUtil.asWarnTrue(time >= attHero.publicSkillTime + skillTemplate.getPubcdt(), "该技能公共CD未冷却");
+		Room room = Model.getInstance().roomMap.get(attHero.roomId);
+		double radians = direction.z / direction.x;
+		float addx = (float)(skillTemplate.getLen() * Math.cos(radians));
+		float addz = (float)(skillTemplate.getLen() * Math.sin(radians));
+		Location targetLocation = new Location(srcLocation.x + addx, srcLocation.y, srcLocation.z + addz);
+		// 生成特效Id
+		int effectId = room.effectId.incrementAndGet();
+		JobKey jobKey = JobScheduler.generaterYasuoWaitJobKey(attHero);
+		// 是否第二段
+		boolean isSecondStage = JobScheduler.isHasJob(jobKey);
+		// 如果是第二段，则关闭waitJob
+		if (isSecondStage) {
+			JobScheduler.stopJob(jobKey);
+		}
+		JobScheduler.createYasuoMoveJob(room, attHero, targetLocation, effectId, skillTemplate, skill);
+		// 如果是第二段，则开始CD时间
+		if (isSecondStage) {
+			time = TimeHelper.getMilliTime();
+			skill.triggertime = time;
+			attHero.publicSkillTime = time;
+		}
+	}
+	
+	public void swordsman(Long accountId, byte idx, Location targetLocation) {
+		Hero attHero = Model.getInstance().heroMap.get(accountId);
+		AssertUtil.asWarnTrue(attHero != null, "玩家不存在");
+		Skill skill = skillService.getSkill(attHero, idx);
+		long time = TimeHelper.getMilliTime();
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		int cdt = skillTemplate.getCdt() - (int)(skillTemplate.getCdt() * attHero.roleTemplate.getCdtime() / 100.0f);
+		AssertUtil.asWarnTrue(time >= skill.triggertime + cdt, "技能CD时间未到");
+		AssertUtil.asWarnTrue(time >= attHero.publicSkillTime + skillTemplate.getPubcdt(), "该技能公共CD未冷却");
+		Room room = Model.getInstance().roomMap.get(attHero.roomId);
+		AssertUtil.asWarnTrue(skillTemplate.getAid() == TemplateConstant.template_id_12600, "使用的技能不是剑魔");
+		int effectId = room.effectId.incrementAndGet();
+		// 玩家向空中跃起
+		JobScheduler.createSwordsmanJumpJob(room, attHero, targetLocation, effectId, skillTemplate);
+		time = TimeHelper.getMilliTime();
+		skill.triggertime = time;
+		attHero.publicSkillTime = time;
+	}
+	
+	public void startPantheon(Long accountId, byte idx, Location targetLocation) {
+		Hero attHero = Model.getInstance().heroMap.get(accountId);
+		AssertUtil.asWarnTrue(attHero != null, "玩家不存在");
+		Skill skill = skillService.getSkill(attHero, idx);
+		long time = TimeHelper.getMilliTime();
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		int cdt = skillTemplate.getCdt() - (int)(skillTemplate.getCdt() * attHero.roleTemplate.getCdtime() / 100.0f);
+		AssertUtil.asWarnTrue(time >= skill.triggertime + cdt, "技能CD时间未到");
+		AssertUtil.asWarnTrue(time >= attHero.publicSkillTime + skillTemplate.getPubcdt(), "该技能公共CD未冷却");
+		Room room = Model.getInstance().roomMap.get(attHero.roomId);
+		AssertUtil.asWarnTrue(skillTemplate.getAid() == TemplateConstant.template_id_12700, "使用的技能不是潘森");
+		int effectId = room.effectId.incrementAndGet();
+		// 玩家向空中跃起
+		JobScheduler.createPantheonSavingJob(room, attHero, targetLocation, effectId, skillTemplate);
+		time = TimeHelper.getMilliTime();
+		skill.triggertime = time;
+		attHero.publicSkillTime = time;
+	}
+	
+	public void stopPantheon(Long accountId, byte idx) {
+		Hero attHero = Model.getInstance().heroMap.get(accountId);
+		AssertUtil.asWarnTrue(attHero != null, "玩家不存在");
+		Skill skill = skillService.getSkill(attHero, idx);
+		long time = TimeHelper.getMilliTime();
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		int cdt = skillTemplate.getCdt() - (int)(skillTemplate.getCdt() * attHero.roleTemplate.getCdtime() / 100.0f);
+		AssertUtil.asWarnTrue(time >= skill.triggertime + cdt, "技能CD时间未到");
+		AssertUtil.asWarnTrue(time >= attHero.publicSkillTime + skillTemplate.getPubcdt(), "该技能公共CD未冷却");
+		AssertUtil.asWarnTrue(skillTemplate.getAid() == TemplateConstant.template_id_12700, "使用的技能不是潘森");
+		// 生成潘森蓄力JobKey
+		JobKey jobKey = JobScheduler.generaterPantheonSavingJobKey(attHero);
+		if (JobScheduler.isHasJob(jobKey)) {
+			JobScheduler.stopJob(jobKey);
+		}
+		time = TimeHelper.getMilliTime();
+		skill.triggertime = time;
+		attHero.publicSkillTime = time;
+	}
+	
+	public void rammus(Long accountId, byte idx) {
+		Hero attHero = Model.getInstance().heroMap.get(accountId);
+		AssertUtil.asWarnTrue(attHero != null, "玩家不存在");
+		Skill skill = skillService.getSkill(attHero, idx);
+		long time = TimeHelper.getMilliTime();
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		int cdt = skillTemplate.getCdt() - (int)(skillTemplate.getCdt() * attHero.roleTemplate.getCdtime() / 100.0f);
+		AssertUtil.asWarnTrue(time >= skill.triggertime + cdt, "技能CD时间未到");
+		AssertUtil.asWarnTrue(time >= attHero.publicSkillTime + skillTemplate.getPubcdt(), "该技能公共CD未冷却");
+		AssertUtil.asWarnTrue(skillTemplate.getAid() == TemplateConstant.template_id_12800, "使用的技能不是龙龟");
+		// 生成龙龟JobKey
+		JobScheduler.createRammusJob(attHero, skill);
+		time = TimeHelper.getMilliTime();
+		attHero.publicSkillTime = time;
+	}
+	
+	public void handleHeroHurt(Location skillLocation, Hero attHero, Room room
+			, Hero beAttHero, SkillTemplate skillTemplate, int effectId, Integer aCycleHurt) {
+		handleHeroHurt(skillLocation, attHero, room, beAttHero, skillTemplate, effectId, aCycleHurt, 0, null);
+	}
+	
+	public void handleHeroHurt(Location skillLocation, Hero attHero, Room room
+			, Hero beAttHero, SkillTemplate skillTemplate, int effectId, Integer aCycleHurt, SingTime singTime) {
+		handleHeroHurt(skillLocation, attHero, room, beAttHero, skillTemplate, effectId, aCycleHurt, singTime.getValue(), null);
+	}
+	
+	public void handleHeroHurt(Location skillLocation, Hero attHero, Room room
+			, Hero beAttHero, SkillTemplate skillTemplate, int effectId, Integer aCycleHurt, LeesinStage leesinStage) {
+		handleHeroHurt(skillLocation, attHero, room, beAttHero, skillTemplate, effectId, aCycleHurt, 0, leesinStage);
+	}
+	
+	public void handleHeroHurt(Location skillLocation, Hero attHero, Room room
+			, Hero beAttHero, SkillTemplate skillTemplate, int effectId, Integer aCycleHurt, int realSingTime, LeesinStage leesinStage) {
+		Long milliTime = TimeHelper.getMilliTime();
+		ASkillType aSkillType = ASkillType.getType(skillTemplate.getAid());
+		BSkillType bSkillType = BSkillType.getType(skillTemplate.getBid());
+		// 技能装备伤害加成
+		int hurt = aCycleHurt + attHero.addHurt;
+		// 如果没有中链接，则计算A技能伤害
+		if (!JobScheduler.isHasJob(beAttHero, BSkillType.Link)) {
+			// 如果对应的B技能不是治疗、回复、护盾、链接，则计算A技能所造成的伤害
+			if (bSkillType != BSkillType.Treat && bSkillType != BSkillType.Recovers && bSkillType != BSkillType.Shield && bSkillType != BSkillType.Link) {
+				if (attHero.accountId != beAttHero.accountId) {
+					if (hurt > 0) {
+						// 如果当前技能是角色技能，则计算加成
+						if (skillTemplate.getId().intValue() == attHero.roleTemplate.getSkillId()) {
+							hurt += (int)(attHero.roleTemplate.getSkillAdd() / 100.0f * aCycleHurt);
+						}
+						// 随机计算暴击率
+						if (RandomHelper.getRandom(1, 100) <= attHero.roleTemplate.getCrit()) {
+							// 暴击增加50%伤害
+							hurt += aCycleHurt * 0.5f;
+						}
+						// 计算韧性（降低暴击伤害百分比）
+						if (beAttHero.roleTemplate.getTough() > 0) {
+							hurt -= aCycleHurt * (attHero.roleTemplate.getTough() / 100.0f);
+						}
+						if (aSkillType == ASkillType.Kotl) {
+							hurt = (int)(realSingTime * 1.0f / skillTemplate.getSingtime() * aCycleHurt); 
+							calcHurt(attHero, room, hurt, milliTime, beAttHero, true, skillTemplate);
+						} else {
+							calcHurt(attHero, room, hurt, milliTime, beAttHero, true, skillTemplate);
+						}
+					}
+				}
+			}
+		}
+		if (leesinStage == LeesinStage.First) {
+			// 创建一个job，被标记的敌人在4秒内，且两人距离不超过弹道技能射程范围内，再次点击技能玩家会冲向目标造成第二段伤害，伤害值为敌方已损失血量的8%
+			JobKey jobKey = JobScheduler.generaterLeesinWaitJobKey(attHero);
+			JobScheduler.createLeesinWaitJob(jobKey, attHero, skillTemplate, beAttHero, 4000);
+		}
+		BSkillType skillBType = BSkillType.getType(skillTemplate.getBid());
+		// 如果被攻击的玩家没有魔免或B技能是狂暴，则计算B技能伤害
+		if (!JobScheduler.isHasJob(beAttHero, SelfSkill.Unmagic) || skillBType == BSkillType.Val) {
+			if (leesinStage == LeesinStage.Second) {
+				int bCycleHurt = (int)(skillTemplate.getHurt() * skillTemplate.getValue() / 100.0f);
+				// 创建Buff
+				createBuff(room, attHero, beAttHero, skillTemplate, skillBType, skillLocation, milliTime, effectId, bCycleHurt);
+			} else if (leesinStage == null) {
+				// 如果对应的B技能不是治疗、回复、护盾、链接，则计算A技能所造成的伤害
+				if (bSkillType != BSkillType.Treat && bSkillType != BSkillType.Recovers && bSkillType != BSkillType.Shield && bSkillType != BSkillType.Link) {
+					// 计算非周期性deBuff造成的伤害
+					callAperiodicDeBuffHurt(room, attHero, beAttHero, skillTemplate, milliTime, effectId, hurt);
+				}
+				// B技能的周期伤害
+				int bCycleHurt = (int)(hurt * skillTemplate.getValue() / 100.0f);
+				if (aSkillType == ASkillType.Kotl) {
+					bCycleHurt = (int)(realSingTime * 1.0f / skillTemplate.getSingtime() * bCycleHurt); 
+				}
+				// 创建Buff
+				createBuff(room, attHero, beAttHero, skillTemplate, skillBType, skillLocation, milliTime, effectId, bCycleHurt);
+			}
+		}
+	}
+	
+	/**
+	 * 计算缩圈的圆心点和半径
+	 */
+	public void shrinkCircle(Room room) {
+		if (room.circle != null) {
+			Circle circle = room.circle;
+			CircleTemplate circleTemplate = CircleConfig.map.get(circle.templateId);
+			circle.age += CircleConstant.interval;
+//			logger.info("circle.age=" + circle.age + " locationList.size=" + circle.locationList.size());
+			long stay = circleTemplate.getStay() * 1000;
+			// 如果大于停留时间，则缩圈，否则不缩圈
+			if (circle.age > stay) {
+				circle.radius -= circle.shrinkSpeed;
+				if (circle.radius < 0) {
+					circle.radius = 0f;
+				}
+				// 第n次缩圈
+				int shrinkIndex = (int)((circle.age - stay) / CircleConstant.interval);
+				// 根据毒圈年龄和之前计算出来的圆心点列表，设置圆心点
+				if (shrinkIndex < circle.locationList.size()) {
+					circle.center = circle.locationList.get(shrinkIndex);
+				}
+			}
+		}
+	}
+
+	/**
+	 * 缩圈计算玩家伤害
+	 */
+	public void circleHurt(Room room) {
+//		logger.info(String.format("毒圈伤害计算开始 center(%s, %s) radius=%s", room.circle.center.x, room.circle.center.z, room.circle.radius));
+		Circle circle = room.circle;
+		CircleTemplate circleTemplate = CircleConfig.map.get(circle.templateId);
+		int time = TimeHelper.getTime();
+		Set<Long> heroIdSet = room.heroMap.keySet();
+		int hurt = HeroConstant.fullhp * circleTemplate.getHurt() / 100;
+		// 每隔n毫秒扣血量
+		hurt = hurt * CircleConstant.interval / 1000;
+		if (hurt > 0) {
+			for (Iterator<Long> it = heroIdSet.iterator(); it.hasNext();) {
+				Long heroId = it.next();
+				Hero hero = room.heroMap.get(heroId);
+				if (hero != null) {
+					float distance = GameUtil.distance(hero.location, room.circle.center);
+					// 如果在圈外，则计算伤害
+					if (distance >= circle.radius + 3.5f) {
+						GameUtil.beHurt(hero, hurt);
+						logger.info(String.format("玩家%d(%s, %s) 圆心(%s, %s) radius=%s distance=%s hurt=%s hp=%s"
+								, hero.accountId, hero.location.x, hero.location.z, circle.center.x, circle.center.z, circle.radius, distance, hurt, hero.hp));
+						if (!hero.isNpc) {
+							MsgHelper.broadcastCircleHurt(room, hero);
+						}
+						if (hero.hp <= 0) {
+							logger.info(String.format("玩家 %d 阵亡", hero.accountId));
+							deathHero(room, hero, null, time);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	public List<Book> deathHero(Room room, Hero dead, Hero killer, int time) {
+		// 视野内玩家的视野列表删除这个玩家的引用
+		dead.visionHeroList.forEach(r -> r.visionHeroList.remove(dead));
+		List<Hero> observerList = MsgHelper.broadcastDeath(room, dead);
+		if (killer != null) {
+			dead.killerMemberId = killer.accountId;
+			if (!killer.isNpc) {
+				killer.killCount++;
+			}
+		}
+		dead.killTime = time;
+		dead.isLoadFinish = false;
+		room.heroMap.remove(dead.accountId);
+		if (!dead.isNpc) {
+			Model.getInstance().heroMap.remove(dead.accountId);
+			Account account = Model.getInstance().accountMap.get(dead.accountId);
+	    	// 设置玩家为结算状态
+	    	account.setState(AccountState.Settlement.getIndex());
+	    	accountDao.update(account);
+		}
+		// 停止更新视野内技能书的任务
+		String jobName = String.format("%s_%s_updateVisionBook", dead.roomId, dead.accountId);
+		String groupName = String.format("%s_%s", dead.roomId, dead.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		JobScheduler.stopJob(jobKey);
+		// 停止更新视野内宝箱的任务
+		jobName = String.format("%s_%s_updateVisionBox", dead.roomId, dead.accountId);
+		groupName = String.format("%s_%s", dead.roomId, dead.accountId);
+		jobKey = new JobKey(jobName, groupName);
+		JobScheduler.stopJob(jobKey);
+		// 停止更新视野内玩家的任务
+		jobName = String.format("%s_%s_updateVisionHero", dead.roomId, dead.accountId);
+		groupName = String.format("%s_%s", dead.roomId, dead.accountId);
+		jobKey = new JobKey(jobName, groupName);
+		JobScheduler.stopJob(jobKey);
+		// 把阵亡玩家列入死亡名单
+		room.deadMap.put(dead.accountId, dead);
+		// 计算名次
+		callRank(room, dead);
+    	stopRoomJob(room, true, 2);
+    	return outBooks(room, dead, observerList);
+	}
+	
+	private void callRank(Room room, Hero currHero) {
+		// 是否还有队友存活
+		boolean isHasTeammate = room.heroMap.values().stream().anyMatch(r -> r.teamId == currHero.teamId && r.accountId != currHero.accountId);
+		// 如果没有队友存活，则计算名次
+		if (!isHasTeammate) {
+			int teamCount = room.heroMap.values().stream().collect(Collectors.groupingBy(Hero::getTeamId)).size();
+			int rank = teamCount + 1;
+			// 更新该队所有队友名次
+			room.deadMap.values().stream().filter(r -> r.teamId == currHero.teamId).forEach(r -> r.rank = rank);
+		}
+	}
+
+	/**
+	 * 停止该房间所有任务
+	 * @param room
+	 * @param isDeath	玩家是阵亡的还是退出游戏的
+	 * @param loopCount		执行该方法的次数
+	 */
+	public void stopRoomJob(Room room, boolean isDeath, int loopCount) {
+		int teamCount = room.heroMap.values().stream().collect(Collectors.groupingBy(Hero::getTeamId)).size();
+		if (teamCount == 0) {
+			roomService.recoveryRoom(room);
+		} else if (teamCount == 1) {
+			boolean isHasRealHero = room.heroMap.values().stream().anyMatch(r -> !r.isNpc && !r.isExit);
+			// 如果房间真实玩家，则倒计时回收房间
+			if (isHasRealHero) {
+				Optional<Hero> op = room.heroMap.values().stream().findFirst();
+				if (op.isPresent()) {
+					Hero hero = op.get();
+					// 设置活着的玩家为第一名
+					room.heroMap.values().stream().filter(r -> r.teamId == hero.teamId).forEach(r -> r.rank = 1);
+					// 设置与第一名同队的阵亡的的玩家为第一名
+					room.deadMap.values().stream().filter(r -> r.teamId == hero.teamId).forEach(r -> r.rank = 1);
+				}
+				// TODO 给客户端发送消息，通知结束游戏
+			}
+			roomService.recoveryRoom(room);
+		} else if (teamCount > 1) {
+			boolean isHasRealHero = room.heroMap.values().stream().anyMatch(r -> !r.isNpc && !r.isExit);
+			// 如果房间没有真实玩家，则倒计时回收房间
+			if (!isHasRealHero) {
+				// 如果最后的玩家是阵亡的，则倒计时回收房间，否则等待一段时间回收房间
+				if (loopCount > 0) {
+					int countdown = isDeath ? RoomConstant.death_recovery_room_count_down : RoomConstant.exit_recovery_room_count_down;
+					String jobName = UuidHelper.getUuid();
+					String jobGroup = UuidHelper.getUuid();
+					JobKey jobKey = new JobKey(jobName, jobGroup);
+					JobScheduler.createStopRoomJob(jobKey, stopAutoMoveHandle, room, isDeath, loopCount, countdown * 1000);
+				} else {
+					roomService.recoveryRoom(room);
+				}
+			}
+		}
+	}
+	
+	/**爆技能书*/
+	private List<Book> outBooks(Room room, Hero currHero, List<Hero> observerList) {
+		List<Skill> skillList = new ArrayList<Skill>(currHero.skillBag);
+		Arrays.stream(currHero.skillPanelA).filter(s -> s != null).forEach(s -> skillList.add(s));
+		Arrays.stream(currHero.skillPanelB).filter(s -> s != null).forEach(s -> skillList.add(s));
+		List<Book> bookList = new ArrayList<Book>();
+		// 如果阵亡玩家身上没有技能，则随机一个技能书
+		if (CollectionUtils.isEmpty(skillList)) {
+			int index = RandomHelper.getRandom(0, TemplateConstant.templateIdAList.size() - 1);
+			int templateId = TemplateConstant.templateIdAList.get(index);
+			Book book = GameUtil.generateBook(currHero.location, templateId, room);
+			bookList.add(book);
+			room.bookMap.put(book.code, book);
+		} else {
+			for (Skill skill : skillList) {
+				Book book = GameUtil.generateBook(currHero.location, skill.templateId, room);
+				bookList.add(book);
+				room.bookMap.put(book.code, book);
+			}
+		}
+		logger.info(String.format("outBooks bookList.size=%s", bookList.size()));
+		bookList.stream().forEach(b -> {logger.info(String.format("book.code=%s templateId=%s location=%s roomId=%s", b.code, b.templateId, b.location, room.id));});
+		// 广播生成技能书
+		MsgHelper.broadcastGenerateBook(room, observerList, bookList);
+		// 让视野内玩家能看到这本书
+		for (Hero hero : observerList) {
+			for (Book book : bookList) {
+				if (!hero.visionBookList.contains(book)) {
+					hero.visionBookList.add(book);
+				}
+			}
+		}
+    	return bookList;
+	}
+
+	public void startSelfSkill(Long accountId, byte selfSkillIdx) {
+		Hero hero = Model.getInstance().heroMap.get(accountId);
+		switch (SelfSkill.getType(selfSkillIdx)) {
+		case Treat:
+			startSelfTreat(hero);
+			break;
+		case Unmatch:
+			startSelfUnmatch(hero);
+			break;
+		case Unmagic:
+			startSelfUnmagic(hero);
+			break;
+		case Run:
+			startSelfRun(hero);
+			break;
+		default:
+			break;
+		}
+	}
+	
+	public void startSelfTreat(Hero currHero) {
+		int time = TimeHelper.getTime();
+		// 自身治疗触发时间，用来计算CD冷却时间
+		AssertUtil.asWarnTrue(time > currHero.selfTreaTime + HeroConstant.self_private_cd, "自身治疗CD时间没到");
+		AssertUtil.asWarnTrue(time > currHero.publicSelfTime + HeroConstant.self_public_cd, "自身技能公共CD时间没到");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Silent), "沉默时不能自身治疗");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Dizzy), "晕眩时不能自身治疗");
+		// 设置自身治疗时间
+		currHero.selfTreaTime = time;
+		// 设置公共CD时间
+		currHero.publicSelfTime = time;
+		// 实现创建Job接口
+		HandleHelper.CreateSelfSkillHandle createSelfTreatJobFunc = (hero, selfTreat) -> {
+	        JobManager.createSelfTreatJob(hero, selfTreat);
+		};
+		// 创建自身治疗任务
+		JobScheduler.createSelfJob(createSelfTreatJobFunc, currHero, SelfSkill.Treat);
+	}
+
+	private void startSelfUnmatch(Hero currHero) {
+		int time = TimeHelper.getTime();
+		AssertUtil.asWarnTrue(time > currHero.selfUnmatchTime + HeroConstant.self_private_cd, "无敌CD时间没到");
+		AssertUtil.asWarnTrue(time > currHero.publicSelfTime + HeroConstant.self_public_cd, "自身技能公共CD时间没到");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Near), "靠近时不能无敌");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Push), "远离时不能无敌");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Silent), "沉默时不能无敌");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Dizzy), "晕眩时不能无敌");
+		// 如果有剧毒deBuff，则停止
+		JobKey dotJobKey = JobScheduler.generateJobKey(currHero, BSkillType.Dot);
+		if (JobScheduler.isHasJob(dotJobKey)) {
+			JobScheduler.stopJob(dotJobKey);
+			MsgHelper.broadcastDotStatus(currHero, BuffStatus.Stop);
+			currHero.buffDot = new Buff();
+		}
+		// 如果有伤害加深deBuff，则停止
+		JobKey hurtJobKey = JobScheduler.generateJobKey(currHero, BSkillType.Hurt);
+		if (JobScheduler.isHasJob(hurtJobKey)) {
+			JobScheduler.stopJob(hurtJobKey);
+			MsgHelper.broadcastHurtStatus(currHero, BuffStatus.Stop);
+			currHero.buffHurt = new Buff();
+		}
+		// 如果有狂暴deBuff，则停止
+		JobKey valJobKey = JobScheduler.generateJobKey(currHero, BSkillType.Val);
+		if (JobScheduler.isHasJob(valJobKey)) {
+			JobScheduler.stopJob(valJobKey);
+			currHero.buffVal = new Buff();
+		}
+		// 实现创建Job接口
+		HandleHelper.CreateSelfSkillHandle createSelfTreatJobFunc = (hero, selfSkill) -> {
+	        JobManager.createSelfUnmatchJob(hero, selfSkill);
+		};
+		// 创建无敌任务
+		JobScheduler.createSelfJob(createSelfTreatJobFunc, currHero, SelfSkill.Unmatch);
+		// 设置无敌时间
+		currHero.selfUnmatchTime = time;
+		// 设置公共CD时间
+		currHero.publicSelfTime = time;
+	}
+	
+	private void startSelfUnmagic(Hero currHero) {
+		int time = TimeHelper.getTime();
+		AssertUtil.asWarnTrue(time > currHero.selfUnmagicTime + HeroConstant.self_private_cd, "魔免CD时间没到");
+		AssertUtil.asWarnTrue(time > currHero.publicSelfTime + HeroConstant.self_public_cd, "自身技能公共CD时间没到");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Silent), "沉默时不能魔免");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Dizzy), "晕眩时不能魔免");
+		// 如果有减速deBuff，则停止
+		JobKey speedJobKey = JobScheduler.generateJobKey(currHero, BSkillType.Speed);
+		if (JobScheduler.isHasJob(speedJobKey)) {
+			JobScheduler.stopJob(speedJobKey);
+			SkillTemplate skillTemplate = SkillConfig.map.get(currHero.buffSpeed.skillTemplateId);
+			currHero.speed += HeroConstant.default_speed * skillTemplate.getValue() / 100.0f;
+			logger.info(String.format("玩家%s魔免减速speed=%s", currHero.accountId, currHero.speed));
+			MsgHelper.broadcastSpeedStatus(currHero, BuffStatus.Stop);
+			currHero.buffSpeed = new Buff();
+		}
+		// 如果有剧毒deBuff，则停止
+		JobKey dotJobKey = JobScheduler.generateJobKey(currHero, BSkillType.Dot);
+		if (JobScheduler.isHasJob(dotJobKey)) {
+			JobScheduler.stopJob(dotJobKey);
+			MsgHelper.broadcastDotStatus(currHero, BuffStatus.Stop);
+			currHero.buffDot = new Buff();
+		}
+		// 如果有伤害加深deBuff，则停止
+		JobKey hurtJobKey = JobScheduler.generateJobKey(currHero, BSkillType.Hurt);
+		if (JobScheduler.isHasJob(hurtJobKey)) {
+			JobScheduler.stopJob(hurtJobKey);
+			MsgHelper.broadcastHurtStatus(currHero, BuffStatus.Stop);
+			currHero.buffHurt = new Buff();
+		}
+		// 如果有致盲deBuff，则停止
+		JobKey blindJobKey = JobScheduler.generateJobKey(currHero, BSkillType.Blind);
+		if (JobScheduler.isHasJob(blindJobKey)) {
+			JobScheduler.stopJob(blindJobKey);
+			MsgHelper.broadcastBlindStatus(currHero, BuffStatus.Stop);
+			currHero.buffBlind = new Buff();
+		}
+		// 如果有狂暴deBuff，则停止
+		JobKey valJobKey = JobScheduler.generateJobKey(currHero, BSkillType.Val);
+		if (JobScheduler.isHasJob(valJobKey)) {
+			JobScheduler.stopJob(valJobKey);
+			currHero.buffVal = new Buff();
+		}
+		// 如果有禁步deBuff，则停止
+		JobKey stopJobKey = JobScheduler.generateJobKey(currHero, BSkillType.Stop);
+		if (JobScheduler.isHasJob(stopJobKey)) {
+			JobScheduler.stopJob(stopJobKey);
+			MsgHelper.broadcastStopStatus(currHero, BuffStatus.Stop);
+			currHero.buffStop = new Buff();
+		}
+		// 如果有链接deBuff，则停止
+		JobKey linkJobKey = JobScheduler.generateJobKey(currHero, BSkillType.Link);
+		if (JobScheduler.isHasJob(linkJobKey)) {
+			JobScheduler.stopJob(linkJobKey);
+			MsgHelper.broadcastLinkStatus(currHero, BuffStatus.Stop);
+			Room room = Model.getInstance().roomMap.get(currHero.roomId);
+			Link link = room.linkMap.get(currHero.buffLink.effectId);
+			// 如果链接里只有一个玩家，则解除链接
+			if (link != null && link.heroList.size() == 1) {
+				Hero linkedHero = link.heroList.get(0);
+				JobKey jobKey = JobScheduler.generateJobKey(linkedHero, BSkillType.Link);
+				JobScheduler.stopJob(jobKey);
+				MsgHelper.broadcastLinkStatus(linkedHero, BuffStatus.Stop);
+			}
+			currHero.buffLink = new Buff();
+		}
+		// 实现创建Job接口
+		HandleHelper.CreateSelfSkillHandle createSelfTreatJobFunc = (hero, selfSkill) -> {
+	        JobManager.createSelfUnmagicJob(hero, selfSkill);
+		};
+		// 创建魔免任务
+		JobScheduler.createSelfJob(createSelfTreatJobFunc, currHero, SelfSkill.Unmagic);
+		currHero.selfUnmagicTime = time;
+		currHero.publicSelfTime = time;
+	}
+	
+	public void startSelfFlash(Long accountId, Location location) {
+		Hero currHero = Model.getInstance().heroMap.get(accountId);
+		// 检查是否已经携带技能
+		boolean isHas = currHero.selfSkill[SelfSkill.Flash.getIndex()] == 1;
+		AssertUtil.asWarnTrue(isHas, "没有携带闪现技能");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Near), "靠近时不能闪现");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Push), "远离时不能闪现");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Silent), "沉默时不能闪现");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Stop), "禁步时不能闪现");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Dizzy), "晕眩时不能闪现");
+		float distance = GameUtil.distance(location, currHero.location);
+		int time = TimeHelper.getTime();
+		AssertUtil.asWarnTrue(distance <= HeroConstant.self_flash_distance, "超过闪现距离上限");
+		AssertUtil.asWarnTrue(time > currHero.selfFlashTime + HeroConstant.self_private_cd, "闪现CD时间没到");
+		AssertUtil.asWarnTrue(time > currHero.publicSelfTime + HeroConstant.self_public_cd, "自身技能公共CD时间没到");
+		currHero.location = location;
+		currHero.selfFlashTime = time;
+		currHero.publicSelfTime = time;
+		MsgHelper.broadcastSelfFlash(location, currHero);
+	}
+
+	private void startSelfRun(Hero currHero) {
+		// 检查是否已经携带技能
+		boolean isHas = currHero.selfSkill[SelfSkill.Run.getIndex()] == 1;
+		AssertUtil.asWarnTrue(isHas, "没有携带疾跑技能");
+		int time = TimeHelper.getTime();
+		AssertUtil.asWarnTrue(time > currHero.selfRunTime + HeroConstant.self_private_cd, "疾跑CD时间没到");
+		AssertUtil.asWarnTrue(time > currHero.publicSelfTime + HeroConstant.self_public_cd, "自身技能公共CD时间没到");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Near), "靠近时不能疾跑");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Push), "远离时不能疾跑");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Silent), "沉默时不能疾跑");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Stop), "禁步时不能疾跑");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Dizzy), "晕眩时不能闪现");
+		// 实现创建Job接口
+		HandleHelper.CreateSelfSkillHandle createSelfTreatJobFunc = (hero, selfSkill) -> {
+	        JobManager.createSelfRunJob(hero, selfSkill);
+		};
+		// 创建自身疾跑任务
+		JobScheduler.createSelfJob(createSelfTreatJobFunc, currHero, SelfSkill.Run);
+		currHero.selfRunTime = time;
+		currHero.publicSelfTime = time;
+	}
+
+	public void broadcastSkillEffect(Long attId, byte idx, Vector3 skillDirection, Location skillLocation) {
+		Hero attHero = Model.getInstance().heroMap.get(attId);
+		AssertUtil.asWarnTrue(attHero != null, "玩家不存在");
+		Skill skill = skillService.getSkill(attHero, idx);
+		AssertUtil.asWarnTrue(skill != null, "技能为空");
+		Room room = Model.getInstance().roomMap.get(attHero.roomId);
+		// 生成特效Id
+		int effectId = room.effectId.incrementAndGet();
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		// 生成瞎子技能JobKey
+		JobKey leesinWaitJobKey = JobScheduler.generaterLeesinWaitJobKey(attHero);
+		// 生成三连斩技能JobKey
+		JobKey threeChopsJobKey = JobScheduler.generaterThreeChopsJobKey(attHero);
+		// 如果有瞎子技能，则执行瞎子的第二段攻击，否则CD验证，并技能攻击
+		if (JobScheduler.isHasJob(leesinWaitJobKey)) {
+			JobDetail jobDetail = JobScheduler.getJobDetail(leesinWaitJobKey);
+			if (jobDetail != null) {
+				physicService.leesinBump(attHero, jobDetail, skillTemplate);
+			}
+		} else if (JobScheduler.isHasJob(threeChopsJobKey)) {
+			JobDetail jobDetail = JobScheduler.getJobDetail(leesinWaitJobKey);
+			if (jobDetail != null) {
+				runChop(jobDetail, effectId);
+			}
+		} else {
+			long time = TimeHelper.getMilliTime();
+			int cdt = skillTemplate.getCdt() - (int)(skillTemplate.getCdt() * attHero.roleTemplate.getCdtime() / 100.0f);
+			AssertUtil.asWarnTrue(time >= skill.triggertime + cdt, "技能CD时间未到");
+			// 技能攻击
+			attackSkill(attHero, skill, idx, skillDirection, skillLocation, effectId);
+		}
+	}
+	
+	private void runChop(JobDetail jobDetail, int effectId) {
+		
+	}
+
+	public void createTrap(Hero attHero, Skill skill, Location skillLocation, int effectId) {
+		AssertUtil.asWarnTrue(skill != null, "技能不存在");
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		ASkillType aSkillType = ASkillType.getType(skillTemplate.getAid());
+		// 如果是陷阱，则创建一个陷阱
+		AssertUtil.asWarnTrue(aSkillType == ASkillType.Trap, "只有陷阱才能设置");
+		Trap trap = new Trap();
+		trap.hero = attHero;
+		trap.location = new Location(skillLocation.x, 0f, skillLocation.z);
+		trap.templateId = skillTemplate.getId();
+		trap.effectiveTime = TimeHelper.getMilliTime() + skillTemplate.getDlytime();
+		trap.effectId = effectId;
+		logger.info(String.format("玩家%d设置陷阱effectId=%d", attHero.accountId, trap.effectId));
+		Room room = Model.getInstance().roomMap.get(attHero.roomId);
+		room.trapList.add(trap);
+		logger.info(String.format("room.trapList.size=%d Mvtime=%s", room.trapList.size(), skillTemplate.getMvtime()));
+		// 设置作废陷阱Job
+		JobScheduler.createCancelTrapJob(room, attHero, trap, trap.effectId, skillTemplate.getMvtime());
+	}
+	
+	/**
+	 * 引爆陷阱
+	 * @param touchHero 引爆陷阱的玩家
+	 */
+	public void onTouchTrap(Room room, Hero touchHero) {
+		
+	}
+	
+	public void stealHp(Hero attHero, int hurt, Hero beAttHero, SkillTemplate skillTemplate) {
+		if (hurt > 0) {
+			if (attHero.roleTemplate.getId() == skillTemplate.getId().intValue()) {
+				int addHp = (int)(hurt * attHero.roleTemplate.getStealhp());
+				// 治疗补血
+				attHero.hp += addHp;
+				if (attHero.hp > attHero.maxhp) {
+					attHero.hp = attHero.maxhp;
+				}
+				// 广播受到回复加血
+				MsgHelper.broadcastHurt(attHero, attHero);
+			}
+		}
+	}
+
+	public List<Book> calcHurt(Hero attHero, Room room, int hurt, long milliTime, Hero beAttHero, boolean isUseShield, SkillTemplate skillTemplate) {
+		int time = TimeHelper.getTime();
+		int oldHp = beAttHero.hp;
+		GameUtil.beHurt(beAttHero, hurt, milliTime, isUseShield);
+		int realHurt = oldHp - beAttHero.hp;
+		if (realHurt > 0) {
+			if (!attHero.isNpc) {
+				attHero.attackHp += realHurt;
+			}
+			if (beAttHero.isNpc) {
+				Target target = new Target(attHero);
+				beAttHero.reTarget = target;
+				logger.info(String.format("beAttHero.id=%s beAttHero.reTarget=%s", beAttHero.accountId, beAttHero.reTarget));
+			} else {
+				beAttHero.beAttackHp += realHurt;
+			}
+		}
+		// 广播伤害
+		MsgHelper.broadcastHurt(attHero, beAttHero);
+		if (beAttHero.hp <= 0) {
+			logger.info(String.format("玩家 %d 阵亡", beAttHero.accountId));
+			List<Book> bookList = deathHero(room, beAttHero, attHero, time);
+			if (CollectionUtils.isNotEmpty(bookList)) {
+				Book book = bookList.get(RandomHelper.getRandom(0, bookList.size() - 1));
+				attHero.target = new Target(book);
+			}
+			return bookList;
+		} else {
+			return null;
+		}
+	}
+	
+	private void createBuff(Room room, Hero attHero, Hero beAttHero, SkillTemplate skillTemplate, BSkillType skillBType
+			, Location skillLocation, Long milliTime, int effectId, Integer cycleHurt) {
+		
+		JobKey kotlJobKey = JobScheduler.generaterReSingJobKey(attHero, ASkillType.Kotl);
+		if (beAttHero.hp > 0) {
+			if (skillBType != null) {
+				switch (skillBType) {
+				case Speed:		// 减速
+					JobScheduler.createSpeedJob(attHero, beAttHero, effectId, skillTemplate);
+					break;
+				case Dot:		// 剧毒
+					JobScheduler.createDotJob(room, attHero, beAttHero, effectId, skillTemplate, cycleHurt);
+					break;
+				case Near:		// 靠近
+					JobScheduler.createNearJob(room, attHero, beAttHero, effectId, skillTemplate, skillLocation);
+					JobScheduler.stopSing(beAttHero);
+					// 如果有光法，则更新光法触发时间为当前时间
+					if (JobScheduler.isHasJob(kotlJobKey)) {
+						JobScheduler.updateJob(kotlJobKey);
+					}
+					break;
+				case Push:		// 远离
+					JobScheduler.createPushJob(room, attHero, beAttHero, effectId, skillTemplate, skillLocation);
+					JobScheduler.stopSing(beAttHero);
+					// 如果有光法，则更新光法触发时间为当前时间
+					if (JobScheduler.isHasJob(kotlJobKey)) {
+						JobScheduler.updateJob(kotlJobKey);
+					}
+					break;
+				case Hurt:		// 伤害加深，buff生效范围内，所有伤害加深
+					JobScheduler.createHurtJob(attHero, beAttHero, effectId, skillTemplate);
+					break;
+				case Blind:		// 致盲
+					JobScheduler.createBlindJob(attHero, beAttHero, effectId, skillTemplate);
+					break;
+				case Val:		// 狂暴，只提高本次攻击伤害
+					JobScheduler.createValJob(room, attHero, beAttHero, effectId, skillTemplate, cycleHurt);
+					break;
+				case Silent:	// 沉默
+					JobScheduler.createSilentJob(attHero, beAttHero, effectId, skillTemplate);
+					JobScheduler.stopSing(beAttHero);
+					// 如果有光法，则更新光法触发时间为当前时间
+					if (JobScheduler.isHasJob(kotlJobKey)) {
+						JobScheduler.updateJob(kotlJobKey);
+					}
+					break;
+				case Stop:		// 禁步
+					JobScheduler.createStopJob(attHero, beAttHero, effectId, skillTemplate);
+					break;
+				case Dizzy:		// 晕眩
+					JobScheduler.createDizzyJob(attHero, beAttHero, effectId, skillTemplate);
+					JobScheduler.stopSing(beAttHero);
+					// 如果有光法，则更新光法触发时间为当前时间
+					if (JobScheduler.isHasJob(kotlJobKey)) {
+						JobScheduler.updateJob(kotlJobKey);
+					}
+					break;
+				case Treat:		// 治疗
+					JobScheduler.createTreatJob(attHero, beAttHero, effectId, skillTemplate);
+					break;
+				case Recovers:	// 回复
+					JobScheduler.createRecoversJob(attHero, room, beAttHero, effectId, skillTemplate, cycleHurt);
+					break;
+				case Shield:	// 护盾
+					JobScheduler.createShieldJob(attHero, beAttHero, effectId, skillTemplate);
+					break;
+				case Clear:		// 净化
+					JobScheduler.createClearJob(attHero, beAttHero, effectId, skillTemplate);
+					break;
+				case Link:		// 链接
+					JobScheduler.createLinkJob(room, attHero, beAttHero, effectId, skillTemplate);
+					break;
+				}
+			}
+		}
+	}
+	
+	public void shareHurt(Room room, Hero attHero, Hero beAttHero, SkillTemplate skillTemplate,
+			Long milliTime, int effectId, int hurt, Link link) {
+		// 每个人分摊的伤害
+		int everyoneHurt = (int)(hurt * 1.00f / link.heroList.size());
+		if (everyoneHurt > 0) {
+			SkillTemplate linkSkillTemplate = SkillConfig.map.get(link.skillTemplateId);
+			// 是否断链
+			boolean isDisconnect = false;
+			for (Hero hero : link.heroList) {
+				if (hero.hp > 0) {
+					// 累计链接的伤害
+					link.sumHurt += everyoneHurt;
+					// 如果总伤害超过断链上限，则链接全部断链，并通知客户端
+					if (link.sumHurt >= linkSkillTemplate.getValue()) {
+						room.linkMap.remove(effectId);
+						logger.info(String.format("linkMap.remove effectId=%s", effectId));
+						// 循环通知客户端链接断开
+						for (Hero linkedHero : link.heroList) {
+							JobKey jobKey = JobScheduler.generateJobKey(linkedHero, BSkillType.Link);
+							JobScheduler.stopJob(jobKey);
+							MsgHelper.broadcastLinkStatus(linkedHero, BuffStatus.Stop);
+						}
+						// 如果链接里面只有一个玩家，则解除链接
+						if (link.heroList.size() == 1) {
+							Hero linkedHero = link.heroList.get(0);
+							JobKey jobKey = JobScheduler.generateJobKey(linkedHero, BSkillType.Link);
+							JobScheduler.stopJob(jobKey);
+							MsgHelper.broadcastLinkStatus(linkedHero, BuffStatus.Stop);
+						}
+						isDisconnect = true;
+						break;
+					}
+					logger.info(String.format("玩家%s为玩家%s分摊%s的伤害", hero.accountId, beAttHero.accountId, everyoneHurt));
+					calcHurt(beAttHero, room, everyoneHurt, milliTime, hero, false, skillTemplate);
+					if (hero.hp <= 0) {
+						logger.info(String.format("玩家 %d 阵亡", hero.accountId));
+						deathHero(room, hero, attHero, TimeHelper.getTime());
+					}
+				}
+			}
+			// 如果断链，则通知客户端
+			if (isDisconnect) {
+				MsgHelper.broadcastLinkStatus(beAttHero, BuffStatus.Stop);
+			}
+		}
+	}
+	
+	public void beMove(Room room, Hero beAttHero, float speed, Location location) {
+		beAttHero.location.x = location.x;
+		beAttHero.location.z = location.z;
+		logger.info(String.format("被迁移的玩家位置 beAttHero.id=%s location=%s", beAttHero.accountId, beAttHero.location));
+		MsgHelper.broadcastBeMove(beAttHero, speed);
+		// 检测陷阱攻击
+		onTouchTrap(room, beAttHero);
+	}
+
+	/**
+	 * 计算非周期性伤害
+	 * 周期性伤害指的是持续循环伤害，例如剧毒，每周期时间内掉血；非周期性伤害是持续一段时间和其他技能搭配才能产生伤害，例如伤害加深，链接
+	 */
+	private void callAperiodicDeBuffHurt(Room room, Hero attHero, Hero beAttHero, SkillTemplate skillTemplate, Long milliTime, int effectId, int aCycleHurt) {
+		// 如果有链接deBuff，则分摊，否则直接计算伤害
+		if (JobScheduler.isHasJob(beAttHero, BSkillType.Link)) {
+			// 如果不是本次产生的技能，则分摊伤害
+			if (effectId != beAttHero.buffLink.effectId) {
+				int hurt = skillTemplate.getHurt();
+				// 如果有伤害加深deBuff，则累加伤害
+				if (JobScheduler.isHasJob(beAttHero, BSkillType.Hurt)) {
+					// 如果不是本次产生的技能，则计算伤害加深产生的伤害
+					if (effectId != beAttHero.buffHurt.effectId) {
+						SkillTemplate hurtSkillTemplate = SkillConfig.map.get(beAttHero.buffHurt.skillTemplateId);
+						// 计算伤害
+						hurt += skillTemplate.getHurt() * hurtSkillTemplate.getValue() / 100.0f;
+					}
+				}
+				Link link = room.linkMap.get(beAttHero.buffLink.effectId);
+				if (link != null) {
+					shareHurt(room, attHero, beAttHero, skillTemplate, milliTime, effectId, hurt, link);
+				}
+			}
+		} else {
+			// 如果有伤害加深deBuff，则累加伤害
+			if (JobScheduler.isHasJob(beAttHero, BSkillType.Hurt)) {
+				// 如果不是本次产生的技能，则计算伤害加深产生的伤害
+				if (effectId != beAttHero.buffHurt.effectId) {
+					SkillTemplate hurtSkillTemplate = SkillConfig.map.get(beAttHero.buffHurt.skillTemplateId);
+					// 计算伤害
+					float hurt = aCycleHurt * hurtSkillTemplate.getValue() / 100.00f;
+					calcHurt(attHero, room, (int)hurt, milliTime, beAttHero, true, skillTemplate);
+				}
+			}
+		}
+	}
+	
+	public void move(Long accountId, float direction) {
+		Hero currHero = Model.getInstance().heroMap.get(accountId);
+		AssertUtil.asWarnTrue(currHero != null, "角色不存在");
+		// 如果释放的技能不是普通技能，则判断是否处于沉默状态
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Stop), "玩家已经处于禁步状态");
+		AssertUtil.asWarnTrue(!JobScheduler.isHasJob(currHero, BSkillType.Silent), "玩家已经处于沉默禁步状态");
+		if (JobScheduler.isHasJob(currHero, BSkillType.Near) || JobScheduler.isHasJob(currHero, BSkillType.Push)) {
+			logger.info(String.format("玩家%s处于牵引或抗拒状态时不能移动", currHero.accountId));
+			return;
+		}
+		Room room = Model.getInstance().roomMap.get(currHero.roomId);
+		synchronized (currHero) {
+			float distance = currHero.speed * HeroConstant.client_move_interval_time;
+			float x = (float)(currHero.location.x + Math.sin(direction) * distance);
+			float z = (float)(currHero.location.z + Math.cos(direction) * distance);
+			// 如果是可以行走的路，则移动
+//			if (MapConfig.isRoad(x, z)) {
+				currHero.location.x = x;
+				currHero.location.z = z;
+//			}
+			logger.info(String.format("玩家%s速度%s 移动到%s", currHero.accountId, currHero.speed, currHero.location));
+			currHero.direction = direction;
+			int vision = AppConfig.isDebug() ? HeroConstant.debug_vision : HeroConstant.not_debug_vision;
+			List<Hero> observerList = VisionAdapter.getVisionHeroList(currHero, room.heroMap, vision);
+			observerList.add(currHero);
+			// 广播我的位置
+			MsgHelper.broadcastLocation(currHero, observerList);
+			// 检测陷阱攻击
+			onTouchTrap(room, currHero);
+			// 如果不是NPC，则累加移动路程
+			if (!currHero.isNpc) {
+				currHero.moveDistance += distance;
+			}
+		}
+		JobScheduler.stopSing(currHero);
+		// 光法JobKey
+		JobKey kotlJobKey = JobScheduler.generaterReSingJobKey(currHero, ASkillType.Kotl);
+		// 如果有光法，则更新光法触发时间为当前时间
+		if (JobScheduler.isHasJob(kotlJobKey)) {
+			JobScheduler.updateJob(kotlJobKey);
+		}
+		// 努努大JobKey
+		JobKey lldJobKey = JobScheduler.generaterReSingJobKey(currHero, ASkillType.Lld);
+		// 如果有努努大，则更新光法触发时间为当前时间
+		if (JobScheduler.isHasJob(lldJobKey)) {
+			JobScheduler.updateJob(lldJobKey);
+		}
+		// 如果玩家已经开启龙龟技能，则计算碰撞
+		if (currHero.rammusStatus == TaskStatus.On) {
+			onRammusRun(room, currHero);
+		}
+	}
+	
+	private void onRammusRun(Room room, Hero attHero) {
+		
+	}
+
+	public void stopMove(Long accountId, float direction) {
+		Hero currHero = Model.getInstance().heroMap.get(accountId);
+		AssertUtil.asWarnTrue(currHero != null, "角色不存在");
+		currHero.direction = direction;
+		MsgHelper.broadcastStopMove(currHero);
+	}
+
+	public void updateVisionHero(Room room, Hero currHero) {
+		int vision = currHero.isNpc ? HeroConstant.not_debug_vision : HeroConstant.debug_vision;
+		JobScheduler.createUpdateVisionHeroJob(room, currHero, vision);
+	}
+	
+	public void updateVisionBox(Room room, Hero currHero) {
+		int vision = currHero.isNpc ? HeroConstant.not_debug_vision : HeroConstant.debug_vision;
+		JobScheduler.createUpdateVisionBoxJob(room, currHero, vision);
+	}
+	
+	public void updateVisionBook(Room room, Hero currHero) {
+		int vision = currHero.isNpc ? HeroConstant.not_debug_vision : HeroConstant.debug_vision;
+		JobScheduler.createUpdateVisionBookJob(room, currHero, vision);
+	}
+	
+	
+}

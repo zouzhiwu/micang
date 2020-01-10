@@ -1,0 +1,14 @@
+package com.game.dao;
+
+import com.game.entity.UserMail;
+
+public interface UserMailDao {
+	
+	public void create(UserMail userMail);
+	
+	public void update(UserMail userMail);
+
+	public UserMail findById(Long id);
+	
+	public void delById(Long id);
+}

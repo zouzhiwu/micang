@@ -1,0 +1,151 @@
+package com.game.config;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.enumerate.ArmsType;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.WayType;
+import com.common.template.NodeTemplate;
+import com.game.util.PoiUtil;
+
+public class NodeConfig {
+	private final static String sheetName = "Node";
+	private static final Logger logger = LoggerFactory.getLogger(NodeConfig.class);
+	public static Map<Integer, NodeTemplate> map = new HashMap<Integer, NodeTemplate>();
+	/**蓝方上路水晶*/
+	public static NodeTemplate buleTopCrystalNodeTemplate;
+	/**蓝方中路水晶*/
+	public static NodeTemplate buleMidCrystalNodeTemplate;
+	/**蓝方下路水晶*/
+	public static NodeTemplate buleDownCrystalNodeTemplate;
+	/**红方上路水晶*/
+	public static NodeTemplate redTopCrystalNodeTemplate;
+	/**红方中路水晶*/
+	public static NodeTemplate redMidCrystalNodeTemplate;
+	/**红方下路水晶*/
+	public static NodeTemplate redDownCrystalNodeTemplate;
+	
+	/**蓝方小兵*/
+	public static NodeTemplate buleSoldierNodeTemplate;
+	/**蓝方炮兵*/
+	public static NodeTemplate buleArtilleryNodeTemplate;
+	/**蓝方超级兵*/
+	public static NodeTemplate buleSuperNodeTemplate;
+	/**红方小兵*/
+	public static NodeTemplate redSoldierNodeTemplate;
+	/**红方炮兵*/
+	public static NodeTemplate redArtilleryNodeTemplate;
+	/**红方超级兵*/
+	public static NodeTemplate redSuperNodeTemplate;
+	
+	public static void init() {
+		InputStream in = NodeConfig.class.getClassLoader().getResourceAsStream("template/Node.xlsx");
+		try {
+			XSSFWorkbook workBook = new XSSFWorkbook(in);
+			XSSFSheet sheet = workBook.getSheet(sheetName);
+			int i = 0;
+			for (Iterator<Row> iterator = sheet.rowIterator(); iterator.hasNext();) {
+				XSSFRow row = (XSSFRow) iterator.next();
+				if (i >= 2) {
+					int index = 0;
+					Integer id = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					String name = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					String icon = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					Byte type = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte campType = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte wayType = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte armsType = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte skillTarget = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Integer hp = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer pa = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer ma = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer pd = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer md = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Short ats = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short aoe = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short vr = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short mvs = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short gold = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short exp = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Integer growthHP = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthPA = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthMA = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthGold = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthExp = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer buff = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Short borthTime = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Integer growthInterval = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer endGrowthTime = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Byte borthCount = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte triggerType = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Short loopTime = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short reviveTime = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short x = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short y = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					
+					NodeTemplate template = new NodeTemplate(id, name, icon, type, campType, wayType, armsType, skillTarget, hp, pa, ma
+							, pd, md, ats, aoe, vr, mvs, gold, exp, growthHP, growthPA, growthMA, growthGold, growthExp, buff, borthTime
+							, growthInterval, endGrowthTime, borthCount, triggerType, loopTime, reviveTime, x, y);
+					map.put(template.getId(), template);
+					
+					if (template.getType() == NodeType.Crystal.getIndex()) {
+						if (template.getCampType() == CampType.Blue.getIndex()) {
+							if (template.getWayType() == WayType.Top.getIndex()) {
+								buleTopCrystalNodeTemplate = template;
+							} else if (template.getWayType() == WayType.Mid.getIndex()) {
+								buleMidCrystalNodeTemplate = template;
+							} else if (template.getWayType() == WayType.Down.getIndex()) {
+								buleDownCrystalNodeTemplate = template;
+							}
+						} else if (template.getCampType() == CampType.Red.getIndex()) {
+							if (template.getWayType() == WayType.Top.getIndex()) {
+								redTopCrystalNodeTemplate = template;
+							} else if (template.getWayType() == WayType.Mid.getIndex()) {
+								redMidCrystalNodeTemplate = template;
+							} else if (template.getWayType() == WayType.Down.getIndex()) {
+								redDownCrystalNodeTemplate = template;
+							}
+						}
+					} else if (template.getType() == NodeType.Troops.getIndex()) {
+						if (template.getCampType() == CampType.Blue.getIndex()) {
+							if (template.getArmsType() == ArmsType.Soldier.getIndex()) {
+								buleSoldierNodeTemplate = template;
+							} else if (template.getArmsType() == ArmsType.Artillery.getIndex()) {
+								buleSoldierNodeTemplate = template;
+							} else if (template.getArmsType() == ArmsType.Super.getIndex()) {
+								buleSoldierNodeTemplate = template;
+							}
+						} else if (template.getCampType() == CampType.Red.getIndex()) {
+							if (template.getArmsType() == ArmsType.Soldier.getIndex()) {
+								redSoldierNodeTemplate = template;
+							} else if (template.getArmsType() == ArmsType.Artillery.getIndex()) {
+								redSoldierNodeTemplate = template;
+							} else if (template.getArmsType() == ArmsType.Super.getIndex()) {
+								redSoldierNodeTemplate = template;
+							}
+						}
+					}
+				}
+				i++;
+			}
+			logger.info(String.format("node config loaded record %d", i - 2));
+			workBook.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+}

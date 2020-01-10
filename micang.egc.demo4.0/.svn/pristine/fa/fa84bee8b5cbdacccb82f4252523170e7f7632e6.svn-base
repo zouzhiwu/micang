@@ -1,0 +1,16 @@
+package com.game.dao;
+
+import java.util.List;
+
+import com.common.entity.AuctionRecord;
+
+public interface AuctionRecordDao {
+
+	public void create(AuctionRecord auctionRecord);
+	
+	public AuctionRecord getById(Long id);
+	
+	public List<AuctionRecord> getByAuctionId(Long auctionId);
+	
+	public void delete(Long id);
+}

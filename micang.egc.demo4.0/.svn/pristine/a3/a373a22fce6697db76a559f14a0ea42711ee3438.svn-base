@@ -1,0 +1,25 @@
+package com.game.job.trade;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class InviteTradeJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(InviteTradeJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Long accountId = jobDataMap.getLong("accountId");
+		Long beAccountId = jobDataMap.getLong("beAccountId");
+		logger.info(String.format("玩家%s申请与玩家%s交易job结束", accountId, beAccountId));
+	}
+}

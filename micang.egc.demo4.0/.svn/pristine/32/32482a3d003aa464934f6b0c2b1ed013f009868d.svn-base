@@ -1,0 +1,22 @@
+package com.game.dao;
+
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
+import com.common.entity.Goods;
+
+public interface GoodsDao {
+
+	public void create(Goods guild);
+
+	public void update(Goods guild);
+	
+	public void delete(Integer id);
+	
+	public Goods getById(Integer id);
+	
+	public List<Goods> getList(@Param("tabIndex")Integer tabIndex, @Param("recordIndex")Integer recordIndex, @Param("pageSize")Integer pageSize);
+	
+	public Integer getRecordCount(Integer pageIndex);
+}

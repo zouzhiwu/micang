@@ -1,0 +1,51 @@
+package com.game.action;
+
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Action;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.game.common.MessageCode;
+import com.game.config.ParameterConfig;
+import com.game.entity.Gacha;
+import com.game.entity.Item;
+import com.game.service.GachaService;
+
+import io.netty.channel.Channel;
+
+@Service
+public class GachaAction {
+	
+	private static final Logger logger = LoggerFactory.getLogger(GachaAction.class);
+	
+	@Autowired
+	private GachaService gachaService;
+	
+	
+	@Action(MessageCode.msg_item_Gacha)
+	public void itemGacha(Message message, Channel channel) throws Exception {
+		Byte typeId = message.getByte();
+		logger.info(String.format("RESV %d from accountId=%s typeId=%d", message.getMsgcd(), message.getAccountId(), typeId));
+		gachaService.gachaMain(message.getAccountId(), typeId, message);
+	}
+	
+	@Action(MessageCode.msg_item_GachaInfo)
+	public void itemGachaInfo(Message message, Channel channel) throws Exception {
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		Gacha gachaInfo = gachaService.getGachaInfo(message.getAccountId());
+		Map<Integer, Item> itemMap = gachaService.freeSecurities(gachaInfo.getAccountId());
+		Message msg = new Message(message);
+		msg.putByte(gachaInfo.getFreeGold().byteValue());
+		msg.putByte(gachaInfo.getFreeDiamond().byteValue());
+		msg.putInt(itemMap.get(ParameterConfig.map.get(290).getValue().intValue()).getCount());
+		msg.putByte(gachaInfo.getHalfDiamond().byteValue());
+		msg.putByte(gachaInfo.getTenGold().byteValue());
+		msg.putLong(gachaInfo.getLastGoldNow());
+		MsgSender.sendMsg(msg);
+	}
+}

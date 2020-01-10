@@ -1,0 +1,113 @@
+package com.game.action;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Action;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.Member;
+import com.game.common.MessageCode;
+import com.game.service.MemberService;
+
+import io.netty.channel.Channel;
+
+@Service
+public class MemberAction {
+
+	private static final Logger logger = LoggerFactory.getLogger(MemberAction.class);
+
+	@Autowired
+	private MemberService meberService;
+	
+	@Action(MessageCode.msg_member_list)
+	public void getByList(Message message, Channel channel) throws Exception {
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		Long accountId = message.getAccountId();
+		List<Member> memberList = meberService.getByList(accountId);
+		Message msg = new Message(message);
+		msg.putShort(memberList.size());
+		for (int i = 0; i < memberList.size(); i++) {
+			Member member = memberList.get(i);
+			msg.putLong(member.getId());
+			msg.putInt(member.getTemplateId());
+			msg.putByte(member.getStar());
+			msg.putInt(member.getExp());
+			msg.putByte(member.getStage());
+			msg.putInt(member.getLikeHero1());
+			msg.putInt(member.getLikeVal1());
+			msg.putInt(member.getLikeHero2());
+			msg.putInt(member.getLikeVal2());
+			msg.putInt(member.getLikeHero3());
+			msg.putInt(member.getLikeVal3());
+			msg.putInt(member.getLikeHero4());
+			msg.putInt(member.getLikeVal4());
+			msg.putInt(member.getLikeHero5());
+			msg.putInt(member.getLikeVal5());
+			msg.putInt(member.getMasterSkill());
+			msg.putInt(member.getMaskerSkillLv());
+			msg.putInt(member.getSlaveSkill1());
+			msg.putInt(member.getSlaveSkillLv1());
+			msg.putInt(member.getSlaveSkill2());
+			msg.putInt(member.getSlaveSkillLv2());
+			msg.putInt(member.getSlaveSkill3());
+			msg.putInt(member.getSlaveSkillLv3());
+			msg.putInt(member.getCharacter1());
+			msg.putInt(member.getCharacterVal1());
+			msg.putInt(member.getCharacter2());
+			msg.putInt(member.getCharacterVal2());
+			msg.putInt(member.getCharacter3());
+			msg.putInt(member.getCharacterVal3());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	@Action(MessageCode.msg_member_add)
+	public void add(Message message, Channel channel) throws Exception {
+		byte currencyType = message.getByte();
+		byte count = message.getByte();
+		logger.info(String.format("RESV %d from accountId=%s currencyType=%d count=%d", message.getMsgcd(), message.getAccountId(), currencyType, count));
+		Member member = meberService.add(message.getAccountId(), currencyType, count);
+		Message msg = new Message(message);
+		msg.putLong(member.getId());
+		msg.putInt(member.getTemplateId());
+		msg.putByte(member.getStar());
+		msg.putInt(member.getExp());
+		msg.putByte(member.getStage());
+		msg.putInt(member.getLikeHero1());
+		msg.putInt(member.getLikeVal1());
+		msg.putInt(member.getLikeHero2());
+		msg.putInt(member.getLikeVal2());
+		msg.putInt(member.getLikeHero3());
+		msg.putInt(member.getLikeVal3());
+		msg.putInt(member.getLikeHero4());
+		msg.putInt(member.getLikeVal4());
+		msg.putInt(member.getLikeHero5());
+		msg.putInt(member.getLikeVal5());
+		msg.putInt(member.getMasterSkill());
+		msg.putInt(member.getMaskerSkillLv());
+		msg.putInt(member.getSlaveSkill1());
+		msg.putInt(member.getSlaveSkillLv1());
+		msg.putInt(member.getSlaveSkill2());
+		msg.putInt(member.getSlaveSkillLv2());
+		msg.putInt(member.getSlaveSkill3());
+		msg.putInt(member.getSlaveSkillLv3());
+		msg.putInt(member.getCharacter1());
+		msg.putInt(member.getCharacterVal1());
+		msg.putInt(member.getCharacter2());
+		msg.putInt(member.getCharacterVal2());
+		msg.putInt(member.getCharacter3());
+		msg.putInt(member.getCharacterVal3());
+		MsgSender.sendMsg(msg);
+	}
+
+	@Action(MessageCode.msg_member_set_default)
+	public void setDefault(Message message, Channel channel) {
+		Long memberId = message.getLong();
+		meberService.setDefault(message.getAccountId(), memberId);
+	}
+}

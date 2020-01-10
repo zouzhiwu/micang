@@ -1,0 +1,70 @@
+package com.game.node;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.constant.ParameterConstant;
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.MonsterType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.common.template.ParameterTemplate;
+import com.game.config.ParameterConfig;
+import com.game.entity.Room;
+import com.game.job.FightJobManager;
+
+public class MonsterNode extends AbsUpdateVisionNode {
+	private static final Logger logger = LoggerFactory.getLogger(MonsterNode.class);
+	public MonsterNode(short nodeId, Room room, NodeTemplate template) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = CampType.Neutral;
+		setEnemyCamp();
+		this.hp = template.getHp();
+		this.pa = template.getPa();
+		this.ma = template.getMa();
+		logger.info(String.format("创建 nodeId=%d %s %s", nodeId, this.selfCamp.getName(), this.getNodeType().getName()));
+	}
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Monster;
+	}
+	
+	public void revive() {
+		MonsterType monsterType = MonsterType.getType(template.getMonsterType());
+		if (monsterType == MonsterType.SamllDragon) {
+			ParameterTemplate reviveSmallDragonTemplate = ParameterConfig.map.get(ParameterConstant.small_dragon_revive_time_id);
+			int reviveSmallDragonTime = reviveSmallDragonTemplate.getValue();
+			// 复活小龙Job
+			FightJobManager.createMonsterJob(room, reviveSmallDragonTime, template);
+		} else if (monsterType == MonsterType.BigDragon) {
+			ParameterTemplate reviveBigDragonTemplate = ParameterConfig.map.get(ParameterConstant.big_dragon_revive_time_id);
+			int reviveBigDragonTime = reviveBigDragonTemplate.getValue();
+			// 复活大龙Job
+			FightJobManager.createMonsterJob(room, reviveBigDragonTime, template);
+		} else {
+			ParameterTemplate reviveMonsterTemplate = ParameterConfig.map.get(ParameterConstant.monster_revive_time_id);
+			int reviveMonsterTime = reviveMonsterTemplate.getValue();
+			// 复活野怪Job
+			FightJobManager.createMonsterJob(room, reviveMonsterTime, template);
+		}
+	}
+	
+	@Override
+	public void die(BaseNode attackNode) {
+		logger.info(String.format("nodeId=%d 阵亡", this.nodeId));
+		stopAttack();
+		stopUpdateVision();
+		refreshAllNodeVision();
+		revive();
+	}
+
+	@Override
+	public void setTarget(Target target) {
+		this.target = target;
+	}
+}

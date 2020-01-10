@@ -1,0 +1,41 @@
+package com.game.util;
+
+import com.common.template.MemberTemplate;
+
+public class PowerUtils {
+	
+	/**
+	 *  当前属性值= Dynamic + （队员等级-1） * GrowthDynamic
+	 * 战斗力=(活力+操作+专注)* 5+(坚韧+潜能)*3
+	 * 
+	 * 
+	 * @return
+	 */
+	public static int getPower(MemberTemplate memberTemplate, int lv) {
+		
+		
+		int dynamic = memberTemplate.getDynamic();
+		int growthDynamic = memberTemplate.getGrowthDynamic();
+		int operation = memberTemplate.getOperation();
+		int growthOperation = memberTemplate.getGrowthOperation();
+		int focus = memberTemplate.getFocus();
+		int growthFocus = memberTemplate.getGrowthFocus();
+		int tough = memberTemplate.getTough();
+		int growthTough = memberTemplate.getGrowthTough();
+		int potential = memberTemplate.getPotential();
+		int growthPotential = memberTemplate.getGrowthPotential();
+		
+		int power = ((dynamic + (lv-1)*growthDynamic) + (operation + (lv-1)*growthOperation) + (focus + (lv-1)*growthFocus)) * 5
+						+((tough+(lv-1)*growthTough) + (potential + (lv-1) * growthPotential)) * 3;
+		
+		return power;
+	}
+	
+	
+	
+	
+	
+	
+	
+
+}

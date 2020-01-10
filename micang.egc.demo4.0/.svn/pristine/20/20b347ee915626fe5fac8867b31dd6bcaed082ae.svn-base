@@ -1,0 +1,27 @@
+package com.game.node;
+
+import com.common.entity.Location;
+import com.common.enumerate.TargetType;
+
+public class Target {
+	public Target(BaseNode node) {
+        this.type = TargetType.Node;
+        this.node = node;
+        this.location = null;
+    }
+	
+	public Target(Location location) {
+        this.type = TargetType.Location;
+        this.node = null;
+        this.location = location;
+    }
+
+    /**目标类型**/
+    public TargetType type;
+
+    /**目标节点**/
+    public BaseNode node;
+    
+    /**目标位置，PNG地图坐标**/
+    public Location location;
+}

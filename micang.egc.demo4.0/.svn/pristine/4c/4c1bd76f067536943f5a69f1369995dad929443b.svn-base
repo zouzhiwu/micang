@@ -1,0 +1,76 @@
+package com.game.util;
+
+import com.common.entity.Lvxp;
+import com.common.template.LevelTemplate;
+import com.game.config.LevelConfig;
+
+public class LevelUtil {
+	
+	public static Lvxp getLvxp(Byte type, int exp) {
+		
+//	  int lv = 0; 
+//	  int xp = exp; 
+//	  for (int i = 1; i < LevelConfig.map.size(); i++) {
+//		  LevelTemplate levelTemplate = LevelConfig.map.get(i); 
+//		  lv++; 
+//		  if (xp <levelTemplate.getExp()) {
+//			  break; 
+//		  } else {
+//			  xp -= levelTemplate.getExp(); 
+//		  } 
+//	  }
+//	  Lvxp lvxp = new Lvxp(); 
+//	  lvxp.setLevel(lv); 
+//	  lvxp.setXp(xp); 
+//	  return lvxp;
+	  
+	  
+	  
+	  int lv = 0; 
+	  int xp = exp; 
+	  for (int i = 1; i < LevelConfig.map.size(); i++) {
+		  LevelTemplate levelTemplate = LevelConfig.map.get(i); 
+		  
+		  if(type.byteValue()==levelTemplate.getType().byteValue()) {
+			  lv++;
+			  if (xp <levelTemplate.getExp() || levelTemplate.getExp()==0) {
+				  break; 
+			  } else {
+				  xp -= levelTemplate.getExp(); 
+			  } 
+		  }
+
+	  }
+	  Lvxp lvxp = new Lvxp(); 
+	  lvxp.setLevel(lv); 
+	  lvxp.setXp(xp); 
+	  return lvxp;
+	}
+	
+	
+	public static int getMaxLv(Byte type) {
+		
+		int maxLv = 0;
+		for (int i = 1; i < LevelConfig.map.size(); i++) {
+		  LevelTemplate levelTemplate = LevelConfig.map.get(i); 
+		  if(type.byteValue()==levelTemplate.getType().byteValue()) {
+			  
+			  maxLv++;
+			  if (levelTemplate.getExp()==0) {
+				  break;
+			  }
+		  }
+		}
+		
+		
+		return maxLv;
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+}

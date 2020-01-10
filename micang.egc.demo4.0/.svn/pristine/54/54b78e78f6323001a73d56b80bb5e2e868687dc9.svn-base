@@ -1,0 +1,102 @@
+package com.game.factory;
+
+import javax.servlet.http.HttpServlet;
+
+import org.apache.catalina.LifecycleException;
+import org.apache.catalina.core.StandardContext;
+import org.apache.catalina.startup.Tomcat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.factory.SocketServer;
+import com.game.config.AppConfig;
+import com.game.config.HeroConfig;
+import com.game.config.MemberConfig;
+import com.game.job.JobManager;
+import com.game.listener.Listener;
+import com.game.servlet.GameServlet;
+import com.game.util.SensitiveChar;
+
+@Service
+public class Server {
+	private static final Logger logger = LoggerFactory.getLogger(Server.class);
+	
+	@Autowired
+	private Listener listener;
+	@Autowired
+	private GameServlet gameServlet;
+	
+	public static Integer gamePort = 9002;
+	public static Integer webPort = 9003;
+	
+	private static Server server = null;
+	
+	static {
+		server = (Server)Context.getBean("server");
+	}
+	
+	public void gameServer(int gameServerPort) {
+		logger.info(String.format("environment profile: %s", AppConfig.getProfile()));
+		logger.info("sensitiveChar service stating...");
+		SensitiveChar.init();
+		logger.info("sensitiveChar service finish.");
+		logger.info("socket server stating...");
+		listener.scan();
+		logger.info("scan finish.");
+		AppConfig.init();
+		JobManager.init();
+		logger.info("job manager finish.");
+		MemberConfig.init();
+		logger.info("member config finish.");
+		HeroConfig.init();
+		logger.info("hero config finish.");
+		SocketServer.start(gameServerPort, listener);
+		logger.info(String.format("tcp socket service port=%d finish.", gameServerPort));
+		logger.info("Game server finish.");
+		// 清除因上次非法关机在数据库Member表留下的ip地址和port号
+		logger.info("kick role finish.");
+	}
+	
+	public static void main(String[] args) {
+		String strGamePort = args[0];
+		String strWebPort = args[1];
+		Integer gamePort = Integer.parseInt(strGamePort);
+		Integer webPort = Integer.parseInt(strWebPort);
+		Server.gamePort = gamePort;
+		Server.webPort = webPort;
+		server.gameServer(gamePort);
+		server.webServer(webPort);
+	}
+	
+	public void webServer(int webServerPort) {
+		Tomcat tomcat = new Tomcat();
+		tomcat.setPort(webServerPort);
+		tomcat.getHost().setAutoDeploy(false);
+		addServlet(tomcat, "/game", "/action.do", "gameServlet", gameServlet);
+		try {
+			tomcat.start();
+			// 异步接受请求
+			logger.info(String.format("web server port=%d finish.", webServerPort));
+			tomcat.getServer().await();
+		} catch (LifecycleException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+	private void addServlet(Tomcat tomcat, String path, String actionName, String servletName, HttpServlet servlet) {
+		StandardContext context = new StandardContext();
+		context.setPath(path);
+		context.addLifecycleListener(new Tomcat.FixContextListener());
+		tomcat.getHost().addChild(context);
+		// 创建Servlet
+		tomcat.addServlet(path, servletName, servlet);
+		// servlet映射
+		context.addServletMappingDecoded(actionName, servletName);
+	}
+	
+	public static void stop() {
+		System.exit(0);
+	}
+}

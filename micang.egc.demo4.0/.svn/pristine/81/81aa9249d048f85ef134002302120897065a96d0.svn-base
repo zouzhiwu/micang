@@ -1,0 +1,28 @@
+package com.game.dao;
+
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
+import com.common.entity.Mail;
+
+public interface MailDao {
+
+	public void create(Mail mail);
+
+	public void update(Mail mail);
+	
+	public void delete(Long id);
+	
+	public Mail getById(Long id);
+	
+	public void setOpened(Long id);
+	
+	public List<Mail> getList(@Param("accountId")Long accountId, @Param("recordIndex")Integer recordIndex, @Param("pageSize")Integer pageSize);
+	
+	public Integer getListSize(@Param("accountId")Long accountId);
+	
+	public void clearOutMail(Integer time);
+	
+	public void clearReadMail(Integer time);
+}

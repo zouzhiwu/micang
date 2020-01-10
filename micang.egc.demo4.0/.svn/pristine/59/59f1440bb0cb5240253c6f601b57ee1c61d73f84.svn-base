@@ -1,0 +1,97 @@
+package com.common.entity;
+
+public class Hero  {
+	private Long id;
+	private Long accountId;
+	private Integer templateId;
+	
+	/***************************战斗属性***********************************/
+	/**英雄code*/
+	public short nodeId;
+	
+	/**生命值(Hit Point) */
+	public int hp;
+	
+	/**物攻(Physical Attack)*/
+	public int pa;
+	
+	/**法攻(Magic Attack)*/
+	public int ma;
+	
+	/**物防(Physical Defense)*/
+	public int pd;
+	
+	/**法防(Magic Defense)*/
+	public int md;
+	
+	/**攻速(Attack Speed)*/
+	public int ats;
+	
+	/**射程(Area Of Effect)*/
+	public int aoe;
+	
+	/**移速(Move Speed)*/
+	public int mvs;
+	
+	/**冷却时间(Cold Down)*/
+	public int cd;
+	
+	/**物暴(Physical Crit)*/
+	public int pcrt;
+	
+	/**法暴(Magic Crit)*/
+	public int mcrt;
+	
+	/**物穿(Physical Penetrating Power)*/
+	public int ppt;
+	
+	/**法穿(Magic Penetrating Power)*/
+	public int mpt;
+	
+	/**伤害加深(Hurt Increase)*/
+	public int hi;
+	
+	/**伤害减免(Hurt Reduction)*/
+	public int hr;
+	
+	/**当前位置*/
+	public Location location;
+	
+	/**补刀数*/
+	public short supplement;
+	
+	/**金钱数*/
+	public short money;
+	
+	/**等级*/
+	public short exp;
+	
+	/**击杀数量*/
+	public byte kill;
+	
+	/**死亡次数*/
+	public byte dead;
+	
+	/**助攻次数*/
+	public byte help;
+	/***************************战斗属性***********************************/
+	
+	public Long getId() {
+		return id;
+	}
+	public void setId(Long id) {
+		this.id = id;
+	}
+	public Long getAccountId() {
+		return accountId;
+	}
+	public void setAccountId(Long accountId) {
+		this.accountId = accountId;
+	}
+	public Integer getTemplateId() {
+		return templateId;
+	}
+	public void setTemplateId(Integer templateId) {
+		this.templateId = templateId;
+	}
+}

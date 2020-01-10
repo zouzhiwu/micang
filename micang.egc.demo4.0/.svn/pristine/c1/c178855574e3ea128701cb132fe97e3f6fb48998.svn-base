@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.AuctionDao">	
+	
+	<insert id="create" parameterType="com.common.entity.Auction" useGeneratedKeys="true" keyProperty="id">
+		insert into auction ( id
+			<if test="null != accountId">
+				, accountId
+			</if>
+			<if test="null != auctionRecordId">
+				, auctionRecordId
+			</if>
+			<if test="null != itemTemplateId">
+				, itemTemplateId
+			</if>
+			<if test="null != itemType">
+				, itemType
+			</if>
+			<if test="null != itemName">
+				, itemName
+			</if>
+			<if test="null != itemUseCount">
+				, itemUseCount
+			</if>
+			<if test="null != startPrice">
+				, startPrice
+			</if>
+			<if test="null != expectPrice">
+				, expectPrice
+			</if>
+			<if test="null != createTime">
+				, createTime
+			</if>
+			<if test="null != expiresTime">
+				, expiresTime
+			</if>
+		) values ( #{id}
+			<if test="null != accountId">
+				, #{accountId}
+			</if>
+			<if test="null != auctionRecordId">
+				, #{auctionRecordId}
+			</if>
+			<if test="null != itemTemplateId">
+				, #{itemTemplateId}
+			</if>
+			<if test="null != itemType">
+				, #{itemType}
+			</if>
+			<if test="null != itemName">
+				, #{itemName}
+			</if>
+			<if test="null != itemUseCount">
+				, #{itemUseCount}
+			</if>
+			<if test="null != startPrice">
+				, #{startPrice}
+			</if>
+			<if test="null != expectPrice">
+				, #{expectPrice}
+			</if>
+			<if test="null != createTime">
+				, #{createTime}
+			</if>
+			<if test="null != expiresTime">
+				, #{expiresTime}
+			</if>
+		)
+	</insert>
+	
+	<select id="getById" parameterType="Long" resultType="com.common.entity.Auction">
+		select * from auction where id = #{id}
+	</select>
+	
+	<select id="getByAccountId" parameterType="Long" resultType="com.common.entity.Auction">
+		select * from auction where accountId = #{accountId}
+	</select>
+	
+	<delete id="delete" parameterType="Long">
+		delete from auction where id = #{id}
+	</delete>
+	
+	<update id="update" parameterType="com.common.entity.Auction">
+		update auction 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != auctionRecordId">
+				, auctionRecordId = #{auctionRecordId}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<select id="getList" resultType="com.common.entity.AuctionInfo">
+		select auction.id
+			, auction.accountId
+			, account.nick as accountName
+			, auction.itemTemplateId
+			, auction.itemName
+			, auction.itemUseCount
+			, if(auctionRecordId=0, auction.startPrice, ar.bidPrice) as price
+			, auction.expectPrice
+			, auction.expiresTime
+		from auction left join account 
+			on auction.accountId = account.id
+		left join auction_record ar
+			on auction.auctionRecordId = ar.id
+		where 1 = 1 
+		<if test="null != itemType">
+			and auction.itemType = #{itemType}
+		</if>
+		<if test="null != itemName">
+			and auction.itemName like CONCAT('%',#{itemName},'%')
+		</if>
+		limit #{recordIndex}, #{pageSize}
+	</select>
+	
+	<select id="getListSize" resultType="Integer">
+		select count(1) from auction where itemName like CONCAT('%',#{itemName},'%')
+	</select>
+	
+	<select id="getExpiresList" parameterType="Integer" resultType="com.common.entity.Auction">
+		select * from auction where expiresTime &lt;= #{time}
+	</select>
+</mapper>  

@@ -1,0 +1,151 @@
+package com.game.action;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Action;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.Item;
+import com.common.entity.Role;
+import com.game.common.MessageCode;
+import com.game.service.ItemService;
+
+import io.netty.channel.Channel;
+
+@Service
+public class ItemAction {
+
+	private static final Logger logger = LoggerFactory.getLogger(ItemAction.class);
+
+	@Autowired
+	private ItemService itemService;
+	
+	/**
+	 * 获取个人仓库道具
+	 */
+	@Action(MessageCode.msg_item_depository_list)
+	public void getListWithDepository(Message message, Channel channel) throws Exception {
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		List<Item> itemList = itemService.getListWithDepo(message.getAccountId());
+		Message msg = new Message(message);
+		msg.putShort(itemList.size());
+		for (Item item : itemList) {
+			msg.putLong(item.getId());
+			msg.putInt(item.getTemplateId());
+			msg.putInt(item.getUseCount());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 获取场外背包的装备
+	 */
+	@Action(MessageCode.msg_item_equip_list)
+	public void getListWithEquip(Message message, Channel channel) throws Exception {
+		Long roleId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s roleId=%d", message.getMsgcd(), message.getAccountId(), roleId));
+		List<Item> itemList = itemService.getListWithEquip(message.getAccountId(), roleId);
+		Message msg = new Message(message);
+		msg.putShort(itemList.size());
+		for (Item item : itemList) {
+			msg.putLong(item.getId());
+			msg.putInt(item.getTemplateId());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 获取场内背包的物品
+	 */
+	@Action(MessageCode.msg_item_prop_list)
+	public void getListWithProp(Message message, Channel channel) throws Exception {
+		Long roleId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s roleId=%d", message.getMsgcd(), message.getAccountId(), roleId));
+		List<Item> itemList = itemService.getListWithProp(message.getAccountId(), roleId);
+		Message msg = new Message(message);
+		msg.putShort(itemList.size());
+		for (Item item : itemList) {
+			msg.putLong(item.getId());
+			msg.putInt(item.getTemplateId());
+			msg.putInt(item.getUseCount());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 把道具从个人仓库移入到背包（如果该物品是装备，则放入场外背包，如果是道具，则放入场内背包）
+	 */
+	@Action(MessageCode.msg_item_store_to_bag)
+	public void fromStore2Bag(Message message, Channel channel) throws Exception {
+		Long roleId = message.getLong();
+		Long itemId = message.getLong();
+		Integer position = message.getInt();
+		logger.info(String.format("RESV %d from accountId=%s roleId=%d", message.getMsgcd(), message.getAccountId(), roleId));
+		itemService.fromStore2Bag(message.getAccountId(), roleId, itemId, position);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 把道具从背包（场内背包或场外背包）移入到个人仓库
+	 */
+	@Action(MessageCode.msg_item_bag_to_store)
+	public void fromBag2Store(Message message, Channel channel) throws Exception {
+		Long roleId = message.getLong();
+		Long itemId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s roleId=%d", message.getMsgcd(), message.getAccountId(), roleId));
+		itemService.fromBag2Store(message.getAccountId(), roleId, itemId);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 装备或卷轴合成
+	 */
+	@Action(MessageCode.msg_item_compose)
+	public void compose(Message message, Channel channel) throws Exception {
+		Long itemId1 = message.getLong();
+		Long itemId2 = message.getLong();
+		Long itemId3 = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s roleId=%d", message.getMsgcd(), message.getAccountId(), itemId1, itemId2, itemId3));
+		Item item = itemService.compose(message.getAccountId(), itemId1, itemId2, itemId3);
+		Message msg = new Message(message);
+		msg.putLong(item.getId());
+		msg.putInt(item.getTemplateId());
+		msg.putInt(item.getUseCount());
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 打开卷轴
+	 */
+	@Action(MessageCode.msg_item_open_scroll)
+	public void openScroll(Message message, Channel channel) throws Exception {
+		Long itemId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s roleId=%d", message.getMsgcd(), message.getAccountId(), itemId));
+		Item item = itemService.openScroll(message.getAccountId(), itemId);
+		Message msg = new Message(message);
+		msg.putLong(item.getId());
+		msg.putInt(item.getTemplateId());
+		msg.putInt(item.getUseCount());
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 使用皮肤道具
+	 */
+	@Action(MessageCode.msg_item_use_skin)
+	public void useSkin(Message message, Channel channel) throws Exception {
+		Long itemId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s roleId=%d", message.getMsgcd(), message.getAccountId(), itemId));
+		Role role = itemService.useSkin(message.getAccountId(), itemId);
+		Message msg = new Message(message);
+		msg.putLong(role.getId());
+		MsgSender.sendMsg(msg);
+	}
+}

@@ -1,0 +1,33 @@
+package com.game.node;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+
+public class HomeNode extends BaseNode {
+	private static final Logger logger = LoggerFactory.getLogger(HomeNode.class);
+	public HomeNode(short nodeId, Room room, NodeTemplate template, CampType camp) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = camp;
+		setEnemyCamp();
+		this.hp = template.getHp();
+	}
+	
+	public NodeType getNodeType() {
+		return NodeType.Home;
+	}
+
+	@Override
+	public void die(BaseNode attackNode) {
+		// TODO 游戏结束
+		logger.info(String.format("nodeId=%d阵亡", this.nodeId));
+	}
+}

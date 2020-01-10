@@ -1,0 +1,40 @@
+package com.game.entity;
+
+public class PointsDaoBean {
+	
+	private Integer id;
+	
+	private Integer pointId;
+	
+	private Integer starCount;
+
+	public Integer getId() {
+		return id;
+	}
+
+	public void setId(Integer id) {
+		this.id = id;
+	}
+
+	public Integer getPointId() {
+		return pointId;
+	}
+
+	public void setPointId(Integer pointId) {
+		this.pointId = pointId;
+	}
+
+	public Integer getStarCount() {
+		return starCount;
+	}
+
+	public void setStarCount(Integer starCount) {
+		this.starCount = starCount;
+	}
+
+	
+	
+	
+	
+	
+}

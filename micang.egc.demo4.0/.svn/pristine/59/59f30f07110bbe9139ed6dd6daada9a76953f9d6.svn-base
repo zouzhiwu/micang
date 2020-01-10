@@ -1,0 +1,273 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.apache.commons.collections.CollectionUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.common.constant.HeroConstant;
+import com.common.entity.Account;
+import com.common.entity.Item;
+import com.common.entity.Role;
+import com.common.enumerate.ItemType;
+import com.common.enumerate.ScrollGrade;
+import com.common.enumerate.StoreType;
+import com.common.helper.RandomHelper;
+import com.common.template.CriticalTemplate;
+import com.common.template.ItemTemplate;
+import com.common.util.AssertUtil;
+import com.game.config.CriticalConfig;
+import com.game.config.ItemConfig;
+import com.game.dao.AccountDao;
+import com.game.dao.ItemDao;
+import com.game.dao.RoleDao;
+import com.game.util.ItemUtil;
+
+@Service
+public class ItemService {
+	@Autowired
+	private AccountDao accountDao;
+	@Autowired
+	private RoleDao roleDao;
+	@Autowired
+	private RoleService roleService;
+	@Autowired
+	private ItemDao itemDao;
+	
+	/**
+	 * 把道具从个人仓库移入到背包（如果该物品是装备，则放入装备背包，如果是道具，则放入道具背包）
+	 */
+	public void fromStore2Bag(Long accountId, Long roleId, Long itemId, Integer position) {
+		Item item = itemDao.getById(itemId);
+		AssertUtil.asWarnTrue(item != null, "道具为空");
+		AssertUtil.asWarnTrue(item.getAccountId().equals(accountId), "该道具不属于你");
+		ItemType itemType = ItemUtil.getItemType(item.getTemplateId());
+		Role accountRole = roleDao.getById(roleId);
+		AssertUtil.asWarnTrue(accountRole != null, "角色不存在");
+		AssertUtil.asWarnTrue(accountRole.getAccountId().equals(accountId), "该角色不属于该账户");
+		Account account = accountDao.getById(accountRole.getAccountId());
+		if (itemType == ItemType.Equip) {
+			Integer equipBagSize = getListWithEquipSize(accountRole.getAccountId(), roleId);
+			// 如果是卷轴或护符，则放入道具背包
+			AssertUtil.asWarnTrue(HeroConstant.store_bag_equip_init + account.getExtendEquipBag() > equipBagSize, "装备背包空间已达上限");
+			item.setStoreType(StoreType.EquipBag);
+			item.setPosition(position);
+		} else {
+			Integer propBagSize = getListWithPropSize(accountRole.getAccountId(), roleId);
+			// 如果是卷轴或护符，则放入道具背包
+			AssertUtil.asWarnTrue(HeroConstant.store_bag_prop_init + account.getExtendPropBag() > propBagSize, "道具背包空间已达上限");
+			item.setStoreType(StoreType.PropBag);
+		}
+		itemDao.update(item);
+	}
+	
+	/**
+	 * 把道具从道具背包（装备背包或道具背包）移入到个人仓库
+	 */
+	@Transactional
+	public void fromBag2Store(Long accountId, Long roleId, Long itemId) {
+		Item item = itemDao.getById(itemId);
+		AssertUtil.asWarnTrue(item != null, "道具为空");
+		ItemType itemType = ItemUtil.getItemType(item.getTemplateId());
+		Role accountRole = roleDao.getById(roleId);
+		AssertUtil.asWarnTrue(accountRole != null, "角色不存在");
+		AssertUtil.asWarnTrue(accountRole.getAccountId().equals(accountId), "该角色不属于该账户");
+		Integer depositorySize = getListWithDepositorySize(accountRole.getAccountId());
+		Account account = accountDao.getById(accountRole.getAccountId());
+		// 如果是卷轴或护符，则放入道具背包
+		AssertUtil.asWarnTrue(itemType == ItemType.Scroll || itemType == ItemType.Amulet, "该物品不能移入道具背包");
+		AssertUtil.asWarnTrue(HeroConstant.store_depo_init + account.getExtendDepo() > depositorySize, "个人仓库空间已达上限");
+		item.setStoreType(StoreType.Depo);
+		itemDao.update(item);
+	}
+	
+	public List<Item> getListWithDepo(Long accountId) {
+		return itemDao.getListWithStoreType(accountId, null, StoreType.Depo);
+	}
+	
+	public List<Item> getListWithEquip(Long accountId, Long roleId) {
+		return itemDao.getListWithStoreType(accountId, roleId, StoreType.EquipBag);
+	}
+	
+	public List<Item> getListWithProp(Long accountId, Long roleId) {
+		return itemDao.getListWithStoreType(accountId, roleId, StoreType.PropBag);
+	}
+	
+	public Integer getListWithDepositorySize(Long accountId) {
+		return itemDao.getListWithStoreTypeSize(accountId, null, StoreType.Depo);
+	}
+	
+	public Integer getListWithEquipSize(Long accountId, Long roleId) {
+		return itemDao.getListWithStoreTypeSize(accountId, roleId, StoreType.EquipBag);
+	}
+	
+	public Integer getListWithPropSize(Long accountId, Long roleId) {
+		return itemDao.getListWithStoreTypeSize(accountId, roleId, StoreType.PropBag);
+	}
+	
+	public List<Item> getListWithStoreType(Long accountId, Long roleId, Byte storeTypeId) {
+		StoreType storeType = StoreType.getType(storeTypeId);
+		if (storeType == StoreType.Depo) {
+			return getListWithDepo(accountId);
+		} else if (storeType == StoreType.EquipBag) {
+			return getListWithEquip(accountId, roleId);
+		} else if (storeType == StoreType.PropBag) {
+			return getListWithEquip(accountId, roleId);
+		} else {
+			return new ArrayList<Item>(0);
+		}
+	}
+	
+	/**
+	 * 创建道具到仓库
+	 */
+	public Item createItem2Depo(Long accountId, Integer templateId, Integer useCount) {
+		List<Item> itemList = getListWithDepo(accountId);
+		Account account = accountDao.getById(accountId);
+		if (CollectionUtils.isNotEmpty(itemList)) {
+			AssertUtil.asWarnTrue(HeroConstant.store_depo_init + account.getExtendDepo() > itemList.size(), "仓库空间已达上限");
+		}
+		return createItem(accountId, templateId, 0L, StoreType.Depo, useCount, 0);
+	}
+	
+	/**
+	 * 创建道具到道具背包
+	 */
+	public Item createItem2PropBag(Long accountId, Integer templateId, Long roleId, Integer useCount) {
+		List<Item> itemList = getListWithProp(accountId, roleId);
+		Account account = accountDao.getById(accountId);
+		if (CollectionUtils.isNotEmpty(itemList)) {
+			AssertUtil.asWarnTrue(HeroConstant.store_bag_prop_init + account.getExtendPropBag() > itemList.size(), "道具背包空间已达上限");
+		}
+		return createItem(accountId, templateId, roleId, StoreType.PropBag, useCount, 0);
+	}
+	
+	/**
+	 * 创建道具到装备背包
+	 */
+	public Item createItem2EquipBag(Long accountId, Integer templateId, Long roleId, Integer position) {
+		List<Item> itemList = getListWithEquip(accountId, roleId);
+		Account account = accountDao.getById(accountId);
+		if (CollectionUtils.isNotEmpty(itemList)) {
+			AssertUtil.asWarnTrue(HeroConstant.store_bag_equip_init + account.getExtendEquipBag() > itemList.size(), "装备背包空间已达上限");
+		}
+		return createItem(accountId, templateId, roleId, StoreType.EquipBag, 0, position);
+	}
+	
+	/**
+	 * 创建道具
+	 */
+	private Item createItem(Long accountId, Integer templateId, Long roleId, StoreType storeType, Integer useCount, Integer position) {
+		Item item = new Item();
+		item.setAccountId(accountId);
+		item.setRoleId(roleId);
+		item.setStoreType(storeType);
+		item.setTemplateId(templateId);
+		item.setUseCount(useCount);
+		item.setPosition(position);
+		itemDao.create(item);
+		return item;
+	}
+	
+	@Transactional
+	public Item compose(Long accountId, Long itemId1, Long itemId2, Long itemId3) {
+		Item item1 = itemDao.getById(itemId1);
+		Item item2 = itemDao.getById(itemId2);
+		Item item3 = itemDao.getById(itemId3);
+		AssertUtil.asWarnTrue(item1 != null, "第1个物品为空");
+		AssertUtil.asWarnTrue(item2 != null, "第2个物品为空");
+		AssertUtil.asWarnTrue(item3 != null, "第3个物品为空");
+		AssertUtil.asWarnTrue(item1.getAccountId().equals(accountId), "第1个物品不属于该玩家");
+		AssertUtil.asWarnTrue(item2.getAccountId().equals(accountId), "第2个物品不属于该玩家");
+		AssertUtil.asWarnTrue(item3.getAccountId().equals(accountId), "第3个物品不属于该玩家");
+		// 检查等级是否相同
+		int lv1 = ItemUtil.getItemLevel(item1.getTemplateId());
+		int lv2 = ItemUtil.getItemLevel(item2.getTemplateId());
+		int lv3 = ItemUtil.getItemLevel(item3.getTemplateId());
+		AssertUtil.asWarnTrue(lv1 == lv2 && lv1 == lv3, "3个物品等级必须相同");
+		ItemTemplate itemTemplate1 = ItemConfig.map.get(item1.getTemplateId());
+		ItemTemplate itemTemplate2 = ItemConfig.map.get(item2.getTemplateId());
+		ItemTemplate itemTemplate3 = ItemConfig.map.get(item3.getTemplateId());
+		// 获取3个道具级别
+		ScrollGrade scrollGrade1 = ScrollGrade.getType(itemTemplate1.getGrade());
+		ScrollGrade scrollGrade2 = ScrollGrade.getType(itemTemplate2.getGrade());
+		ScrollGrade scrollGrade3 = ScrollGrade.getType(itemTemplate3.getGrade());
+		// 判断道具级别是否相同
+		AssertUtil.asWarnTrue(scrollGrade1 == scrollGrade2 && scrollGrade1 == scrollGrade3, "物品合成必须级别相同");
+		ItemType itemType1 = ItemUtil.getItemType(item1.getTemplateId());
+		ItemType itemType2 = ItemUtil.getItemType(item2.getTemplateId());
+		ItemType itemType3 = ItemUtil.getItemType(item3.getTemplateId());
+		itemDao.delete(itemId1);
+		itemDao.delete(itemId2);
+		itemDao.delete(itemId3);
+		if (ItemType.Scroll == itemType1 && ItemType.Scroll == itemType2 && ItemType.Scroll == itemType3) {	// 如果3个物品都是卷轴，则合成卷轴
+			int grade = scrollGrade1.getIndex();
+			int lv = lv1 + 1;
+			List<ItemTemplate> gradeTemplateList = ItemConfig.gradeMap.get(grade);
+			List<ItemTemplate> templateList = gradeTemplateList.stream().filter(item -> ItemUtil.getItemLevel(item.getId()) == lv).collect(Collectors.toList());
+			// 随机同级别的更高等级的道具模板
+			ItemTemplate template = templateList.get(RandomHelper.getRandom(0, templateList.size() - 1));
+			int userCount;
+			if (itemType1 == ItemType.Amulet) {
+				CriticalTemplate criticalTemplate = CriticalConfig.map.get(template.getId());
+				userCount = criticalTemplate.getUseCount();
+			} else {
+				userCount = 0;
+			}
+			Item item = createItem(accountId, template.getId(), 0L, StoreType.Depo, userCount, 0);
+			return item;
+		} else if (ItemType.Equip == itemType1 && ItemType.Equip == itemType2 && ItemType.Equip == itemType3) { // 如果3个物品都是装备，则合成装备
+			AssertUtil.asWarnTrue(item1.getTemplateId().equals(item2.getTemplateId()) && item1.getTemplateId().equals(item3.getTemplateId())
+					, "必须是相同的装备才能合成");
+			// 装备合成更高等级的同类装备
+			Integer templateId = item1.getTemplateId() + 100000;
+			Item item = createItem(accountId, templateId, 0L, StoreType.Depo, 0, 0);
+			return item;
+		} else {
+			AssertUtil.asWarnTrue(false, "物品类型不一致");
+			return null;
+		}
+	}
+	
+	@Transactional
+	public Item openScroll(Long accountId, Long itemId) {
+		Item scrollItem = itemDao.getById(itemId);
+		AssertUtil.asWarnTrue(scrollItem != null, "物品为空");
+		AssertUtil.asWarnTrue(scrollItem.getAccountId().equals(accountId), "物品不属于该玩家");
+		ItemType itemType = ItemUtil.getItemType(scrollItem.getTemplateId());
+		AssertUtil.asWarnTrue(itemType == ItemType.Scroll, "物品必须是卷轴");
+		ItemTemplate template = ItemConfig.map.get(scrollItem.getTemplateId());
+		ScrollGrade scrollGrade = ScrollGrade.getType(template.getGrade());
+		itemDao.delete(itemId);
+		Item item = null;
+		if (scrollGrade == ScrollGrade.Seal) {
+			List<ItemTemplate> itemTemplateList = ItemConfig.gradeMap.get(ScrollGrade.SkillProp.getIndex());
+			ItemTemplate itemTemplate = itemTemplateList.get(RandomHelper.getRandom(0, itemTemplateList.size() - 1));
+			item = createItem(accountId, itemTemplate.getId(), 0L, StoreType.Depo, 0, 0);
+		} else if (scrollGrade == ScrollGrade.SkillProp) {
+			List<ItemTemplate> itemTemplateList = ItemConfig.gradeMap.get(ScrollGrade.Equip.getIndex());
+			ItemTemplate itemTemplate = itemTemplateList.get(RandomHelper.getRandom(0, itemTemplateList.size() - 1));
+			item = createItem(accountId, itemTemplate.getId(), 0L, StoreType.Depo, 0, 0);
+		} else {
+			Integer templateId = scrollItem.getTemplateId() + 10000000;
+			item = createItem(accountId, templateId, 0L, StoreType.Depo, 0, 0);
+		}
+		return item;
+	}
+	
+	@Transactional
+	public Role useSkin(Long accountId, Long itemId) {
+		Item item = itemDao.getById(itemId);
+		AssertUtil.asWarnTrue(item != null, "物品为空");
+		AssertUtil.asWarnTrue(item.getAccountId().equals(accountId), "物品不属于该玩家");
+		ItemType itemType = ItemUtil.getItemType(item.getTemplateId());
+		AssertUtil.asWarnTrue(itemType == ItemType.Skin, "使用的道具不是皮肤");
+		Role role = roleService.createRole(accountId, item.getTemplateId(), false);
+		itemDao.delete(itemId);
+		return role;
+	}
+}

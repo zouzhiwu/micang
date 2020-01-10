@@ -1,0 +1,67 @@
+package com.game.node;
+
+import java.util.List;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+
+public abstract class BaseNode {
+//	private static final Logger logger = LoggerFactory.getLogger(BaseNode.class);
+	/**nodeId*/
+	public short nodeId;
+	
+	/**生命值(Hit Point)*/
+	public int hp;
+	
+    /**坐标位置 */
+    public Location location;
+    
+    /**己方阵营*/
+    public CampType selfCamp = CampType.Neutral;
+    
+    /**敌方阵营*/
+    public CampType enemyCamp = CampType.All;
+    
+	public NodeTemplate template;
+	
+	public Room room;
+    
+    /**获取节点类型*/
+    public abstract NodeType getNodeType();
+    
+    public abstract void die(BaseNode attackNode);
+    
+    public void setEnemyCamp() {
+    	switch (selfCamp) {
+		case Neutral:
+			enemyCamp = CampType.All;
+			break;
+		case Blue:
+			enemyCamp = CampType.Red;
+			break;
+		case Red:
+			enemyCamp = CampType.Blue;
+			break;
+		case All:
+			enemyCamp = CampType.All;
+			break;
+		default:
+			break;
+		}
+    }
+    
+    public void refreshAllNodeVision() {
+    	// 从所有节点的视野中移除该节点
+    	List<BaseNode> nodeList = room.getAllList();
+		for (BaseNode node : nodeList) {
+			if (AbsAttackNode.class.isAssignableFrom(node.getClass())) {
+				AbsUpdateVisionNode absUpdateVisionNode = (AbsUpdateVisionNode) node;
+				absUpdateVisionNode.visionList.remove(this);
+//				logger.info(String.format("节点%d 视野列表中移除 nodeId=%d isRemove=%s", absAttackNode.nodeId, this.nodeId, isRemove));
+			}
+		}
+    }
+}

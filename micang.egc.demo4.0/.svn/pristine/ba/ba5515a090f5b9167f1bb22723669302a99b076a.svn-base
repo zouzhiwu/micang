@@ -1,0 +1,22 @@
+package com.game.dao;
+
+import java.util.List;
+
+import org.apache.ibatis.annotations.Param;
+
+import com.common.entity.Role;
+
+public interface RoleDao {
+
+	public void create(Role role);
+
+	public void delete(Long id);
+	
+	public void setChecked(@Param("id")Long id, @Param("isChecked")Integer isChecked);
+	
+	public Role getById(Long id);
+	
+	public Role getDefault(Long accountId);
+	
+	public List<Role> getList(Long accountId);
+}

@@ -1,0 +1,38 @@
+package com.game.common;
+
+public class MessageCode {
+	// 账号模块
+	public final static short msg_account_login = 1001; // 登录服务器
+	public final static short msg_account_heartbeat = 1002; // 心跳请求
+	public final static short msg_account_logout = 1003; // 下线通知
+	public final static short msg_account_online_list = 1004; // 获取在线玩家列表
+	
+	// 队员模块
+	public final static short msg_member_list = 1101;	// 获取队员列表
+	public final static short msg_member_add = 1102;	// 添加队员
+	public final static short msg_member_set_default = 1103;	// 设置默认队员
+	
+	// 英雄模块
+	public final static short msg_hero_list = 1201;		// 获取英雄列表
+	public final static short msg_hero_add = 1202;		// 添加英雄
+	
+	// 战斗模块
+	public final static short msg_fight_challenge_request = 1301;	// 挑战
+	public final static short msg_fight_challenge_notice = 1302;	// 挑战通知
+	public final static short msg_fight_challenge_response = 1303;	// 回应挑战
+	public final static short msg_fight_choose_member = 1304;		// 选择上阵队员
+	public final static short msg_fight_member_info = 1305;			// 广播推送上阵队员信息
+	public final static short msg_fight_operation_notice = 1306;	// 操作通知
+	public final static short msg_fight_ban_hero = 1307;			// 禁用英雄
+	public final static short msg_fight_ban_hero_notice = 1308;		// 禁用英雄通知
+	public final static short msg_fight_choose_hero = 1309;			// 选择英雄
+	public final static short msg_fight_choose_hero_notice = 1310;	// 选择英雄通知
+	public final static short msg_fight_show_layout = 1311;			// 阵容展示通知
+	public final static short msg_fight_begin_game = 1312;			// 开始游戏通知
+	
+	public final static short msg_status_success = 0;
+	public final static short msg_status_warning = 1;
+	public final static short msg_status_failed = 2;//失败(房间创建超过十个为失败)
+	public final static short msg_status_error = -1;
+	
+}

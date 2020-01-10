@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.RequestGuildDao">	
+	
+	<insert id="add" parameterType="com.common.entity.RequestGuild" useGeneratedKeys="true" keyProperty="id">
+		insert into request_guild (id
+			<if test="null != guildId">
+				, guildId
+			</if>
+			<if test="null != accountId">
+				, accountId
+			</if>
+			<if test="null != isAgree">
+				, isAgree
+			</if>
+			<if test="null != createTime">
+				, createTime
+			</if>
+			<if test="null != updateTime">
+				, updateTime
+			</if>
+		) values ( #{id}
+			<if test="null != guildId">
+				, #{guildId}
+			</if>
+			<if test="null != accountId">
+				, #{accountId}
+			</if>
+			<if test="null != isAgree">
+				, #{isAgree}
+			</if>
+			<if test="null != createTime">
+				, #{createTime}
+			</if>
+			<if test="null != updateTime">
+				, #{updateTime}
+			</if>
+		)
+	</insert>
+	
+	<delete id="delete" parameterType="Integer">
+		delete from request_guild where id = #{id}
+	</delete>
+	
+	<update id="update" parameterType="com.common.entity.RequestGuild">
+		update request_guild 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != isAgree">
+				, isAgree = #{isAgree}
+			</if>
+			<if test="null != updateTime">
+				, updateTime = #{updateTime}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<delete id="clearHistoricalRecord" parameterType="Integer">
+		delete from request_guild where createTime &lt; #{time}
+	</delete>
+	
+	<select id="getById" parameterType="Integer" resultType="com.common.entity.RequestGuild">
+		select * from request_guild where id = #{id}
+	</select>
+	
+	<select id="getByMemberId" parameterType="Long" resultType="com.common.entity.RequestGuild">
+		select * from request_guild where accountId = #{accountId} and isAgree = 0
+	</select>
+	
+	<select id="getByGuildId" parameterType="Integer" resultType="com.common.entity.RequestGuildInfo">
+		select rg.id
+			, rg.accountId
+			, rg.createTime
+			, m.nick
+		from request_guild rg left join account m on rg.accountId = m.id 
+		where rg.guildId = #{guildId} and rg.isAgree = 0
+	</select>
+	
+</mapper>  

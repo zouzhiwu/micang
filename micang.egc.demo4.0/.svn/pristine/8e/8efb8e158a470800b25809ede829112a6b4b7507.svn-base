@@ -1,0 +1,10 @@
+package com.game.dao;
+
+import com.common.entity.AccountScore;
+
+public interface AccountScoreDao {
+
+	public void replace(AccountScore accountScore);
+	
+	public AccountScore getByAccountId(Long accountId);
+}

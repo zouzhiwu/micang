@@ -1,0 +1,358 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.springframework.stereotype.Service;
+
+import com.common.entity.Box;
+import com.common.entity.Hero;
+import com.common.entity.Location;
+import com.common.entity.Room;
+import com.common.entity.Skill;
+import com.common.entity.Vector3;
+import com.common.enumerate.ASkillType;
+import com.common.template.SkillTemplate;
+import com.game.config.SkillConfig;
+import com.game.job.JobScheduler;
+
+@Service
+public class PhysicService {
+//	private final static Logger logger = LoggerFactory.getLogger(PhysicService.class);
+	/**物体移动的帧数*/
+	private final static int physic_move_fps = 10;
+	/**扇形小半径，计算碰撞时用，单位米*/
+	public final static float sector_small_radius = 0.5f;
+	/**特效的播放时间*/
+	public final static int effect_time = 100;
+	
+	/**
+	 * 包含10100-10600技能的碰撞逻辑
+	 */
+	public void attackSkill(Room room, Hero attHero, Skill skill, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		SkillTemplate skillTemplate = SkillConfig.map.get(skill.templateId);
+		ASkillType aSkillType = ASkillType.getType(skillTemplate.getAid());
+		switch (aSkillType) {
+		case Arrow:
+			arrow(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case Sea:
+			sea(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case Wave:
+			wave(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case Wall:
+			wall(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case Snow:
+			snow(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case Shock:
+			shock(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case ContinueSingSea:
+			continueSingSea(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case ContinueSingWave:
+			continueSingWave(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case ContinueSingWall:
+			continueSingWall(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case ContinueSingSnow:
+			continueSingSnow(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case ContinueSingShock:
+			continueSingShock(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case InstantSingSea:
+			instantSingSea(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case InstantSingWave:
+			instantSingWave(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case InstantSingWall:
+			instantSingWall(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case InstantSingSnow:
+			instantSingSnow(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case InstantSingShock:
+			instantSingShock(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case Kotl:
+			kotl(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case Lld:
+			lld(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case Poke:
+			poke(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		case Leesin:
+			leesinArrow(room, attHero, skillTemplate, skillDirection, skillLocation, effectId, idx);
+			break;
+		default:
+			break;
+		}
+	}
+	
+	/**
+	 * 穿云剑攻击
+	*/
+	private void arrow(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.Arrow, effectId);
+		int cycleHurt = skillTemplate.getHurt() + attHero.addHurt;
+		JobScheduler.createArrowJob(jobKey, room, attHero, skillTemplate
+				, physic_move_fps, effectId, idx, skillDirection, skillLocation, cycleHurt);
+	}
+	
+	/**
+	 * 海浪
+	 */
+	private void sea(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, Integer effectId, byte idx) {
+		
+		int cycleHurt = skillTemplate.getHurt() + attHero.addHurt;
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.Sea, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createSeaJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, cycleHurt, hitBoxList);
+	}
+	
+	/**
+	 * 冲击波，扇形技能攻击
+	*/
+	private void wave(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		int cycleHurt = skillTemplate.getHurt() + attHero.addHurt;
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.Wave, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createWaveJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, cycleHurt, hitBoxList);
+	}
+	
+	/**
+	 * 火墙攻击
+	 */
+	private void wall(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		int cycleHurt = skillTemplate.getHurt() + attHero.addHurt;
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.Wall, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createWallJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, cycleHurt, hitBoxList);
+	}
+	
+	/**
+	 * 暴风雪
+	*/
+	private void snow(Room room, final Hero attHero, SkillTemplate skillTemplate
+			, final Vector3 skillDirection, final Location skillLocation, final int effectId, byte idx) {
+		
+		int cycleHurt = skillTemplate.getHurt() + attHero.addHurt;
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.Snow, effectId);
+		JobScheduler.createSnowJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, cycleHurt, hitBoxList);
+	}
+	
+	/**
+	 * 圆形震荡
+	*/
+	private void shock(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		int cycleHurt = skillTemplate.getHurt() + attHero.addHurt;
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.Shock, effectId);
+		JobScheduler.createShockJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, cycleHurt, hitBoxList);
+	}
+	
+	/**
+	 * 陷阱爆炸
+	*/
+	public void trap(Room room, final Hero touchHero, Hero attHero, SkillTemplate skillTemplate
+			, Vector3 skillDirection, Location skillLocation, final int effectId) {
+		
+	}
+	
+	/**
+	 * 持续吟唱海浪
+	*/
+	private void continueSingSea(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateContinueSingJobKey(attHero, ASkillType.ContinueSingSea, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createContinueSingSeaJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	/**
+	 * 持续吟唱冲击波
+	*/
+	private void continueSingWave(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateContinueSingJobKey(attHero, ASkillType.ContinueSingWave, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createContinueSingWaveJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	/**
+	 * 持续吟唱火墙
+	*/
+	private void continueSingWall(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateContinueSingJobKey(attHero, ASkillType.ContinueSingWall, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createContinueSingWallJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, hitBoxList);
+	}
+
+	/**
+	 * 持续吟唱暴风雪
+	*/
+	private void continueSingSnow(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateContinueSingJobKey(attHero, ASkillType.ContinueSingSnow, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createContinueSingSnowJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	/**
+	 * 持续吟唱震荡
+	*/
+	private void continueSingShock(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateContinueSingJobKey(attHero, ASkillType.ContinueSingShock, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createContinueSingShockJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	/**
+	 * 瞬时吟唱海浪
+	*/
+	private void instantSingSea(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.InstantSingSea, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createInstantSingSeaJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	/**
+	 * 瞬时吟唱冲击波
+	*/
+	private void instantSingWave(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.InstantSingWave, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createInstantSingWaveJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	/**
+	 * 瞬时吟唱火墙
+	*/
+	private void instantSingWall(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.InstantSingWall, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createInstantSingWallJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	/**
+	 * 瞬时吟唱暴风雪
+	*/
+	private void instantSingSnow(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.InstantSingSnow, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createInstantSingSnowJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	/**
+	 * 瞬时吟唱震荡
+	*/
+	private void instantSingShock(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		
+		JobKey jobKey = JobScheduler.generateJobKey(attHero, ASkillType.InstantSingShock, effectId);
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createInstantSingSnowJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	/**
+	 * 光法
+	 */
+	public void kotl(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		int cycleHurt = skillTemplate.getHurt() + attHero.addHurt;
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobKey jobKey = JobScheduler.generaterReSingJobKey(attHero, ASkillType.Kotl);
+		if (JobScheduler.isHasJob(jobKey)) {
+			JobScheduler.updateJob(jobKey);
+		} else {
+			long delayMilliseconds = skillTemplate.getSingtime();
+			JobScheduler.createKotlJob(jobKey, room
+					, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, cycleHurt, hitBoxList, delayMilliseconds);
+		}
+	}
+	
+	/**
+	 * 努努大
+	 */
+	public void lld(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		int cycleHurt = skillTemplate.getHurt() + attHero.addHurt;
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobKey jobKey = JobScheduler.generaterReSingJobKey(attHero, ASkillType.Lld);
+		if (JobScheduler.isHasJob(jobKey)) {
+			JobScheduler.updateJob(jobKey);
+		} else {
+			long delayMilliseconds = skillTemplate.getSingtime();
+			JobScheduler.createLldJob(jobKey, room
+					, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, cycleHurt, hitBoxList, delayMilliseconds);
+		}
+	}
+	
+	/**
+	 * 二连戳
+	 */
+	public void poke(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		int cycleHurt = skillTemplate.getHurt() + attHero.addHurt;
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobKey jobKey = JobScheduler.generaterReSingJobKey(attHero, ASkillType.Poke);
+		JobScheduler.createPokeJob(jobKey, room
+				, attHero, skillTemplate, physic_move_fps, effectId, idx, skillDirection, skillLocation, cycleHurt, hitBoxList, 0);
+	}
+	
+	/**
+	 * 瞎子，第一段：释放弹道技能，被命中的目标将受到配置表的伤害
+	 */
+	public void leesinArrow(Room room, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation, int effectId, byte idx) {
+		int cycleHurt = skillTemplate.getHurt() + attHero.addHurt;
+		List<Box> hitBoxList = new ArrayList<Box>();
+		JobScheduler.createLeesinArrowJob(room, attHero, skillTemplate, physic_move_fps
+			, effectId, idx, skillDirection, skillLocation, cycleHurt, hitBoxList, 0);
+	}
+	
+	/**
+	 * 瞎子，第二段：再次点击技能玩家会冲向目标造成第二段伤害，伤害值为敌方已损失血量的8%
+	 */
+	public void leesinBump(Hero attHero, JobDetail jobDetail, SkillTemplate skillTemplate) {
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Hero beAttHero = (Hero)jobDataMap.get("beAttHero");
+		// 创建一个job，执行冲撞
+		JobScheduler.createLeesinBumpJob(attHero, beAttHero, skillTemplate);
+	}
+	
+}

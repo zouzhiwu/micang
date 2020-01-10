@@ -1,0 +1,28 @@
+package com.game.job.room;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+
+import com.common.entity.Room;
+import com.game.factory.Context;
+import com.game.service.RoomService;
+
+@DisallowConcurrentExecution
+public class SendEnterJob implements Job {
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Room room = (Room)jobDataMap.get("room");
+		RoomService roomService = Context.getBean("roomService");
+		List<Long> roleIdList = room.heroMap.values().stream().map(r -> r.getAccountId()).collect(Collectors.toList());
+		roomService.sendEnter(room, roleIdList);
+	}
+}

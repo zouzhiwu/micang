@@ -1,0 +1,77 @@
+package com.game.config;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.template.ItemTemplate;
+import com.game.util.PoiUtil;
+
+public class ItemConfig {
+
+	private final static String sheetName = "Sheet1";
+	private static final Logger logger = LoggerFactory.getLogger(ItemConfig.class);
+	public static Map<Integer, ItemTemplate> map = new HashMap<Integer, ItemTemplate>();
+	public static Map<Integer, Integer> memberMap = new HashMap<Integer, Integer>();
+	
+	
+	public static void init() {
+		InputStream in = MemberConfig.class.getClassLoader().getResourceAsStream("template/Item.xlsx");
+		try {
+			XSSFWorkbook workBook = new XSSFWorkbook(in);
+			XSSFSheet sheet = workBook.getSheet(sheetName);
+			int i = 0;
+			for (Iterator<Row> iterator = sheet.rowIterator(); iterator.hasNext();) {
+				XSSFRow row = (XSSFRow) iterator.next();
+				if (i >= 2) {
+					int index = 0;
+					
+					Integer id = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					String name = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					Byte type = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte sorting = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Integer num = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer associated = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					//String bigIcon = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					String icon = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					Byte paging = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte quality = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Integer sell = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Byte sellType = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte way1 = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte way2 = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte way3 = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					String effect = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					Byte useLevel = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte buyLevel = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte vipLevel = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					String content = PoiUtil.getString((XSSFCell)row.getCell(index++));
+
+					ItemTemplate itemTemplate = new ItemTemplate(id, name, type, sorting, num, associated,
+							 icon, paging, quality, sell, sellType, way1, way2,
+							way3, effect, useLevel, buyLevel, vipLevel, content);
+					
+					map.put(itemTemplate.getId(), itemTemplate);
+					if (type == 3) {
+						memberMap.put(associated, id);
+					}
+				}
+				i++;
+			}
+			logger.info(String.format("member config loaded record %d", i - 2));
+			workBook.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+}

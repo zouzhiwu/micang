@@ -1,0 +1,20 @@
+package com.game.job.skill;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class LeesinWaitJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(LeesinWaitJob.class);
+	
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		logger.info("瞎子技能等待4秒结束");
+	}
+}

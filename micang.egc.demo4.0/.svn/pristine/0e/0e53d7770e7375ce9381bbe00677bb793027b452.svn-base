@@ -1,0 +1,74 @@
+package com.game.node;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.WayType;
+import com.common.template.NodeTemplate;
+import com.common.util.GameUtil;
+import com.game.entity.Room;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+
+public class TroopsNode extends BaseMoveNode {
+	public TroopsNode(short nodeId, Room room, NodeTemplate template, CampType camp, WayType wayType) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = camp;
+		this.wayType = wayType;
+		// 获取改路通向对方基地的路径
+		this.way = GameUtil.getWayList(camp, wayType);
+		// 如果自己是蓝方，则把红方基地作为目标，否则把蓝方基地作为目标
+		if (selfCamp == CampType.Blue) {
+			HomeNode redHomeNode = (HomeNode)room.getNode((short)2);
+			this.target = new Target(redHomeNode);
+		} else {
+			HomeNode buleHomeNode = (HomeNode)room.getNode((short)1);
+			this.target = new Target(buleHomeNode);
+		}
+		setEnemyCamp();
+	}
+	
+	public WayType wayType;
+	
+	public NodeType getNodeType() {
+		return NodeType.Troops;
+	}
+	
+	@Override
+	public void die(BaseNode node) {
+    	// TODO 把这个节点从所有节点视野中删除，从Room列表删除
+    }
+
+	@Override
+	public void startMove() {
+		FightJobManager.createMoveJob(this, template.getAoe(), template.getMvs());
+	}
+
+	@Override
+	public void stopMove() {
+		JobScheduler.stopJob(this.moveJobKey);
+	}
+
+	@Override
+	public void startUpdateVision() {
+		FightJobManager.createUpdateVisionJob(room, this, template.getVr());
+	}
+
+	@Override
+	public void stopUpdateVision() {
+		JobScheduler.stopJob(this.updateVisionJobKey);
+	}
+
+	@Override
+	public void startAttack() {
+		FightJobManager.createAttackJob(this, template.getVr(), template.getAts());
+	}
+
+	@Override
+	public void stopAttack() {
+		JobScheduler.stopJob(this.attackJobKey);
+	}
+}

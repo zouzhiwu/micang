@@ -1,0 +1,215 @@
+package com.game.config;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.enumerate.ArmsType;
+import com.common.enumerate.CampType;
+import com.common.enumerate.MonsterType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.WayType;
+import com.common.template.NodeTemplate;
+import com.game.util.PoiUtil;
+
+public class NodeConfig {
+	private final static String sheetName = "Node";
+	private static final Logger logger = LoggerFactory.getLogger(NodeConfig.class);
+	public static Map<Integer, NodeTemplate> map = new HashMap<Integer, NodeTemplate>();
+	/**蓝方上路水晶*/
+	public static NodeTemplate buleTopCrystalNodeTemplate;
+	/**蓝方中路水晶*/
+	public static NodeTemplate buleMidCrystalNodeTemplate;
+	/**蓝方下路水晶*/
+	public static NodeTemplate buleDownCrystalNodeTemplate;
+	/**红方上路水晶*/
+	public static NodeTemplate redTopCrystalNodeTemplate;
+	/**红方中路水晶*/
+	public static NodeTemplate redMidCrystalNodeTemplate;
+	/**红方下路水晶*/
+	public static NodeTemplate redDownCrystalNodeTemplate;
+	
+	/**蓝方小兵*/
+	public static NodeTemplate buleSoldierNodeTemplate;
+	/**蓝方炮兵*/
+	public static NodeTemplate buleArtilleryNodeTemplate;
+	/**蓝方超级兵*/
+	public static NodeTemplate buleSuperNodeTemplate;
+	/**红方小兵*/
+	public static NodeTemplate redSoldierNodeTemplate;
+	/**红方炮兵*/
+	public static NodeTemplate redArtilleryNodeTemplate;
+	/**红方超级兵*/
+	public static NodeTemplate redSuperNodeTemplate;
+	
+	/**小龙*/
+	public static NodeTemplate samllDragonTemplate;
+	/**大龙*/
+	public static NodeTemplate bigDragonTemplate;
+	
+	/**蓝方野区巨鸟怪*/
+	public static NodeTemplate buleBirdNodeTemplate;
+	/**蓝方野区蛤蟆怪*/
+	public static NodeTemplate buleToadNodeTemplate;
+	/**蓝方野区小狼怪*/
+	public static NodeTemplate buleWolfNodeTemplate;
+	/**蓝方野区石头人*/
+	public static NodeTemplate buleStoneNodeTemplate;
+	/**蓝方野区红爸爸*/
+	public static NodeTemplate buleRbuffNodeTemplate;
+	/**蓝方野区蓝爸爸*/
+	public static NodeTemplate buleBbuffNodeTemplate;
+	
+	/**红方野区巨鸟怪*/
+	public static NodeTemplate redBirdNodeTemplate;
+	/**红方野区蛤蟆怪*/
+	public static NodeTemplate redToadNodeTemplate;
+	/**红方野区小狼怪*/
+	public static NodeTemplate redWolfNodeTemplate;
+	/**红方野区石头人*/
+	public static NodeTemplate redStoneNodeTemplate;
+	/**红方野区红爸爸*/
+	public static NodeTemplate redRbuffNodeTemplate;
+	/**红方野区蓝爸爸*/
+	public static NodeTemplate redBbuffNodeTemplate;
+	
+	public static void init() {
+		InputStream in = NodeConfig.class.getClassLoader().getResourceAsStream("template/Node.xlsx");
+		try {
+			XSSFWorkbook workBook = new XSSFWorkbook(in);
+			XSSFSheet sheet = workBook.getSheet(sheetName);
+			int i = 0;
+			for (Iterator<Row> iterator = sheet.rowIterator(); iterator.hasNext();) {
+				XSSFRow row = (XSSFRow) iterator.next();
+				if (i >= 2) {
+					int index = 0;
+					Integer id = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					String name = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					String icon = PoiUtil.getString((XSSFCell)row.getCell(index++));
+					Byte type = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte campType = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte wayType = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte armsType = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte monsterType = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Byte skillTarget = PoiUtil.getByte((XSSFCell)row.getCell(index++));
+					Integer hp = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer pa = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer ma = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer pd = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer md = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Short ats = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short aoe = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short vr = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short mvs = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short gold = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short exp = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Integer growthHP = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthPA = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthMA = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthGold = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthExp = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer buff = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer growthInterval = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Integer endGrowthTime = PoiUtil.getInt((XSSFCell)row.getCell(index++));
+					Short x = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					Short y = PoiUtil.getShort((XSSFCell)row.getCell(index++));
+					
+					NodeTemplate template = new NodeTemplate(id, name, icon, type, campType, wayType, armsType, monsterType, skillTarget, hp, pa, ma
+							, pd, md, ats, aoe, vr, mvs, gold, exp, growthHP, growthPA, growthMA, growthGold, growthExp, buff
+							, growthInterval, endGrowthTime, x, y);
+					map.put(template.getId(), template);
+					
+					if (template.getType() == NodeType.Crystal.getIndex()) {
+						if (template.getCampType() == CampType.Blue.getIndex()) {
+							if (template.getWayType() == WayType.Top.getIndex()) {
+								buleTopCrystalNodeTemplate = template;
+							} else if (template.getWayType() == WayType.Mid.getIndex()) {
+								buleMidCrystalNodeTemplate = template;
+							} else if (template.getWayType() == WayType.Down.getIndex()) {
+								buleDownCrystalNodeTemplate = template;
+							}
+						} else if (template.getCampType() == CampType.Red.getIndex()) {
+							if (template.getWayType() == WayType.Top.getIndex()) {
+								redTopCrystalNodeTemplate = template;
+							} else if (template.getWayType() == WayType.Mid.getIndex()) {
+								redMidCrystalNodeTemplate = template;
+							} else if (template.getWayType() == WayType.Down.getIndex()) {
+								redDownCrystalNodeTemplate = template;
+							}
+						}
+					} else if (template.getType() == NodeType.Troops.getIndex()) {
+						if (template.getCampType() == CampType.Blue.getIndex()) {
+							if (template.getArmsType() == ArmsType.Soldier.getIndex()) {
+								buleSoldierNodeTemplate = template;
+							} else if (template.getArmsType() == ArmsType.Artillery.getIndex()) {
+								buleArtilleryNodeTemplate = template;
+							} else if (template.getArmsType() == ArmsType.Super.getIndex()) {
+								buleSuperNodeTemplate = template;
+							}
+						} else if (template.getCampType() == CampType.Red.getIndex()) {
+							if (template.getArmsType() == ArmsType.Soldier.getIndex()) {
+								redSoldierNodeTemplate = template;
+							} else if (template.getArmsType() == ArmsType.Artillery.getIndex()) {
+								redArtilleryNodeTemplate = template;
+							} else if (template.getArmsType() == ArmsType.Super.getIndex()) {
+								redSuperNodeTemplate = template;
+							}
+						}
+					} else if (template.getType() == NodeType.Monster.getIndex()) {
+						if (template.getCampType() == CampType.Blue.getIndex()) {
+							if (template.getMonsterType() == MonsterType.Bird.getIndex()) {
+								buleBirdNodeTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.Toad.getIndex()) {
+								buleToadNodeTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.Wolf.getIndex()) {
+								buleWolfNodeTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.Stone.getIndex()) {
+								buleStoneNodeTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.Rbuff.getIndex()) {
+								buleRbuffNodeTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.Bbuff.getIndex()) {
+								buleBbuffNodeTemplate = template;
+							}
+						} else if (template.getCampType() == CampType.Red.getIndex()) {
+							if (template.getMonsterType() == MonsterType.Bird.getIndex()) {
+								redBirdNodeTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.Toad.getIndex()) {
+								redToadNodeTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.Wolf.getIndex()) {
+								redWolfNodeTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.Stone.getIndex()) {
+								redStoneNodeTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.Rbuff.getIndex()) {
+								redRbuffNodeTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.Bbuff.getIndex()) {
+								redBbuffNodeTemplate = template;
+							}
+						} else {
+							if (template.getMonsterType() == MonsterType.SamllDragon.getIndex()) {
+								samllDragonTemplate = template;
+							} else if (template.getMonsterType() == MonsterType.BigDragon.getIndex()) {
+								bigDragonTemplate = template;
+							}
+						}
+					}
+				}
+				i++;
+			}
+			logger.info(String.format("node config loaded record %d", i - 2));
+			workBook.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+}

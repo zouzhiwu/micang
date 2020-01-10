@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.TradeDao">	
+	
+	<insert id="create" parameterType="com.common.entity.Trade" useGeneratedKeys="true" keyProperty="id">
+		insert into trade (id
+			<if test="null != accountId">
+				, accountId
+			</if>
+			<if test="null != beAccountId">
+				, beAccountId
+			</if>
+			<if test="null != items">
+				, items
+			</if>
+			<if test="null != beItems">
+				, beItems
+			</if>
+			<if test="null != isLock">
+				, isLock
+			</if>
+			<if test="null != isBeLock">
+				, isBeLock
+			</if>
+			<if test="null != isEnter">
+				, isEnter
+			</if>
+			<if test="null != isBeEnter">
+				, isBeEnter
+			</if>
+		) values ( #{id}
+			<if test="null != accountId">
+				, #{accountId}
+			</if>
+			<if test="null != beAccountId">
+				, #{beAccountId}
+			</if>
+			<if test="null != items">
+				, #{items}
+			</if>
+			<if test="null != beItems">
+				, #{beItems}
+			</if>
+			<if test="null != isLock">
+				, #{isLock}
+			</if>
+			<if test="null != isBeLock">
+				, #{isBeLock}
+			</if>
+			<if test="null != isEnter">
+				, #{isEnter}
+			</if>
+			<if test="null != isBeEnter">
+				, #{isBeEnter}
+			</if>
+		)
+	</insert>
+	
+	<update id="update">
+		update trade 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != accountId">
+				, accountId = #{accountId}
+			</if>
+			<if test="null != beAccountId">
+				, beAccountId = #{beAccountId}
+			</if>
+			<if test="null != items">
+				, items = #{items}
+			</if>
+			<if test="null != beItems">
+				, beItems = #{beItems}
+			</if>
+			<if test="null != isLock">
+				, isLock = #{isLock}
+			</if>
+			<if test="null != isBeLock">
+				, isBeLock = #{isBeLock}
+			</if>
+			<if test="null != isEnter">
+				, isEnter = #{isEnter}
+			</if>
+			<if test="null != isBeEnter">
+				, isBeEnter = #{isBeEnter}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<delete id="delete" parameterType="Long">
+		delete from trade where id = #{id}
+	</delete>
+	
+	<select id="getById" parameterType="Long" resultType="com.common.entity.Trade">
+		select * from trade where id = #{id}
+	</select>
+	
+	<select id="getTradingCount" parameterType="Long" resultType="Integer">
+		select count(1) from trade where accountId = #{accountId} || beAccountId =#{accountId}
+	</select>
+	
+</mapper>  

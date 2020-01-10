@@ -1,0 +1,183 @@
+package com.game.job.fight;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.cb.msg.Message;
+import com.common.constant.FightConstant;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.WayType;
+import com.common.template.NodeTemplate;
+import com.game.common.MessageCode;
+import com.game.config.NodeConfig;
+import com.game.entity.Room;
+import com.game.helper.MsgHelper;
+import com.game.node.BaseNode;
+import com.game.node.TroopsNode;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class ArsenalControllerJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(ArsenalControllerJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Room room = (Room)jobDataMap.get("room");
+		// 第x波
+		Integer index = (Integer)jobDataMap.get("index") + 1;
+		logger.info(String.format("第%d波兵", index));
+		// 所有的水晶建筑列表
+		List<BaseNode> crystalList = room.getNodeList(NodeType.Crystal);
+		// 蓝方上路水晶是否存在
+		boolean isBlueTopExist = crystalList.stream().anyMatch(t ->t.template.getId() == FightConstant.bule_crystal_top_template_id);
+		// 蓝方中路水晶是否存在
+		boolean isBlueMidExist = crystalList.stream().anyMatch(t ->t.template.getId() == FightConstant.bule_crystal_mid_template_id);
+		// 蓝方下路水晶是否存在
+		boolean isBlueDownExist = crystalList.stream().anyMatch(t ->t.template.getId() == FightConstant.bule_crystal_down_template_id);
+		// 蓝方所有水晶是否存在
+		boolean isBlueAllNotExist = !isBlueTopExist && !isBlueMidExist && !isBlueDownExist;
+		// 红方上路水晶是否存在
+		boolean isRedTopExist = crystalList.stream().anyMatch(t ->t.template.getId() == FightConstant.red_crystal_top_template_id);
+		// 红方中路水晶是否存在
+		boolean isRedMidExist = crystalList.stream().anyMatch(t ->t.template.getId() == FightConstant.red_crystal_mid_template_id);
+		// 红方下路水晶是否存在
+		boolean isRedDownExist = crystalList.stream().anyMatch(t ->t.template.getId() == FightConstant.red_crystal_down_template_id);
+//		logger.info("isBlueTopExist=" + isBlueTopExist);
+//		logger.info("isBlueMidExist=" + isBlueMidExist);
+//		logger.info("isBlueDownExist=" + isBlueDownExist);
+//		logger.info("isRedTopExist=" + isRedTopExist);
+//		logger.info("isRedMidExist=" + isRedMidExist);
+//		logger.info("isRedDownExist=" + isRedDownExist);
+		// 红方所有水晶是否存在
+		boolean isRedAllNotExist = !isRedTopExist && !isRedMidExist && !isRedDownExist;
+		List<List<NodeTemplate>> buleNodeTemplateList = new ArrayList<List<NodeTemplate>>();
+		// 蓝方上中下三路分别出兵
+		for (int i = 0; i < 3; i++) {
+			List<NodeTemplate> wayNoteTemplateList = new ArrayList<NodeTemplate>();
+			if (i == 0) {		// 如果是上路，则判断红方上路水晶是否存在
+				if (!isRedTopExist) {	// 如果红方上路水晶不存在，则添加蓝方1个超级兵
+					wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.bule_super_template_id));
+				}
+			} else if (i == 1) {		// 如果是中路，则判断红方中路水晶是否存在
+				if (!isRedMidExist) {	// 如果红方中路水晶不存在，则添加蓝方1个超级兵
+					wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.bule_super_template_id));
+				}
+			} else if (i == 2) {		// 如果是下路，则判断红方下路水晶是否存在
+				if (!isRedDownExist) {	// 如果红方下路水晶不存在，则添加蓝方1个超级兵
+					wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.bule_super_template_id));
+				}
+			}
+			// 如果红方上中下路水晶全部不存在，则再添加蓝方1个超级兵
+			if (isRedAllNotExist) {
+				wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.bule_super_template_id));
+			}
+			wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.bule_soldier_template_id));
+			wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.bule_soldier_template_id));
+			wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.bule_soldier_template_id));
+			// 每隔3波，出1个炮兵
+			if (index % 3 == 0) {
+				wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.bule_artillery_template_id));
+			}
+			buleNodeTemplateList.add(wayNoteTemplateList);
+		}
+		List<List<NodeTemplate>> redNodeTemplateList = new ArrayList<List<NodeTemplate>>();
+		// 红方上中下三路分别出兵
+		for (int i = 0; i < 3; i++) {
+			List<NodeTemplate> wayNoteTemplateList = new ArrayList<NodeTemplate>();
+			if (i == 0) {		// 如果是上路，则判断蓝方上路水晶是否存在
+				if (!isBlueTopExist) {	// 如果蓝方上路水晶不存在，则添加红方1个超级兵
+					wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.red_super_template_id));
+				}
+			} else if (i == 1) {		// 如果是中路，则判断蓝方上路水晶是否存在
+				if (!isBlueMidExist) {	// 如果蓝方中路水晶不存在，则添加红方1个超级兵
+					wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.red_super_template_id));
+				}
+			} else if (i == 2) {		// 如果是下路，则判断蓝方上路水晶是否存在
+				if (!isBlueDownExist) {	// 如果蓝方下路水晶不存在，则添加红方1个超级兵
+					wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.red_super_template_id));
+				}
+			}
+			// 如果蓝方上中下路水晶全部不存在，则再添加红方1个超级兵
+			if (isBlueAllNotExist) {
+				wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.red_super_template_id));
+			}
+			wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.red_soldier_template_id));
+			wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.red_soldier_template_id));
+			wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.red_soldier_template_id));
+			// 每隔3波，出1个炮兵
+			if (index % 3 == 0) {
+				wayNoteTemplateList.add(NodeConfig.map.get(FightConstant.red_artillery_template_id));
+			}
+			redNodeTemplateList.add(wayNoteTemplateList);
+		}
+		
+		List<List<TroopsNode>> buleTroopsNodeList = new ArrayList<List<TroopsNode>>();
+		for (int i = 0; i < buleNodeTemplateList.size(); i++) {
+			List<NodeTemplate> nodeTemplatesList = buleNodeTemplateList.get(i);
+			List<TroopsNode> troopsNodeList = new ArrayList<TroopsNode>();
+			WayType wayType = WayType.getType((byte)i);
+			for (int j = 0; j < nodeTemplatesList.size(); j++) {
+				NodeTemplate nodeTemplate = nodeTemplatesList.get(j);
+				TroopsNode troopsNode = new TroopsNode(room.troopsNodeId++, room, nodeTemplate, CampType.Blue, wayType);
+//				logger.info(String.format("生成节点nodeId=%d templateId=%d selfCamp=%s location=(%d,%d)", troopsNode.nodeId, troopsNode.template.getId(), troopsNode.selfCamp.getName(), troopsNode.template.getX(), troopsNode.template.getY()));
+				troopsNodeList.add(troopsNode);
+			}
+			buleTroopsNodeList.add(troopsNodeList);
+		}
+		
+		List<List<TroopsNode>> redTroopsNodeList = new ArrayList<List<TroopsNode>>();
+		for (int i = 0; i < redNodeTemplateList.size(); i++) {
+			List<NodeTemplate> nodeTemplatesList = redNodeTemplateList.get(i);
+			List<TroopsNode> troopsNodeList = new ArrayList<TroopsNode>();
+			WayType wayType = WayType.getType((byte)i);
+			for (int j = 0; j < nodeTemplatesList.size(); j++) {
+				NodeTemplate nodeTemplate = nodeTemplatesList.get(j);
+				TroopsNode troopsNode = new TroopsNode(room.troopsNodeId++, room, nodeTemplate, CampType.Red, wayType);
+//				logger.info(String.format("生成节点nodeId=%d templateId=%d selfCamp=%s location=(%d,%d)", troopsNode.nodeId, troopsNode.template.getId(), troopsNode.selfCamp.getName(), troopsNode.template.getX(), troopsNode.template.getY()));
+				troopsNodeList.add(troopsNode);
+			}
+			redTroopsNodeList.add(troopsNodeList);
+		}
+		room.startArsenal(buleTroopsNodeList, redTroopsNodeList);
+		jobDataMap.put("index", index);
+		
+		Message msg = new Message();
+		msg.setMsgcd(MessageCode.msg_fight_troops_create_notice);
+		msg.putInt(room.getTime());
+		msg.putShort(buleTroopsNodeList.size());
+		for (int i = 0; i < buleTroopsNodeList.size(); i++) {
+			List<TroopsNode> troopsNodeList = buleTroopsNodeList.get(i);
+			msg.putShort(troopsNodeList.size());
+			for (int j = 0; j < troopsNodeList.size(); j++) {
+				TroopsNode troopsNode = troopsNodeList.get(j);
+				msg.putShort(troopsNode.nodeId);
+				msg.putInt(troopsNode.template.getId());
+				msg.putByte(troopsNode.wayType.getIndex());
+			}
+		}
+		msg.putShort(redTroopsNodeList.size());
+		for (int i = 0; i < redTroopsNodeList.size(); i++) {
+			List<TroopsNode> nodeTemplatesList = redTroopsNodeList.get(i);
+			msg.putShort(nodeTemplatesList.size());
+			for (int j = 0; j < nodeTemplatesList.size(); j++) {
+				TroopsNode troopsNode = nodeTemplatesList.get(j);
+				msg.putShort(troopsNode.nodeId);
+				msg.putInt(troopsNode.template.getId());
+				msg.putByte(troopsNode.wayType.getIndex());
+			}
+		}
+		MsgHelper.sendBroadcast(msg, room);
+	}
+}

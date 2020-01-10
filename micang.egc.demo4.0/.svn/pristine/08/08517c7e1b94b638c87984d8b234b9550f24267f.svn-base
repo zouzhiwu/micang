@@ -1,0 +1,37 @@
+package com.game.job.skill;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.constant.HeroConstant;
+import com.common.entity.Hero;
+import com.common.entity.Skill;
+import com.common.enumerate.TaskStatus;
+import com.common.helper.TimeHelper;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class RammusJob implements Job {
+	private final static Logger logger = LoggerFactory.getLogger(RammusJob.class);
+	
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Hero attHero = (Hero)jobDataMap.get("attHero");
+		Skill skill = (Skill)jobDataMap.get("skill");
+		attHero.rammusStatus = TaskStatus.Off;
+		attHero.speed -= HeroConstant.default_speed * 0.3f;
+		long time = TimeHelper.getMilliTime();
+		skill.triggertime = time;
+		attHero.publicSkillTime = time;
+		logger.info(String.format("玩家%s结束龙龟技能", attHero.accountId));
+	}
+}

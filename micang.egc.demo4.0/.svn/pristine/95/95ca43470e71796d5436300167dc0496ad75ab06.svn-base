@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.MailDao">	
+	
+	<insert id="create" parameterType="com.common.entity.Mail" useGeneratedKeys="true" keyProperty="id">
+		insert into mail ( id
+			<if test="null != accountId">
+				, accountId
+			</if>
+			<if test="null != content">
+				, content
+			</if>
+			<if test="null != itemTemplateIds">
+				, itemTemplateIds
+			</if>
+			<if test="null != createTime">
+				, createTime
+			</if>
+			<if test="null != updateTime">
+				, updateTime
+			</if>
+		) values ( #{id}
+			<if test="null != accountId">
+				, #{accountId}
+			</if>
+			<if test="null != content">
+				, #{content}
+			</if>
+			<if test="null != itemTemplateIds">
+				, #{itemTemplateIds}
+			</if>
+			<if test="null != createTime">
+				, #{createTime}
+			</if>
+			<if test="null != updateTime">
+				, #{updateTime}
+			</if>
+		)
+	</insert>
+	
+	<update id="update" parameterType="com.common.entity.Mail">
+		update mail 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != itemTemplateIds">
+				, itemTemplateIds = #{itemTemplateIds}
+			</if>
+			<if test="null != updateTime">
+				, updateTime = #{updateTime}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<delete id="delete" parameterType="Long">
+		delete from mail where id = #{id}
+	</delete>
+	
+	<update id="setOpened" parameterType="Long">
+		update mail set updateTime = unix_timestamp(now()) where id = #{id}
+	</update>
+	
+	<select id="getById" parameterType="Long" resultType="com.common.entity.Mail">
+		select * from mail where id = #{id}
+	</select>
+	
+	<select id="getList" resultType="com.common.entity.Mail">
+		select * from mail where accountId = #{accountId}
+		limit #{recordIndex}, #{pageSize}
+	</select>
+	
+	<delete id="clearOutMail" parameterType="Integer">
+		delete from mail where createTime &lt;= #{time}
+	</delete>
+	
+	<delete id="clearReadMail" parameterType="Integer">
+		delete from mail where createTime &lt;= #{time} and updateTime != createTime
+	</delete>
+	
+</mapper>  

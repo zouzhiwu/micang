@@ -1,0 +1,22 @@
+package com.game.common;
+
+public class MessageCode {
+	// 账号模块
+	public final static short msg_account_login = 1001; // 登录服务器
+	public final static short msg_account_heartbeat = 1002; // 心跳请求
+	public final static short msg_account_logout = 1003; // 下线通知
+	
+	// 队员模块
+	public final static short msg_member_list = 1101;
+	public final static short msg_member_add = 1102;
+	
+	// 英雄模块
+	public final static short msg_hero_list = 1201;
+	public final static short msg_hero_add = 1202;
+	
+	public final static short msg_status_success = 0;
+	public final static short msg_status_warning = 1;
+	public final static short msg_status_failed = 2;//失败(房间创建超过十个为失败)
+	public final static short msg_status_error = -1;
+	
+}

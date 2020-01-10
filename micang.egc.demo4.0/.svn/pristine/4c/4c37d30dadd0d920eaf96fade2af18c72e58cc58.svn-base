@@ -1,0 +1,189 @@
+package com.game.job;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.quartz.JobKey;
+
+import com.common.constant.RoomConstant;
+import com.common.enumerate.CampType;
+import com.common.enumerate.TacticsType;
+import com.common.enumerate.WorkType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+import com.game.helper.UuidHelper;
+import com.game.job.fight.ArsenalControllerJob;
+import com.game.job.fight.ArsenalJob;
+import com.game.job.fight.AttackJob;
+import com.game.job.fight.BeginGameJob;
+import com.game.job.fight.CreateHeroJob;
+import com.game.job.fight.CreateMonsterJob;
+import com.game.job.fight.CreateMonstersJob;
+import com.game.job.fight.InitTacticesJob;
+import com.game.job.fight.MoveJob;
+import com.game.job.fight.SyncLocationJob;
+import com.game.job.fight.UpdateVisionJob;
+import com.game.node.SoldierNode;
+
+public class FightJobManager {
+//	private final static Logger logger = LoggerFactory.getLogger(RoomJobManager.class);
+	
+	/**
+	 *  创建开始游戏Job
+	 */
+	public static void createBeginGameJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		room.beginGameJobKey = jobKey;
+		long delayTime = RoomConstant.game_scene_load_time * 1000;
+		JobScheduler.createSingleJob(jobKey, delayTime, dataMap, BeginGameJob.class);
+	}
+	
+	/**
+	 *  创建攻击Job
+	 */
+	public static void createAttackJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long repeatInterval = 100;
+		long delayTime = 0;
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, AttackJob.class);
+	}
+	
+	/**
+	 *  创建更新视野Job
+	 */
+	public static void createUpdateVisionJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long repeatInterval = 30;
+		long delayTime = 0;
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, UpdateVisionJob.class);
+	}
+	
+	/**
+	 *  创建移动Job
+	 */
+	public static void createMoveJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		long repeatInterval = 20;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long delayTime = 0;
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, MoveJob.class);
+	}
+	
+	/**
+	 *  创建兵工厂控制器Job
+	 */
+	public static void createArsenalContrallerJob(Room room, long delayTime, long repeatInterval) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("index", 0);
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, ArsenalControllerJob.class);
+	}
+	
+	/**
+	 *  创建兵工厂Job
+	 */
+	public static void createArsenalJob(Room room, List<SoldierNode> buleTopSoldierNodeList, List<SoldierNode> buleMidSoldierNodeList, List<SoldierNode> buleDownSoldierNodeList
+			, List<SoldierNode> redTopSoldierNodeList, List<SoldierNode> redMidSoldierNodeList, List<SoldierNode> redDownSoldierNodeList) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		long delayTime = 0;
+		long repeatInterval = 1000;
+		dataMap.put("room", room);
+		dataMap.put("buleTopSoldierNodeList", buleTopSoldierNodeList);
+		dataMap.put("buleMidSoldierNodeList", buleMidSoldierNodeList);
+		dataMap.put("buleDownSoldierNodeList", buleDownSoldierNodeList);
+		dataMap.put("redTopSoldierNodeList", redTopSoldierNodeList);
+		dataMap.put("redMidSoldierNodeList", redMidSoldierNodeList);
+		dataMap.put("redDownSoldierNodeList", redDownSoldierNodeList);
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, ArsenalJob.class);
+	}
+	
+	/**
+	 *  英雄到线上位置后，创建查找领路人Job
+	 */
+	public static void createInitTacticesJob(Room room, long delayTime, TacticsType tacticsType) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("tacticsType", tacticsType);
+		JobScheduler.createSingleJob(jobKey, delayTime, dataMap, InitTacticesJob.class);
+	}
+	
+	/**
+	 *  创建同步位置Job
+	 */
+	public static void createSyncLocationJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long delayTime = 0;
+		long repeatInterval = 200;
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, dataMap, SyncLocationJob.class);
+	}
+	
+	/**
+	 *  创建野怪Job
+	 */
+	public static void createMonstersJob(Room room, long delayTime, List<NodeTemplate> monsterTemplateList) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("monsterTemplateList", monsterTemplateList);
+		JobScheduler.createSingleJob(jobKey, delayTime, dataMap, CreateMonstersJob.class);
+	}
+	
+	/**
+	 *  创建大小龙Job
+	 */
+	public static void createMonsterJob(Room room, long delayTime, NodeTemplate monsterTemplate) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("monsterTemplate", monsterTemplate);
+		JobScheduler.createSingleJob(jobKey, delayTime, dataMap, CreateMonsterJob.class);
+	}
+	
+	/**
+	 *  创建英雄Job
+	 */
+	public static void createHeroJob(Room room, long delayTime, CampType campType, WorkType workType) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = room.groupName;
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("campType", campType);
+		dataMap.put("workType", workType);
+		JobScheduler.createSingleJob(jobKey, delayTime, dataMap, CreateHeroJob.class);
+	}
+	
+}

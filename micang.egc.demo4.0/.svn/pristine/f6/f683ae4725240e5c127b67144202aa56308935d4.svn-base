@@ -1,0 +1,884 @@
+package com.game.node;
+
+import java.util.List;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.Hero;
+import com.common.entity.Location;
+import com.common.entity.Lvxp;
+import com.common.entity.Member;
+import com.common.enumerate.CampType;
+import com.common.enumerate.LevelType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.TargetType;
+import com.common.enumerate.TaskType;
+import com.common.enumerate.WorkType;
+import com.common.template.HeroTemplate;
+import com.common.template.NodeTemplate;
+import com.common.util.GameUtil;
+import com.game.config.NodeConfig;
+import com.game.config.ParameterConfig;
+import com.game.entity.Room;
+import com.game.entity.Target;
+import com.game.entity.Task;
+import com.game.job.FightJobManager;
+import com.game.util.LevelUtil;
+
+public class HeroNode extends AbsMoveNode {
+	private static final Logger logger = LoggerFactory.getLogger(HeroNode.class);
+	public Hero hero;
+	public HeroTemplate heroTemplate;
+	public Member member;
+	public WorkType workType;
+	
+	public HeroNode(short nodeId, Room room, Location location, Hero hero, HeroTemplate heroTemplate, CampType camp) {
+		this.nodeId = nodeId;
+		this.selfCamp = camp;
+		this.room = room;
+		this.location = new Location(location.x, location.y);
+		this.hero = hero;
+		this.heroTemplate = heroTemplate;
+		setEnemyCamp();
+		this.hp = heroTemplate.getHp();
+		this.vr = heroTemplate.getVr();
+		this.pa = heroTemplate.getPa();
+		this.ma = heroTemplate.getMa();
+		this.ats = heroTemplate.getAts();
+		workType = WorkType.getType(heroTemplate.getWork());
+		logger.info(String.format("创建 nodeId=%d %s %s %s %s", nodeId, this.selfCamp.getName(), this.getNodeType().getName(), location, workType.getName()));
+	}
+	
+	/**加成后的物防(Physical Defense)*/
+	public int pd;
+	
+	/**加成后的法防(Magic Defense)*/
+	public int md;
+	
+	/**加成后的经验值*/
+    public short exp;
+    
+	/**加成后的冷却时间(Cold Down)*/
+	public int cd;
+	
+	/**加成后的物暴(Physical Crit)*/
+	public int pcrt;
+	
+	/**加成后的法暴(Magic Crit)*/
+	public int mcrt;
+	
+	/**加成后的物穿(Physical Penetrating Power)*/
+	public int ppt;
+	
+	/**加成后的法穿(Magic Penetrating Power)*/
+	public int mpt;
+	
+	/**加成后的伤害加深(Hurt Increase)*/
+	public int hi;
+	
+	/**加成后的伤害减免(Hurt Reduction)*/
+	public int hr;
+	
+	/**补刀数*/
+	public short supplement;
+	
+	/**金钱数*/
+	public short money;
+	
+	/**击杀数量*/
+	public byte kill;
+	
+	/**死亡次数*/
+	public byte dead;
+	
+	/**助攻次数*/
+	public byte help;
+	
+	/**查找领路人*/
+	public JobKey findGuiderJobKey;
+	
+	/**是否到达线上位置*/
+	public boolean isDoneOnline = false;
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Hero;
+	}
+	
+	public void revive() {
+		WorkType workType = WorkType.getType(heroTemplate.getWork());
+		Lvxp lvxp = LevelUtil.getLvxp(LevelType.Hero, exp);
+		// 计算复活时间
+		long delayTime = Math.max((lvxp.getLevel() - 1) * 3 + 7, 10); 
+		FightJobManager.createHeroJob(room, delayTime, this.selfCamp, workType);
+	}
+	
+	public void startAiLogic() {
+		
+	}
+	
+	public void dead(BaseNode attackNode) {
+		logger.info(String.format("nodeId=%d 阵亡", this.nodeId));
+		// 删除节点
+    	room.remove(nodeId);
+    	// 复活
+    	revive();
+    	// 关闭攻击视野
+    	stopAttack();
+    	// 关闭移动job
+    	stopMove();
+    	// 关闭视野job
+    	stopUpdateVision();
+    	// 刷所有节点视野
+		refreshAllNodeVision();
+		// 计算经验收益
+		callExpProfit(attackNode);
+    }
+	
+	private void callExpProfit(BaseNode attackNode) {
+		// 计算击杀英雄的经验值收益
+		int asLv = LevelUtil.getLevel(LevelType.Hero, attackNode.exp);
+		int beLv = LevelUtil.getLevel(LevelType.Hero, this.exp);
+		int lvDiff = asLv - beLv;
+		Float coefficient = callLevelCoefficient(lvDiff);
+		attackNode.exp += Math.round(this.exp * coefficient);
+	}
+	
+	/***
+	 * 计算等级系数
+	 * @param lvDiff 等级差
+	 * @return 系数
+	 */
+	private float callLevelCoefficient(int lvDiff) {
+		List<Object[]> killHeroCoefficient = ParameterConfig.killHeroCoefficient;
+		// 系数
+		Float coefficient = null;
+		for (Object[] objs : killHeroCoefficient) {
+			int levelDiff = (int)objs[0];
+			if (lvDiff <= levelDiff) {
+				coefficient = (float)objs[1];
+				break;
+			}
+		}
+		if (coefficient == null) {
+			if (CollectionUtils.isNotEmpty(killHeroCoefficient)) {
+				Object[] objs = killHeroCoefficient.get(killHeroCoefficient.size() - 1);
+				coefficient = (float)objs[1];
+			} else {
+				coefficient = 1.0f;
+			}
+		}
+		return coefficient;
+	}
+	
+	public void onAiLogic() {
+		Task currTask = task;
+		if (currTask != null) {
+			if (!currTask.isDone) {
+				if (currTask.type == TaskType.Wait) {
+					BaseNode baseNode = getTargetNodeTemplateInVision();
+					// 如果发现目标，则完成任务
+					if (baseNode != null) {
+						currTask.isDone = true;
+						isDoneOnline = true;
+						logger.info(String.format("nodeId=%d 等到目标 nodeId=%d", nodeId, baseNode.nodeId));
+					}
+				} else if (currTask.type == TaskType.Move) {
+					// 如果视野内有节点，则可变更任务
+					if (visionList.size() > 0) {
+						if (currTask.target.type == TargetType.Node) {
+							double distance = GameUtil.distance(currTask.target.node.location, this.location);
+			    			// 如果任务目标不在射程范围内，则可变更目标
+			    			if (distance > aoe) {
+			    				// 如果已经到达线上位置，则可变更目标
+			    				if (isDoneOnline) {
+			    					BaseNode node = getMinDistance(currTask.target);
+				    	    		if (node != null) {
+				    					if (node.hp > 0) {
+				    						double d = GameUtil.distance(node.location, this.location);
+				    						if (d <= aoe) {
+					    						logger.info(String.format("nodeId=%d 变更目标 nodeId=%d %s", nodeId, node.nodeId, node.location));
+					    						changeTask(new Task(new Target(node), TaskType.Attack));
+					    					}
+				    					}
+				    	    		}
+			    				}
+			    			} else {
+			    				currTask.isDone = true;
+			    			}
+						}
+					}
+				} else if (currTask.type == TaskType.Attack) {
+					// TODO 如果在攻击别人时，有人攻击我，则变更任务
+				} else if (currTask.type == TaskType.Free) {
+					// 如果是空闲任务，则什么都不做
+				}
+			}
+			// 如果任务完成
+			if (currTask.isDone) {
+				// 如果没有下一任务，则设置该路上的目标节点为下一任务，否则执行下一任务
+				if (currTask.nextTask == null) {
+					BaseNode targetNode = getTargetNode();
+					logger.info(String.format("nodeId=%d 查找该路上的目标节点 nodeId=%d", nodeId, targetNode.nodeId));
+					Task firstTask = new Task(new Target(new Location(targetNode.location)), TaskType.Move);
+					Task nextTask = new Task(new Target(targetNode), TaskType.Attack);
+					firstTask.nextTask = nextTask;
+					changeTask(firstTask);
+				} else {
+					changeTask(currTask.nextTask);
+				}
+			}
+		}
+	}
+	
+	@Override
+	public void changeTask(Task newTask) {
+		this.task = newTask;
+		switch (this.task.type) {
+		case Wait:
+			logger.info(String.format("nodeId=%d 变更等待任务 newTask=%s", nodeId, newTask));
+			break;
+		case Move:
+			startMove();
+			logger.info(String.format("nodeId=%d 变更移动任务 newTask=%s", nodeId, newTask));
+			break;
+		case Attack:
+			startAttack();
+			logger.info(String.format("nodeId=%d 变更攻击任务 newTask=%s", nodeId, newTask));
+			break;
+		default:
+			break;
+		}
+	}
+	
+	public void toOnline() {
+		// 把我方最前线炮塔位置作为英雄的线上位置
+		BaseNode onlineNode = getOnlineNode();
+		if (workType == WorkType.Jun) {
+			if (onlineNode == null) {
+				NodeTemplate rbuffNodeTemplate = selfCamp == CampType.Blue ? NodeConfig.buleRbuffNodeTemplate : NodeConfig.redRbuffNodeTemplate;
+				Location location = new Location(rbuffNodeTemplate.getX(), rbuffNodeTemplate.getY());
+				// 把该位置作为等待小兵的位置
+				Task moveTask = new Task(new Target(location), TaskType.Move);
+				logger.info(String.format("nodeId=%d monsterNode.name=%s monsterNode.location=%s", nodeId, rbuffNodeTemplate.getName(), location));
+				// 把红爸爸模板作为等待目标条件
+				Task waitTask = new Task(new Target(rbuffNodeTemplate), TaskType.Wait);
+				moveTask.nextTask = waitTask;
+				changeTask(moveTask);
+			} else {
+				// 把该位置作为等待野怪的位置
+				Task moveTask = new Task(new Target(onlineNode.location), TaskType.Move);
+				logger.info(String.format("nodeId=%d monsterNode.nodeId=%d onlineNode.location=%s", nodeId, onlineNode.nodeId, onlineNode.location));
+				// 等待野怪的模板
+				NodeTemplate nodeTemplate = onlineNode.template;
+				// 把野怪模板作为等待目标条件
+				Task waitTask = new Task(new Target(nodeTemplate), TaskType.Wait);
+				moveTask.nextTask = waitTask;
+				changeTask(moveTask);
+			}
+		} else {
+			if (onlineNode == null) {
+				// 上单，中单，辅助，ADC是不可能获取不到线上位置的，除非基地没有了
+			} else {
+				// 把该位置作为等待小兵的位置
+				Task moveTask = new Task(new Target(onlineNode.location), TaskType.Move);
+				logger.info(String.format("nodeId=%d onlineNode.nodeId=%d onlineNode.location=%s", nodeId, onlineNode.nodeId, onlineNode.location));
+				// 等待小兵的模板
+				NodeTemplate nodeTemplate = selfCamp == CampType.Blue ? NodeConfig.buleSmallNodeTemplate : NodeConfig.redSmallNodeTemplate;
+				// 把小兵模板作为等待目标条件
+				Task waitTask = new Task(new Target(nodeTemplate), TaskType.Wait);
+				moveTask.nextTask = waitTask;
+				changeTask(moveTask);
+			}
+		}
+	}
+	
+	private BaseNode getOnlineNode() {
+		BaseNode onlineNode = null;
+		switch (room.tacticsType) {
+		case Alone:
+			onlineNode = getOnlineNodeWithAlone();
+			break;
+		case Group:
+			onlineNode = getOnlineNodeWithGroup();
+			break;
+		}
+		return onlineNode;
+	}
+	
+	private BaseNode getTargetNode() {
+		BaseNode onlineNode = null;
+		switch (room.tacticsType) {
+		case Alone:
+			onlineNode = getTargetNodeWithAlone();
+			break;
+		case Group:
+			onlineNode = getTargetNodeWithGroup();
+			break;
+		}
+		return onlineNode;
+	}
+	
+	/**
+	 * 分推时对方线上建筑物
+	 */
+	private BaseNode getOnlineNodeWithAlone() {
+		BaseNode baseNode = null;
+		if (selfCamp == CampType.Blue) {
+			if (workType == WorkType.Top) {
+				// 查找上路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.buleTopTower1NodeTemplate);
+				// 如果上路1号塔不存在，则查找上路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleTopTower2NodeTemplate);
+				}
+				// 如果上路1号2号塔不存在，则查找上路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleTopTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor2NodeTemplate);
+				}
+				// 如果门牙塔不存在，则查找基地
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleHomeNodeTemplate);
+				}
+			} else if (workType == WorkType.Mid) {
+				// 查找中路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower1NodeTemplate);
+				// 如果中路1号塔不存在，则查找中路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower2NodeTemplate);
+				}
+				// 如果中路1号2号塔不存在，则查找中路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor2NodeTemplate);
+				}
+				// 如果门牙塔不存在，则查找基地
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleHomeNodeTemplate);
+				}
+			} else if (workType == WorkType.Jun) {
+				// 查找蓝方蓝爸爸
+				baseNode = room.getNodeByTemplate(NodeConfig.buleBbuffNodeTemplate);
+				// 如果蓝爸爸不存在，则查找红爸爸
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleRbuffNodeTemplate);
+				}
+				// 如果红爸爸不存在，则查找石头人
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleStoneNodeTemplate);
+				}
+				// 如果石头人不存在，则查找小狼怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleWolfNodeTemplate);
+				}
+				// 如果小狼怪不存在，则查找蛤蟆怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleToadNodeTemplate);
+				}
+				// 如果蛤蟆怪不存在，则查找巨鸟怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleBirdNodeTemplate);
+				}
+			} else if (workType == WorkType.Sup || workType == WorkType.Adc) {
+				// 查找下路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.buleDownTower1NodeTemplate);
+				// 如果下路1号塔不存在，则查找下路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDownTower2NodeTemplate);
+				}
+				// 如果下路1号2号塔不存在，则查找下路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDownTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor2NodeTemplate);
+				}
+				// 如果门牙塔不存在，则查找基地
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleHomeNodeTemplate);
+				}
+			}
+		} else {
+			if (workType == WorkType.Top) {
+				// 查找上路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.redTopTower1NodeTemplate);
+				// 如果上路1号塔不存在，则查找上路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redTopTower2NodeTemplate);
+				}
+				// 如果上路1号2号塔不存在，则查找上路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redTopTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor2NodeTemplate);
+				}
+				// 如果门牙塔不存在，则查找基地
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redHomeNodeTemplate);
+				}
+			} else if (workType == WorkType.Mid) {
+				// 查找中路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.redMidTower1NodeTemplate);
+				// 如果中路1号塔不存在，则查找中路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redMidTower2NodeTemplate);
+				}
+				// 如果中路1号2号塔不存在，则查找中路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redMidTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找中路水晶
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redMidCrystalNodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor2NodeTemplate);
+				}
+			} else if (workType == WorkType.Jun) {
+				// 查找蓝方蓝爸爸
+				baseNode = room.getNodeByTemplate(NodeConfig.redBbuffNodeTemplate);
+				// 如果蓝爸爸不存在，则查找红爸爸
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redRbuffNodeTemplate);
+				}
+				// 如果红爸爸不存在，则查找石头人
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redStoneNodeTemplate);
+				}
+				// 如果石头人不存在，则查找小狼怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redWolfNodeTemplate);
+				}
+				// 如果小狼怪不存在，则查找蛤蟆怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redToadNodeTemplate);
+				}
+				// 如果蛤蟆怪不存在，则查找巨鸟怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redBirdNodeTemplate);
+				}
+			} else if (workType == WorkType.Sup || workType == WorkType.Adc) {
+				// 查找下路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.redDownTower1NodeTemplate);
+				// 如果下路1号塔不存在，则查找下路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDownTower2NodeTemplate);
+				}
+				// 如果下路1号2号塔不存在，则查找下路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDownTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor2NodeTemplate);
+				}
+				// 如果门牙塔不存在，则查找基地
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redHomeNodeTemplate);
+				}
+			}
+		}
+		return baseNode;
+	}
+	
+	/**
+	 * 分推时对方线上建筑物
+	 */
+	private BaseNode getTargetNodeWithAlone() {
+		BaseNode baseNode = null;
+		if (enemyCamp == CampType.Blue) {
+			if (workType == WorkType.Top) {
+				// 查找上路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.buleTopTower1NodeTemplate);
+				// 如果上路1号塔不存在，则查找上路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleTopTower2NodeTemplate);
+				}
+				// 如果上路1号2号塔不存在，则查找上路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleTopTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路水晶
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleTopCrystalNodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor2NodeTemplate);
+				}
+			} else if (workType == WorkType.Mid) {
+				// 查找中路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower1NodeTemplate);
+				// 如果中路1号塔不存在，则查找中路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower2NodeTemplate);
+				}
+				// 如果中路1号2号塔不存在，则查找中路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找中路水晶
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleMidCrystalNodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor2NodeTemplate);
+				}
+			} else if (workType == WorkType.Jun) {
+				// 查找蓝方蓝爸爸
+				baseNode = room.getNodeByTemplate(NodeConfig.buleBbuffNodeTemplate);
+				// 如果蓝爸爸不存在，则查找红爸爸
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleRbuffNodeTemplate);
+				}
+				// 如果红爸爸不存在，则查找石头人
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleStoneNodeTemplate);
+				}
+				// 如果石头人不存在，则查找小狼怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleWolfNodeTemplate);
+				}
+				// 如果小狼怪不存在，则查找蛤蟆怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleToadNodeTemplate);
+				}
+				// 如果蛤蟆怪不存在，则查找巨鸟怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleBirdNodeTemplate);
+				}
+				// 如果巨鸟怪不存在，则查找红方蓝爸爸
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redBbuffNodeTemplate);
+				}
+				// 如果蓝爸爸不存在，则查找红爸爸
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redRbuffNodeTemplate);
+				}
+				// 如果红爸爸不存在，则查找石头人
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redStoneNodeTemplate);
+				}
+				// 如果石头人不存在，则查找小狼怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redWolfNodeTemplate);
+				}
+				// 如果小狼怪不存在，则查找蛤蟆怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redToadNodeTemplate);
+				}
+				// 如果蛤蟆怪不存在，则查找巨鸟怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redBirdNodeTemplate);
+				}
+			} else if (workType == WorkType.Sup || workType == WorkType.Adc) {
+				// 查找下路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.buleDownTower1NodeTemplate);
+				// 如果下路1号塔不存在，则查找下路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDownTower2NodeTemplate);
+				}
+				// 如果下路1号2号塔不存在，则查找下路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDownTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找下路水晶
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDownCrystalNodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleDoor2NodeTemplate);
+				}
+			}
+			// 如果水晶不存在，则查找基地
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleHomeNodeTemplate);
+			}
+		} else {
+			if (workType == WorkType.Top) {
+				// 查找上路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.redTopTower1NodeTemplate);
+				// 如果上路1号塔不存在，则查找上路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redTopTower2NodeTemplate);
+				}
+				// 如果上路1号2号塔不存在，则查找上路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redTopTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路水晶
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redTopCrystalNodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor2NodeTemplate);
+				}
+			} else if (workType == WorkType.Mid) {
+				// 查找中路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.redMidTower1NodeTemplate);
+				// 如果中路1号塔不存在，则查找中路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redMidTower2NodeTemplate);
+				}
+				// 如果中路1号2号塔不存在，则查找中路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redMidTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找中路水晶
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redMidCrystalNodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor2NodeTemplate);
+				}
+			} else if (workType == WorkType.Jun) {
+				// 查找蓝方蓝爸爸
+				baseNode = room.getNodeByTemplate(NodeConfig.redBbuffNodeTemplate);
+				// 如果蓝爸爸不存在，则查找红爸爸
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redRbuffNodeTemplate);
+				}
+				// 如果红爸爸不存在，则查找石头人
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redStoneNodeTemplate);
+				}
+				// 如果石头人不存在，则查找小狼怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redWolfNodeTemplate);
+				}
+				// 如果小狼怪不存在，则查找蛤蟆怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redToadNodeTemplate);
+				}
+				// 如果蛤蟆怪不存在，则查找巨鸟怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redBirdNodeTemplate);
+				}
+				// 如果巨鸟怪不存在，则查找红方蓝爸爸
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redBbuffNodeTemplate);
+				}
+				// 如果蓝爸爸不存在，则查找红爸爸
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleRbuffNodeTemplate);
+				}
+				// 如果红爸爸不存在，则查找石头人
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleStoneNodeTemplate);
+				}
+				// 如果石头人不存在，则查找小狼怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleWolfNodeTemplate);
+				}
+				// 如果小狼怪不存在，则查找蛤蟆怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleToadNodeTemplate);
+				}
+				// 如果蛤蟆怪不存在，则查找巨鸟怪
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.buleBirdNodeTemplate);
+				}
+			} else if (workType == WorkType.Sup || workType == WorkType.Adc) {
+				// 查找下路1号塔
+				baseNode = room.getNodeByTemplate(NodeConfig.redDownTower1NodeTemplate);
+				// 如果下路1号塔不存在，则查找下路2号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDownTower2NodeTemplate);
+				}
+				// 如果下路1号2号塔不存在，则查找下路3号塔
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDownTower3NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找下路水晶
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDownCrystalNodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔1
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor1NodeTemplate);
+				}
+				// 如果防御塔都不存在，则查找上路门牙塔2
+				if (baseNode == null) {
+					baseNode = room.getNodeByTemplate(NodeConfig.redDoor2NodeTemplate);
+				}
+			}
+			// 如果水晶不存在，则查找基地
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.redHomeNodeTemplate);
+			}
+		}
+		return baseNode;
+	}
+	
+	/**
+	 * 中团时对方线上建筑物
+	 */
+	private BaseNode getOnlineNodeWithGroup() {
+		BaseNode baseNode = null;
+		if (selfCamp == CampType.Blue) {
+			// 查找中路1号塔
+			baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower1NodeTemplate);
+			// 如果中路1号塔不存在，则查找中路2号塔
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower2NodeTemplate);
+			}
+			// 如果中路1号2号塔不存在，则查找中路3号塔
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower3NodeTemplate);
+			}
+			// 如果防御塔都不存在，则查找中路水晶
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleMidCrystalNodeTemplate);
+			}
+			// 如果水晶不存在，则查找基地
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleHomeNodeTemplate);
+			}
+		} else {
+			// 查找中路1号塔
+			baseNode = room.getNodeByTemplate(NodeConfig.redMidTower1NodeTemplate);
+			// 如果中路1号塔不存在，则查找中路2号塔
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.redMidTower2NodeTemplate);
+			}
+			// 如果中路1号2号塔不存在，则查找中路3号塔
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.redMidTower3NodeTemplate);
+			}
+			// 如果防御塔都不存在，则查找中路水晶
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.redMidCrystalNodeTemplate);
+			}
+			// 如果水晶不存在，则查找基地
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.redHomeNodeTemplate);
+			}
+		}
+		return baseNode;
+	}
+	
+	/**
+	 * 中团时对方线上建筑物
+	 */
+	private BaseNode getTargetNodeWithGroup() {
+		BaseNode baseNode = null;
+		if (enemyCamp == CampType.Blue) {
+			// 查找中路1号塔
+			baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower1NodeTemplate);
+			// 如果中路1号塔不存在，则查找中路2号塔
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower2NodeTemplate);
+			}
+			// 如果中路1号2号塔不存在，则查找中路3号塔
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleMidTower3NodeTemplate);
+			}
+			// 如果防御塔都不存在，则查找中路水晶
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleMidCrystalNodeTemplate);
+			}
+			// 如果防御塔都不存在，则查找中路门牙塔1
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleDoor1NodeTemplate);
+			}
+			// 如果防御塔都不存在，则查找中路门牙塔2
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleDoor2NodeTemplate);
+			}
+			// 如果水晶不存在，则查找基地
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleHomeNodeTemplate);
+			}
+		} else {
+			// 查找中路1号塔
+			baseNode = room.getNodeByTemplate(NodeConfig.redMidTower1NodeTemplate);
+			// 如果中路1号塔不存在，则查找中路2号塔
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.redMidTower2NodeTemplate);
+			}
+			// 如果中路1号2号塔不存在，则查找中路3号塔
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.redMidTower3NodeTemplate);
+			}
+			// 如果防御塔都不存在，则查找中路水晶
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.redMidCrystalNodeTemplate);
+			}
+			// 如果防御塔都不存在，则查找中路门牙塔1
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleDoor1NodeTemplate);
+			}
+			// 如果防御塔都不存在，则查找中路门牙塔2
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.buleDoor2NodeTemplate);
+			}
+			// 如果水晶不存在，则查找基地
+			if (baseNode == null) {
+				baseNode = room.getNodeByTemplate(NodeConfig.redHomeNodeTemplate);
+			}
+		}
+		return baseNode;
+	}
+}

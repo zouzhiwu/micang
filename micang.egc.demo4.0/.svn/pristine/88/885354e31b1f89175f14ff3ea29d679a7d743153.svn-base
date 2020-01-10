@@ -1,0 +1,119 @@
+package com.game.util;
+
+import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.data.ACL;
+import org.apache.zookeeper.data.Stat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.ServerAddress;
+import com.game.helper.JsonMapper;
+
+public class ZkUtil {
+	
+	private static final Logger logger = LoggerFactory.getLogger(ZkUtil.class);
+	
+	public static boolean exists(ZooKeeper zk, String path) {
+		Stat stat = null;
+		try {
+			stat = zk.exists(path, new Watcher() {
+				@Override
+				public void process(WatchedEvent event) {
+					
+				}
+			});
+		} catch (KeeperException e) {
+			logger.error(e.toString());
+		} catch (InterruptedException e) {
+			logger.error(e.toString());
+		}
+		return stat != null;
+	}
+	
+	public static String create(ZooKeeper zk, String path, byte[] data, ArrayList<ACL> ids, CreateMode mode) {
+		String result = null;
+		try {
+			result = zk.create(path, data, ids, mode);
+			logger.info(String.format("create zk node %s", result));
+		} catch (KeeperException e) {
+			logger.error(e.toString());
+		} catch (InterruptedException e) {
+			logger.error(e.toString());
+		}
+		return result;
+	}
+	
+	public static Stat setData(ZooKeeper zk, String path, byte[] data) {
+		Stat stat = null;
+		try {
+			stat = zk.setData(path, data, zk.exists(path, true).getVersion());
+			logger.info(String.format("set zk node=%s version=%s", path, stat.getVersion()));
+		} catch (KeeperException e) {
+			logger.error(e.toString());
+		} catch (InterruptedException e) {
+			logger.error(e.toString());
+		}
+		return stat;
+	}
+	
+	public static String getData(ZooKeeper zk, String path) {
+		String result = null;
+		try {
+			byte[] data = zk.getData(path, new Watcher() {
+				@Override
+				public void process(WatchedEvent event) {
+					
+				}
+			}, null);
+			result = new String(data, "UTF-8");
+			return result;
+		} catch (KeeperException e) {
+			logger.error(e.toString());
+		} catch (InterruptedException e) {
+			logger.error(e.toString());
+		} catch (UnsupportedEncodingException e) {
+			logger.error(e.toString());
+		}
+		return result;
+	}
+	
+	public static void delete(ZooKeeper zk, String path, String nodeName) {
+		try {
+			zk.delete(path + "/" + nodeName, 0);
+			logger.info(String.format("delete zk node %s", path + "/" + nodeName));
+		} catch (KeeperException e) {
+			logger.error(e.toString());
+		} catch (InterruptedException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+	public static List<ServerAddress> getGameServerList(ZooKeeper zk, String path) {
+		List<ServerAddress> serverList = new ArrayList<ServerAddress>();
+		try {
+			List<String> nodeList = zk.getChildren(path, true);
+	        for (String node : nodeList) {
+	            byte[] data = zk.getData(path + "/" + node, true, null);
+	    		@SuppressWarnings("unchecked")
+	    		Map<String, Integer> map = JsonMapper.getInstance().fromJson(new String(data), Map.class);
+	    		Integer online = map.get("online");
+	            ServerAddress address = new ServerAddress(new String(node), online);
+	            serverList.add(address);
+	        }
+		} catch (KeeperException e) {
+			logger.error(e.toString());
+		} catch (InterruptedException e) {
+			logger.error(e.toString());
+		}
+		return serverList;
+	}
+}

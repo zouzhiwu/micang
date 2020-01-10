@@ -1,0 +1,30 @@
+package com.game.node;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+
+public class HomeNode extends BaseNode {
+	public HomeNode(short nodeId, Room room, NodeTemplate template, CampType camp) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = camp;
+		setEnemyCamp();
+	}
+	
+	public Room room;
+	public NodeTemplate template;
+	
+	public NodeType getNodeType() {
+		return NodeType.Base;
+	}
+
+	@Override
+	public void die(BaseNode node) {
+		// TODO 游戏结束
+	}
+}

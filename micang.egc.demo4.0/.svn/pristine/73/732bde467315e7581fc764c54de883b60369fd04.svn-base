@@ -1,0 +1,27 @@
+package com.game.job.fight;
+
+import org.quartz.DisallowConcurrentExecution;
+import org.quartz.Job;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
+import org.quartz.PersistJobDataAfterExecution;
+
+import com.common.entity.Room;
+import com.game.factory.Context;
+import com.game.service.FightService;
+
+@PersistJobDataAfterExecution
+@DisallowConcurrentExecution
+public class MoveInitplaceJob implements Job {
+//	private final static Logger logger = LoggerFactory.getLogger(MoveInitpaceJob.class);
+	@Override
+	public void execute(JobExecutionContext context) throws JobExecutionException {
+		JobDetail jobDetail = context.getJobDetail();
+		JobDataMap jobDataMap = jobDetail.getJobDataMap();
+		Room room = (Room)jobDataMap.get("room");
+		FightService fightService = Context.getBean(FightService.class);
+		fightService.moveInitplace(room);
+	}
+}

@@ -1,0 +1,122 @@
+package com.game.action;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Action;
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+import com.common.entity.Account;
+import com.game.common.MessageCode;
+import com.game.entity.ChatGroup;
+import com.game.entity.ResultGroupInfoList;
+import com.game.service.ChatService;
+
+import io.netty.channel.Channel;
+
+@Service
+public class ChatAction {
+
+	private static final Logger logger = LoggerFactory.getLogger(ChatAction.class);
+
+	@Autowired
+	private ChatService chatService;
+	
+	
+	/**
+	 * 创建聊天群
+	 */
+	@Action(MessageCode.msg_chat_group_create)
+	public void createGroup(Message message, Channel channel) throws Exception {
+		String tname = message.getString();
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		chatService.createGroup(message.getAccountId(), tname, "group");
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+
+	/**
+	 * 获取聊天群列表
+	 */
+	@Action(MessageCode.msg_chat_group_get_list)
+	public void getGroupList(Message message, Channel channel) throws Exception {
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		ResultGroupInfoList resultGroupInfoList = chatService.getGroupList(message.getAccountId());
+		ChatGroup[] infos = resultGroupInfoList.getInfos();
+		List<ChatGroup> list = new ArrayList<ChatGroup>(Arrays.asList(infos));
+		// 过滤房间的聊天群和小队聊天群
+		List<ChatGroup> chatGroupList = list.stream().filter(g -> {return "room".equals(g.getCustom()) && "team".equals(g.getCustom());}).collect(Collectors.toList());
+		Message msg = new Message(message);
+		msg.putShort(chatGroupList.size());
+		for (int i = 0; i < chatGroupList.size(); i++) {
+			msg.putString(chatGroupList.get(i).getTid());
+			msg.putLong(chatGroupList.get(i).getOwner());
+			msg.putString(chatGroupList.get(i).getTname());
+			msg.putInt(chatGroupList.get(i).getSize());
+		}
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 添加群成员
+	 */
+	@Action(MessageCode.msg_chat_group_member_add)
+	public void addGroupMember(Message message, Channel channel) throws Exception {
+		String tid = message.getString();
+		Long beMemberId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		chatService.addGroupAccount(message.getAccountId(), tid, beMemberId);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 删除群成员
+	 */
+	@Action(MessageCode.msg_chat_group_member_delete)
+	public void deleteGroupMember(Message message, Channel channel) throws Exception {
+		String tid = message.getString();
+		Long beMemberId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		chatService.deleteGroupAccount(message.getAccountId(), tid, beMemberId);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 删除群
+	 */
+	@Action(MessageCode.msg_chat_group_delete)
+	public void deleteGroup(Message message, Channel channel) throws Exception {
+		String tid = message.getString();
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		chatService.deleteGroup(message.getAccountId(), tid);
+		Message msg = new Message(message);
+		MsgSender.sendMsg(msg);
+	}
+	
+	/**
+	 * 获取群成员列表
+	 */
+	@Action(MessageCode.msg_chat_group_member_list)
+	public void getGroupInfo(Message message, Channel channel) throws Exception {
+		String tid = message.getString();
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		List<Account> accountList = chatService.getGroupAccountList(message.getAccountId(), tid);
+		Message msg = new Message(message);
+		msg.putShort(accountList.size());
+		for (int i = 0; i < accountList.size(); i++) {
+			msg.putLong(accountList.get(i).getId());
+			msg.putString(accountList.get(i).getNick());
+			msg.putByte(accountList.get(i).getState());
+		}
+		MsgSender.sendMsg(msg);
+	}
+}

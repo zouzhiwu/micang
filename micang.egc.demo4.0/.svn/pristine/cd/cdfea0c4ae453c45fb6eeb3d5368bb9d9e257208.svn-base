@@ -1,0 +1,14 @@
+package com.game.dao;
+
+import java.util.List;
+
+import com.common.entity.GuildLog;
+
+public interface GuildLogDao {
+
+	public void create(GuildLog guildLog);
+
+	public void delete(Integer time);
+	
+	public List<GuildLog> getByGuildId(Integer guildId);
+}

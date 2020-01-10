@@ -1,0 +1,270 @@
+package com.game.service;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.util.EntityUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.common.entity.Account;
+import com.common.entity.Hero;
+import com.common.entity.Room;
+import com.common.entity.RoomGroup;
+import com.common.helper.CheckSumBuilder;
+import com.common.helper.TimeHelper;
+import com.common.util.AssertUtil;
+import com.game.dao.AccountDao;
+import com.game.dao.RoomGroupDao;
+import com.game.entity.GroupInfo;
+import com.game.entity.ResultGroupInfo;
+import com.game.entity.ResultGroupInfoList;
+import com.game.helper.JsonMapper;
+import com.game.util.HttpClientUtil;
+
+@Service
+public class ChatService {
+	private static final Logger logger = LoggerFactory.getLogger(ChatService.class);
+	private static final String appKey = "02fac6607f62efcdb6fee17a0c07a5ed";
+	private static final String appSecret = "272cbae99b53";
+	
+	@Autowired
+	private RoomGroupDao roomGroupDao;
+	@Autowired
+	private AccountDao accountDao;
+	
+	private Map<?, ?> request(String url, List<NameValuePair> nvps) {
+		CloseableHttpClient httpClient = HttpClientUtil.getDefaultHttpClient();
+		HttpPost httpPost = new HttpPost(url);
+		String nonce = "12345";
+		String curTime = String.valueOf((new Date()).getTime() / 1000L);
+		String checkSum = CheckSumBuilder.getCheckSum(appSecret, nonce, curTime);
+
+		// 设置请求的header
+		httpPost.addHeader("AppKey", appKey);
+		httpPost.addHeader("Nonce", nonce);
+		httpPost.addHeader("CurTime", curTime);
+		httpPost.addHeader("CheckSum", checkSum);
+		httpPost.addHeader("Content-Type", "application/x-www-form-urlencoded;charset=utf-8");
+
+		Map<?, ?> map = null;
+		try {
+			httpPost.setEntity(new UrlEncodedFormEntity(nvps, "utf-8"));
+			HttpResponse response = httpClient.execute(httpPost);
+			map = JsonMapper.getInstance().fromJson(EntityUtils.toString(response.getEntity(), "utf-8"), Map.class);
+		} catch (Exception e) {
+			logger.error(e.toString());
+		}
+		return map;
+	}
+	
+	private ResultGroupInfoList requestGroupInfoList(String url, List<NameValuePair> nvps) {
+		CloseableHttpClient httpClient = HttpClientUtil.getDefaultHttpClient();
+		HttpPost httpPost = new HttpPost(url);
+		String nonce = "12345";
+		String curTime = String.valueOf((new Date()).getTime() / 1000L);
+		String checkSum = CheckSumBuilder.getCheckSum(appSecret, nonce, curTime);
+
+		// 设置请求的header
+		httpPost.addHeader("AppKey", appKey);
+		httpPost.addHeader("Nonce", nonce);
+		httpPost.addHeader("CurTime", curTime);
+		httpPost.addHeader("CheckSum", checkSum);
+		httpPost.addHeader("Content-Type", "application/x-www-form-urlencoded;charset=utf-8");
+
+		ResultGroupInfoList resultGroupInfoList = null;
+		try {
+			httpPost.setEntity(new UrlEncodedFormEntity(nvps, "utf-8"));
+			HttpResponse response = httpClient.execute(httpPost);
+			resultGroupInfoList = JsonMapper.getInstance().fromJson(EntityUtils.toString(response.getEntity(), "utf-8"), ResultGroupInfoList.class);
+		} catch (Exception e) {
+			logger.error(e.toString());
+		}
+		return resultGroupInfoList;
+	}
+	
+	private ResultGroupInfo requestGroupInfo(String url, List<NameValuePair> nvps) {
+		CloseableHttpClient httpClient = HttpClientUtil.getDefaultHttpClient();
+		HttpPost httpPost = new HttpPost(url);
+		String nonce = "12345";
+		String curTime = String.valueOf((new Date()).getTime() / 1000L);
+		String checkSum = CheckSumBuilder.getCheckSum(appSecret, nonce, curTime);
+
+		// 设置请求的header
+		httpPost.addHeader("AppKey", appKey);
+		httpPost.addHeader("Nonce", nonce);
+		httpPost.addHeader("CurTime", curTime);
+		httpPost.addHeader("CheckSum", checkSum);
+		httpPost.addHeader("Content-Type", "application/x-www-form-urlencoded;charset=utf-8");
+
+		ResultGroupInfo gesultGroupInfo = null;
+		try {
+			httpPost.setEntity(new UrlEncodedFormEntity(nvps, "utf-8"));
+			HttpResponse response = httpClient.execute(httpPost);
+			String str = EntityUtils.toString(response.getEntity(), "utf-8");
+			gesultGroupInfo = JsonMapper.getInstance().fromJson(str, ResultGroupInfo.class);
+		} catch (Exception e) {
+			logger.error(e.toString());
+		}
+		return gesultGroupInfo;
+	}
+	
+	public Integer createAccid(Long accountId) {
+		String url = "https://api.netease.im/nimserver/user/create.action";
+		List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+		nvps.add(new BasicNameValuePair("accid", String.valueOf(accountId)));
+		Map<?, ?> map = request(url, nvps);
+		Integer code = (Integer)map.get("code");
+		return code;
+	}
+	
+	public Map<?, ?> createGroup(Long accountId, String tname, String custom) {
+		String url = "https://api.netease.im/nimserver/team/create.action";
+		List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+		nvps.add(new BasicNameValuePair("tname", tname));
+		nvps.add(new BasicNameValuePair("owner", String.valueOf(accountId)));
+		nvps.add(new BasicNameValuePair("members", String.format("[%s]", accountId)));
+		nvps.add(new BasicNameValuePair("msg", "msg"));
+		nvps.add(new BasicNameValuePair("magree", "0"));
+		nvps.add(new BasicNameValuePair("joinmode", "0"));
+		nvps.add(new BasicNameValuePair("custom", custom));
+		Map<?, ?> map = request(url, nvps);
+		return map;
+	}
+	
+//	public static void main(String[] args) {
+//		ChatService chatService = new ChatService();
+//		Integer code = chatService.createAccid(1003L);
+//		Map<?, ?> map = chatService.createGroup(1003L, "testGroup3", "group");
+//		System.out.println(map);
+//		Integer code = chatService.addGroupAccount(1003L, "2553375420", 1002L);
+//		Integer code = chatService.deleteGroupAccount(1003L, "2553375420", 1001L);
+//		ResultGroupInfoList resultGroupInfoList = chatService.getGroupList(1003L);
+//		System.out.println(resultGroupInfoList);
+//		Integer code = chatService.deleteGroup(1001L, "2552237768");
+//		List<Account> accountList = chatService.getGroupAccountList(1003L, "2553375420");
+//		System.out.println(accountList.size());
+//		System.out.println(code);
+//	}
+	
+	public Integer addGroupAccount(Long accountId, String tid, Long beAccountId) {
+		String url = "https://api.netease.im/nimserver/team/add.action";
+		List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+		nvps.add(new BasicNameValuePair("tid", tid));
+		nvps.add(new BasicNameValuePair("owner", String.valueOf(accountId)));
+		nvps.add(new BasicNameValuePair("members", String.format("[%s]", beAccountId)));
+		nvps.add(new BasicNameValuePair("msg", "msg"));
+		nvps.add(new BasicNameValuePair("magree", "0"));
+		Map<?, ?> map = request(url, nvps);
+		Integer code = (Integer)map.get("code");
+		return code;
+	}
+	
+	public Integer addGroupAccounts(Long accountId, String tid, List<Long> beAccountList) {
+		StringBuilder sb = new StringBuilder();
+		for (Long beAccountId : beAccountList) {
+			sb.append("," + beAccountId);
+		}
+		sb.deleteCharAt(0);
+		String url = "https://api.netease.im/nimserver/team/add.action";
+		List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+		nvps.add(new BasicNameValuePair("tid", tid));
+		nvps.add(new BasicNameValuePair("owner", String.valueOf(accountId)));
+		nvps.add(new BasicNameValuePair("members", String.format("[%s]", sb.toString())));
+		nvps.add(new BasicNameValuePair("msg", "msg"));
+		nvps.add(new BasicNameValuePair("magree", "0"));
+		Map<?, ?> map = request(url, nvps);
+		Integer code = (Integer)map.get("code");
+		return code;
+	}
+	
+	public Integer deleteGroupAccount(Long accountId, String tid, Long beAccountId) {
+		String url = "https://api.netease.im/nimserver/team/kick.action";
+		List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+		nvps.add(new BasicNameValuePair("tid", tid));
+		nvps.add(new BasicNameValuePair("owner", String.valueOf(accountId)));
+		nvps.add(new BasicNameValuePair("members", String.format("[%s]", beAccountId)));
+		Map<?, ?> map = request(url, nvps);
+		Integer code = (Integer)map.get("code");
+		return code;
+	}
+	
+	public Integer deleteGroup(Long accountId, String tid) {
+		String url = "https://api.netease.im/nimserver/team/remove.action";
+		List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+		nvps.add(new BasicNameValuePair("tid", tid));
+		nvps.add(new BasicNameValuePair("owner", String.valueOf(accountId)));
+		Map<?, ?> map = request(url, nvps);
+		Integer code = (Integer)map.get("code");
+		return code;
+	}
+	
+	public ResultGroupInfoList getGroupList(Long accountId) {
+		String url = "https://api.netease.im/nimserver/team/joinTeams.action";
+		List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+		nvps.add(new BasicNameValuePair("accid", String.valueOf(accountId)));
+		ResultGroupInfoList resultGroup = requestGroupInfoList(url, nvps);
+		return resultGroup;
+	}
+	
+	public List<Account> getGroupAccountList(Long accountId, String tid) {
+		String url = "https://api.netease.im/nimserver/team/query.action";
+		List<NameValuePair> nvps = new ArrayList<NameValuePair>();
+		nvps.add(new BasicNameValuePair("tids", String.format("[%s]", tid)));
+		nvps.add(new BasicNameValuePair("ope", "1"));
+		ResultGroupInfo resultGroupInfo = requestGroupInfo(url, nvps);
+		GroupInfo[] groupInfos = resultGroupInfo.getTinfos();
+		if (groupInfos != null && groupInfos.length > 0) {
+			GroupInfo groupInfo = groupInfos[0];
+			Long[] accountIds = groupInfo.getAccounts();
+			List<Long> accountIdList = new ArrayList<Long>(Arrays.asList(accountIds));
+			accountIdList.add(groupInfo.getOwner());
+			List<Account> accountList = accountDao.getByList(accountIdList);
+			return accountList;
+		} else {
+			return new ArrayList<Account>();
+		}
+	}
+	
+	public String createChatRoom(Room room) {
+		List<Long> roleIdList = room.heroMap.values().stream().filter(r -> !r.isNpc).map(Hero::getAccountId).collect(Collectors.toList());
+		AssertUtil.asWarnTrue(CollectionUtils.isNotEmpty(roleIdList), "没有真实玩家，不能创建聊天室");
+		AssertUtil.asWarnTrue(roleIdList.size() <= 20, "聊天室内不能多于20人");
+		Long owner = roleIdList.get(0);
+		Map<?, ?> map = createGroup(owner, "chatRoom", "room");
+		Integer code = (Integer)map.get("code");
+		AssertUtil.asWarnTrue(code == 200, "创建聊天室失败");
+		String tid = (String)map.get("tid");
+		addGroupAccounts(owner, tid, roleIdList);
+		RoomGroup roomGroup = new RoomGroup();
+		roomGroup.setTid(tid);
+		roomGroup.setOwner(owner);
+		roomGroup.setCreateTime(TimeHelper.getTime());
+		roomGroupDao.create(roomGroup);
+		return tid;
+	}
+
+	public void recycleChatRoom() {
+		Integer time = TimeHelper.getTime() + 6 * TimeHelper.HOUR_S;
+		List<RoomGroup> roomGroupList = roomGroupDao.getOutList(time);
+		for (RoomGroup roomGroup : roomGroupList) {
+			Integer code = deleteGroup(roomGroup.getOwner(), roomGroup.getTid());
+			if (code == 200) {
+				roomGroupDao.delete(roomGroup.getTid());
+			}
+		}
+	}
+}

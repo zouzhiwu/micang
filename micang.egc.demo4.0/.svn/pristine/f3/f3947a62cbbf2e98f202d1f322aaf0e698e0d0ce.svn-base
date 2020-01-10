@@ -1,0 +1,30 @@
+package com.game.service;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.common.entity.Member;
+import com.game.dao.MemberDao;
+
+@Service
+public class MemberService {
+	
+	@Autowired
+	private MemberDao memberDao;
+	
+//	private static final Logger logger = LoggerFactory.getLogger(MemberService.class);
+	
+	public List<Member> getByList(Long accountId) {
+		return memberDao.getByList(accountId);
+	}
+	
+	public Member getById(Long memberId) {
+		return memberDao.getById(memberId);
+	}
+
+	public void add(Member member) {
+		memberDao.add(member);
+	}
+}

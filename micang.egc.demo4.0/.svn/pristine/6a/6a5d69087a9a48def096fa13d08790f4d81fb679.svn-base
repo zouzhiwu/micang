@@ -1,0 +1,40 @@
+package com.game.node;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.entity.Room;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+
+public class TowerNode extends BaseAttackNode {
+	public TowerNode(short nodeId, Room room, NodeTemplate template, CampType camp) {
+		this.nodeId = nodeId;
+		this.room = room;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = camp;
+		setEnemyCamp();
+	}
+	
+	@Override
+	public NodeType getNodeType() {
+		return NodeType.Tower;
+	}
+
+	@Override
+	public void die(BaseNode node) {
+		// TODO 把这个节点从所有节点视野中删除，从Room列表删除
+	}
+
+	@Override
+	public void startAttack() {
+		FightJobManager.createAttackJob(this, template.getAoe(), template.getAts());
+	}
+
+	@Override
+	public void stopAttack() {
+		JobScheduler.stopJob(this.attackJobKey);
+	}
+}

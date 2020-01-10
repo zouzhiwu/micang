@@ -1,0 +1,109 @@
+package com.game.job;
+
+import java.io.IOException;
+import java.util.Date;
+import java.util.Map;
+import java.util.Properties;
+
+import org.quartz.Job;
+import org.quartz.JobBuilder;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.SchedulerFactory;
+import org.quartz.SimpleScheduleBuilder;
+import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
+import org.quartz.impl.StdSchedulerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.helper.TimeHelper;
+import com.game.config.AppConfig;
+
+public class JobManager {
+	private final static Logger logger = LoggerFactory.getLogger(JobManager.class);
+	public final static int interval = 50;
+	private static SchedulerFactory schedulerFactory;
+	public final static int max_count = 0;
+	
+	public static void init() {
+		String configPath = AppConfig.getConfigPath();
+		String quartzConfigPath = String.format("%s/quartz.properties", configPath);
+		Properties properties = new Properties();
+		try {
+			properties.load(Thread.currentThread().getContextClassLoader().getResourceAsStream(quartzConfigPath));
+			schedulerFactory = new StdSchedulerFactory(properties);
+		} catch (IOException e) {
+			logger.error(e.toString());
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+	/**
+	 * 创建执行轮询的作业
+	 * @param jobName		作业名
+	 * @param delayMilliseconds			延迟时间，毫秒
+	 * @param IntervalInMilliseconds	间隔时间，毫秒
+	 * @param count			循环次数
+	 * @param dataMap		参数集合
+	 * @param jobClass		作业类
+	 */
+	public static void createRepeatJob(JobKey jobKey, long delayMilliseconds, long IntervalInMilliseconds, int count
+			, Map<String, Object> dataMap, Class <? extends Job> jobClass) {
+		long firstTime = TimeHelper.getMilliTime() + delayMilliseconds;
+		try {
+			Scheduler scheduler = schedulerFactory.getScheduler();
+			JobDetail jobDetail = JobBuilder.newJob(jobClass)
+					.withIdentity(jobKey.getName(), jobKey.getGroup())
+					.build();
+	        Trigger trigger = TriggerBuilder.newTrigger()
+	        		.withIdentity(jobKey.getName(), jobKey.getGroup())
+	                .withSchedule(SimpleScheduleBuilder.simpleSchedule().withIntervalInMilliseconds(IntervalInMilliseconds).withRepeatCount(count - 1))
+	                .startAt(new Date(firstTime))
+	                .build();
+	        JobDataMap jobDataMap = jobDetail.getJobDataMap();
+	        if (!dataMap.containsKey("index")) {
+	        	dataMap.put("index", 0);
+	        }
+			jobDataMap.putAll(dataMap);
+	        scheduler.scheduleJob(jobDetail, trigger);
+			scheduler.start();
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+	/**
+	 * 创建执行单次的作业
+	 * @param jobName		作业名
+	 * @param delayMilliseconds			延迟时间，毫秒
+	 * @param dataMap		参数集合
+	 * @param jobClass		作业类
+	 */
+	public static void createSingleJob(JobKey jobKey, long delayMilliseconds, Map<String, Object> dataMap, Class <? extends Job> jobClass) {
+		long firstTime = TimeHelper.getMilliTime() + delayMilliseconds;
+		long IntervalInMilliseconds = delayMilliseconds;
+		try {
+			Scheduler scheduler = schedulerFactory.getScheduler();
+			JobDetail jobDetail = JobBuilder.newJob(jobClass)
+					.withIdentity(jobKey.getName(), jobKey.getGroup())
+					.build();
+	        Trigger trigger = TriggerBuilder.newTrigger()
+	        		.withIdentity(jobKey.getName(), jobKey.getGroup())
+	                .withSchedule(SimpleScheduleBuilder.simpleSchedule().withIntervalInMilliseconds(IntervalInMilliseconds).withRepeatCount(0))
+	                .startAt(new Date(firstTime))
+	                .build();
+	        JobDataMap jobDataMap = jobDetail.getJobDataMap();
+			jobDataMap.putAll(dataMap);
+	        scheduler.scheduleJob(jobDetail, trigger);
+			scheduler.start();
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+}

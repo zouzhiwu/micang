@@ -1,0 +1,14 @@
+package com.game.helper;
+
+import java.util.List;
+
+import com.cb.msg.Message;
+import com.cb.msg.MsgSender;
+
+public class MsgHelper {
+	
+	public static void sendBroadcast(Message message, List<Long> roleList) {
+		MsgSender.sendBroadcast(message, roleList, null);
+	}
+	
+}

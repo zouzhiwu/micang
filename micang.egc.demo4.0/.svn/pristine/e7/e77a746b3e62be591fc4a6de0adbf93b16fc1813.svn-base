@@ -1,0 +1,21 @@
+package com.game.dao;
+
+import java.util.List;
+
+import com.common.entity.TeamAccount;
+import com.common.entity.TeamAccountInfo;
+
+public interface TeamAccountDao {
+
+	public void add(TeamAccount teamAccount);
+
+	public void update(TeamAccount teamAccount);
+	
+	public void delete(Long id);
+	
+	public List<TeamAccount> getTeamAccountList(Long teamId);
+	
+	public List<TeamAccountInfo> getTeamAccountInfoList(Long teamId);
+	
+	public TeamAccount getTeamAccount(Long accountId);
+}

@@ -1,0 +1,70 @@
+package com.game.entity;
+
+public class UserMail {
+	
+	private Long accountId;//用户id
+	
+	private Long startIndex;//系统邮件刚开始的索引
+	
+	private Long endIndex;//邮件结束索引
+	
+	private Long receiveStartIndex;//领取附件开始索引
+	
+	private Long receiveEndIndex;//自动领取结束索引
+	
+	private String delInde;//开始索引和结束索引中被删除的索引 逗号分隔
+	
+	private String noRead;//开始索引和结束索引中未阅读的索引 逗号分隔
+	
+	private String noReceive;//开始索引和结束索引中未领取的索引 逗号分隔
+	
+	public Long getAccountId() {
+		return accountId;
+	}
+	public void setAccountId(Long accountId) {
+		this.accountId = accountId;
+	}
+	public Long getStartIndex() {
+		return startIndex;
+	}
+	public void setStartIndex(Long startIndex) {
+		this.startIndex = startIndex;
+	}
+	public Long getEndIndex() {
+		return endIndex;
+	}
+	public void setEndIndex(Long endIndex) {
+		this.endIndex = endIndex;
+	}
+	public Long getReceiveStartIndex() {
+		return receiveStartIndex;
+	}
+	public void setReceiveStartIndex(Long receiveStartIndex) {
+		this.receiveStartIndex = receiveStartIndex;
+	}
+	public Long getReceiveEndIndex() {
+		return receiveEndIndex;
+	}
+	public void setReceiveEndIndex(Long receiveEndIndex) {
+		this.receiveEndIndex = receiveEndIndex;
+	}
+	public String getDelInde() {
+		return delInde;
+	}
+	public void setDelInde(String delInde) {
+		this.delInde = delInde;
+	}
+	public String getNoRead() {
+		return noRead;
+	}
+	public void setNoRead(String noRead) {
+		this.noRead = noRead;
+	}
+	public String getNoReceive() {
+		return noReceive;
+	}
+	public void setNoReceive(String noReceive) {
+		this.noReceive = noReceive;
+	}
+	
+}

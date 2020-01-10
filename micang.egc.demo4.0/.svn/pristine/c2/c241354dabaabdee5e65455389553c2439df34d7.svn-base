@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.AccountDao">	
+	
+	<insert id="add" parameterType="com.common.entity.Account" useGeneratedKeys="true" keyProperty="id">
+		insert into account ( id
+			<if test="null != loginName">
+				, loginName
+			</if>
+			<if test="null != passwd">
+				, passwd
+			</if>
+			<if test="null != awtar">
+				, awtar
+			</if>
+			<if test="null != nick">
+				, nick
+			</if>
+			<if test="null != phoneNumber">
+				, phoneNumber
+			</if>
+			<if test="null != isTest">
+				, isTest
+			</if>
+			<if test="null != state">
+				, state
+			</if>
+		) values ( #{id}
+			<if test="null != loginName">
+				, #{loginName}
+			</if>
+			<if test="null != passwd">
+				, #{passwd}
+			</if>
+			<if test="null != awtar">
+				, #{awtar}
+			</if>
+			<if test="null != nick">
+				, #{nick}
+			</if>
+			<if test="null != phoneNumber">
+				, #{phoneNumber}
+			</if>
+			<if test="null != isTest">
+				, #{isTest}
+			</if>
+			<if test="null != state">
+				, #{state}
+			</if>
+		)
+	</insert>
+	
+	<select id="getById" parameterType="Long" resultType="com.common.entity.Account">
+		select * from account where id = #{id}
+	</select>
+	
+	<select id="getByName" parameterType="String" resultType="com.common.entity.Account">
+		select * from account where loginName = #{loginName}
+	</select>
+	
+	<select id="findTopOne" resultType="com.game.entity.SysMail">
+		select * from account order by id desc LIMIT 1
+	</select>
+	
+	<update id="update" parameterType="com.common.entity.Account">
+		update account 
+		<trim prefix="set" prefixOverrides=","> 
+			<if test="null != loginName">
+				, loginName = #{loginName}
+			</if>
+			<if test="null != passwd">
+				, passwd = #{passwd}
+			</if>
+			<if test="null != awtar">
+				, awtar = #{awtar}
+			</if>
+			<if test="null != nick">
+				, nick = #{nick}
+			</if>
+			<if test="null != exp">
+				, exp = exp + #{exp}
+			</if>
+			<if test="null != phoneNumber">
+				, phoneNumber = #{phoneNumber}
+			</if>
+			<if test="null != isTest">
+				, isTest = #{isTest}
+			</if>
+			<if test="null != state">
+				, state = #{state}
+			</if>
+		</trim>
+		where id = #{id}
+	</update>
+	
+	<update id="kickRole" parameterType="com.common.entity.Account">
+		update account ip = null, port = 0, roomId = 0 where ip = #{ip} and port = #{port}
+	</update>
+	
+	<select id="getByList" parameterType="List" resultType="com.common.entity.Account">
+		select * from account where id in 
+		<foreach collection="list" item="listItem" index="index" open="(" separator="," close=")">
+            #{listItem}
+    	</foreach>
+	</select>
+	
+	<update id="updateJb">
+		update account set jb = jb + #{addjb} where id = #{accountId}
+	</update>
+	
+	<update id="updateGb">
+		update account set gb = gb + #{addgb} where id = #{accountId}
+	</update>
+</mapper>  

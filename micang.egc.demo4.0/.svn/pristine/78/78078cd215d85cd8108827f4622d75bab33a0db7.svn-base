@@ -1,0 +1,131 @@
+package com.game.job;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.SchedulerFactory;
+import org.quartz.Trigger;
+import org.quartz.TriggerKey;
+import org.quartz.impl.StdSchedulerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.constant.RoomConstant;
+import com.common.entity.OperateStep;
+import com.common.entity.Room;
+import com.game.helper.UuidHelper;
+import com.game.room.job.BeginGameJob;
+import com.game.room.job.ChooseMemberJob;
+import com.game.room.job.OperationNoticeJob;
+
+public class JobScheduler {
+	private final static Logger logger = LoggerFactory.getLogger(JobScheduler.class);
+	public static SchedulerFactory factory = new StdSchedulerFactory();
+	
+	public static JobDetail getJobDetail(JobKey jobKey) {
+		JobDetail jobDetail = null;
+		try {
+			jobDetail = factory.getScheduler().getJobDetail(jobKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return jobDetail;
+	}
+	
+	public static Trigger getTrigger(TriggerKey triggerKey) {
+		Trigger trigger = null;
+		try {
+			trigger = factory.getScheduler().getTrigger(triggerKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return trigger;
+	}
+	
+	public static Scheduler getScheduler() {
+		Scheduler scheduler = null;
+		try {
+			scheduler = factory.getScheduler();
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return scheduler;
+	}
+	
+	public static boolean isHasJob(JobKey jobKey) {
+		boolean result = false;
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			result = scheduler.checkExists(jobKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return result;
+	}
+	
+	public static boolean stopJob(JobKey jobKey) {
+		boolean result = false;
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			result = scheduler.deleteJob(jobKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return result;
+	}
+	
+	public static JobKey getChooseMemberJobKey(int roomId) {
+		String jobName = String.format("job_name_choose_member_%d", roomId);
+		String groupName = "job_group_choose_member";
+		JobKey jobKey = new JobKey(jobName, groupName);
+		return jobKey;
+	}
+	
+	/**
+	 *  创建选择默认上阵队员Job
+	 */
+	public static void createChooseMemberJob(JobKey jobKey, Room room) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long delayMilliseconds = 30 * 1000;
+		JobManager.createSingleJob(jobKey, delayMilliseconds, dataMap, ChooseMemberJob.class);
+	}
+	
+	public static JobKey getOperationNoticeJobKey(int roomId) {
+		String jobName = String.format("job_name_operation_notice_%d", roomId);
+		String groupName = "group_name_operation_notice";
+		JobKey jobKey = new JobKey(jobName, groupName);
+		return jobKey;
+	}
+	
+	/**
+	 *  创建操作通知Job
+	 */
+	public static void createOperationNoticeJob(JobKey jobKey, List<OperateStep> operateStepList, Room room, int index) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("operateStepList", operateStepList);
+		dataMap.put("room", room);
+		dataMap.put("index", index);
+		long delayMilliseconds = RoomConstant.operation_notice_cd_time * 1000;
+		JobManager.createSingleJob(jobKey, delayMilliseconds, dataMap, OperationNoticeJob.class);
+	}
+	
+	/**
+	 *  创建开始游戏Job
+	 */
+	public static void createBeginGameJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long delayMilliseconds = RoomConstant.begin_game_cd_time;
+		JobManager.createSingleJob(jobKey, delayMilliseconds, dataMap, BeginGameJob.class);
+	}
+	
+}

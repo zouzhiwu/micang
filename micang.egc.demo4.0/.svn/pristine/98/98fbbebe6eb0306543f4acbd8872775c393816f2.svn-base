@@ -1,0 +1,96 @@
+package com.game.job;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.quartz.JobKey;
+
+import com.common.constant.RoomConstant;
+import com.game.entity.Room;
+import com.game.helper.UuidHelper;
+import com.game.job.fight.AttackJob;
+import com.game.job.fight.BeginGameJob;
+import com.game.job.fight.MoveInitplaceJob;
+import com.game.job.fight.MoveJob;
+import com.game.job.fight.UpdateVisionJob;
+import com.game.node.BaseAttackNode;
+import com.game.node.BaseMoveNode;
+
+public class FightJobManager {
+//	private final static Logger logger = LoggerFactory.getLogger(RoomJobManager.class);
+	
+	/**
+	 *  创建开始游戏Job
+	 */
+	public static void createBeginGameJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long delayTime = RoomConstant.game_scene_load_time * 1000;
+		JobScheduler.createSingleJob(jobKey, delayTime, dataMap, BeginGameJob.class);
+	}
+	
+	/**
+	 *  指定到初始位置 Job
+	 */
+	public static void createMoveInitplaceJob(Room room) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		long delayTime = 7500;
+		JobScheduler.createSingleJob(jobKey, delayTime, dataMap, MoveInitplaceJob.class);
+	}
+	
+	/**
+	 *  创建攻击Job
+	 */
+	public static void createAttackJob(BaseAttackNode node, short aoe) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		node.attackJobKey = jobKey;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("node", node);
+		dataMap.put("aoe", aoe);
+		long delayTime = 7500;
+		long repeatInterval = 7500;
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, 0, dataMap, AttackJob.class);
+	}
+	
+	/**
+	 *  创建更新视野Job
+	 */
+	public static void createUpdateVisionJob(Room room, BaseMoveNode node, short vr) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		node.moveJobKey = jobKey;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("node", node);
+		dataMap.put("vr", vr);
+		long delayTime = 7500;
+		long repeatInterval = 7500;
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, 0, dataMap, UpdateVisionJob.class);
+	}
+	
+	/**
+	 *  创建移动Job
+	 */
+	public static void createMoveJob(BaseMoveNode node, short aoe) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		node.moveJobKey = jobKey;
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("node", node);
+		dataMap.put("aoe", aoe);
+		long delayTime = 7500;
+		long repeatInterval = 7500;
+		JobScheduler.createRepeatJob(jobKey, delayTime, repeatInterval, 0, dataMap, MoveJob.class);
+	}
+}

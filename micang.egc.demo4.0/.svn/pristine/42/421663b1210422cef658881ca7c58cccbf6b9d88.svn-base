@@ -1,0 +1,1360 @@
+package com.game.job;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
+import org.quartz.JobKey;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.SchedulerFactory;
+import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
+import org.quartz.TriggerKey;
+import org.quartz.impl.StdSchedulerFactory;
+import org.quartz.impl.matchers.GroupMatcher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.constant.HeroConstant;
+import com.common.constant.TemplateConstant;
+import com.common.entity.Box;
+import com.common.entity.Buff;
+import com.common.entity.Hero;
+import com.common.entity.Link;
+import com.common.entity.Location;
+import com.common.entity.Room;
+import com.common.entity.Skill;
+import com.common.entity.Target;
+import com.common.entity.Trap;
+import com.common.entity.Vector3;
+import com.common.enumerate.ASkillType;
+import com.common.enumerate.BSkillType;
+import com.common.enumerate.SelfSkill;
+import com.common.enumerate.TargetType;
+import com.common.enumerate.TaskStatus;
+import com.common.helper.RandomHelper;
+import com.common.helper.TimeHelper;
+import com.common.template.SkillTemplate;
+import com.game.config.SkillConfig;
+import com.game.helper.HandleHelper.CreateSelfSkillHandle;
+import com.game.helper.HandleHelper.CreateSkillHandle;
+import com.game.helper.HandleHelper.ReplaceHandle;
+import com.game.helper.HandleHelper.StopRoomJobHandle;
+import com.game.helper.MsgHelper;
+import com.game.helper.UuidHelper;
+import com.game.job.buff.ValBuffJob;
+import com.game.job.room.CreateAiJob;
+import com.game.job.room.CreateRobotJob;
+import com.game.job.room.MarryRoomJob;
+import com.game.job.room.SendEnterJob;
+import com.game.job.room.ShutdownJob;
+import com.game.job.room.StartGameJob;
+import com.game.job.room.StopRoomJob;
+import com.game.job.skill.AttackGeneralJob;
+import com.game.job.skill.CancelTrapJob;
+import com.game.job.skill.KotlJob;
+import com.game.job.skill.LLdJob;
+import com.game.job.skill.LeblancMoveJob;
+import com.game.job.skill.LeblancWaitJob;
+import com.game.job.skill.LeesinBumpJob;
+import com.game.job.skill.LeesinWaitJob;
+import com.game.job.skill.PantheonJumpJob;
+import com.game.job.skill.PantheonSavingJob;
+import com.game.job.skill.PokeJob;
+import com.game.job.skill.RammusJob;
+import com.game.job.skill.ShockJob;
+import com.game.job.skill.SingShockJob;
+import com.game.job.skill.SingSnowJob;
+import com.game.job.skill.SwordsmanJumpJob;
+import com.game.job.skill.ThreeChopsJob;
+import com.game.job.skill.TossJob;
+import com.game.job.skill.WaveJob;
+import com.game.job.skill.YasuoMoveJob;
+import com.game.job.skill.YasuoWaitJob;
+import com.game.job.task.AttackBoxJob;
+import com.game.job.task.AttackHeroJob;
+import com.game.job.task.ChangeTaskJob;
+import com.game.job.task.MainTaskJob;
+import com.game.job.trade.InviteTradeJob;
+import com.game.job.trade.TestEnterTradeJob;
+import com.game.job.trade.TestOperationTradeJob;
+import com.game.job.vision.UpdateBookVisionJob;
+import com.game.job.vision.UpdateBoxVisionJob;
+import com.game.job.vision.UpdateHeroVisionJob;
+import com.game.util.GameUtil;
+
+public class JobScheduler {
+	private final static Logger logger = LoggerFactory.getLogger(JobScheduler.class);
+	public static SchedulerFactory factory = new StdSchedulerFactory();
+	
+	public static JobDetail getJobDetail(JobKey jobKey) {
+		JobDetail jobDetail = null;
+		try {
+			jobDetail = factory.getScheduler().getJobDetail(jobKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return jobDetail;
+	}
+	
+	public static Trigger getTrigger(TriggerKey triggerKey) {
+		Trigger trigger = null;
+		try {
+			trigger = factory.getScheduler().getTrigger(triggerKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return trigger;
+	}
+	
+	public static Scheduler getScheduler() {
+		Scheduler scheduler = null;
+		try {
+			scheduler = factory.getScheduler();
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return scheduler;
+	}
+	
+	public static void stopSing(Hero currHero) {
+		String groupName = String.format("%s_%s_longsing", currHero.roomId, currHero.accountId);
+		// 结束Quartz线程
+		stopGroup(groupName);
+	}
+	
+	public static boolean isHasSing(Hero currHero) {
+		String groupName = String.format("%s_%s_longsing", currHero.roomId, currHero.accountId);
+		boolean result = false;
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			GroupMatcher<JobKey> matcher = GroupMatcher.groupStartsWith(groupName);
+			Set<JobKey> jobKeySet = scheduler.getJobKeys(matcher);
+			result = CollectionUtils.isNotEmpty(jobKeySet);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return result;
+	}
+	
+	public static JobKey generateContinueSingJobKey(Hero beAttHero, ASkillType aSkillType, int effectId) {
+		String jobName = String.format("%s_%s_askill_%s_%s", beAttHero.roomId, beAttHero.accountId, aSkillType.getIndex(), effectId);
+		String groupName = String.format("%s_%s_longsing", beAttHero.roomId, beAttHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static JobKey generateJobKey(Hero beAttHero, ASkillType aSkillType, int effectId) {
+		String jobName = String.format("%s_%s_askill_%s_%s", beAttHero.roomId, beAttHero.accountId, aSkillType.getIndex(), effectId);
+		String groupName = String.format("%s_%s", beAttHero.roomId, beAttHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static JobKey generateJobKey(Hero beAttHero, BSkillType bSkillType) {
+		String jobName = String.format("%s_%s_bskill_%s", beAttHero.roomId, beAttHero.accountId, bSkillType.getIndex());
+		String groupName = String.format("%s_%s", beAttHero.roomId, beAttHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static JobKey generateJobKey(Hero beAttHero, SelfSkill selfSkill) {
+		String jobName = String.format("%s_%s_self_%s", beAttHero.roomId, beAttHero.accountId, selfSkill.getIndex());
+		String groupName = String.format("%s_%s", beAttHero.roomId, beAttHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static JobKey generateTargetJobKey(Hero currHero) {
+		String jobName = String.format("%s_%s_targetTask", currHero.roomId, currHero.accountId);
+		String groupName = String.format("%s_%s", currHero.roomId, currHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static boolean isHasJob(Hero beAttHero, BSkillType bSkillType) {
+		JobKey jobKey = generateJobKey(beAttHero, bSkillType);
+		return isHasJob(jobKey);
+	}
+	
+	public static boolean isHasJob(Hero beAttHero, ASkillType aSkillType, int effectId) {
+		JobKey jobKey = generateJobKey(beAttHero, aSkillType, effectId);
+		return isHasJob(jobKey);
+	}
+	
+	public static boolean isHasJob(Hero beAttHero, SelfSkill selfSkill) {
+		JobKey jobKey = generateJobKey(beAttHero, selfSkill);
+		return isHasJob(jobKey);
+	}
+	
+	public static boolean isHasJob(JobKey jobKey) {
+		boolean result = false;
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			result = scheduler.checkExists(jobKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return result;
+	}
+	
+	public static boolean stopJob(JobKey jobKey) {
+		boolean result = false;
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			result = scheduler.deleteJob(jobKey);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return result;
+	}
+	
+	public static boolean stopGroup(String groupName) {
+		boolean result = false;
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			GroupMatcher<JobKey> matcher = GroupMatcher.groupStartsWith(groupName);
+			Set<JobKey> jobKeySet = scheduler.getJobKeys(matcher);
+			if (CollectionUtils.isNotEmpty(jobKeySet)) {
+				List<JobKey> jobKeyList = new ArrayList<JobKey>(jobKeySet);
+				result = scheduler.deleteJobs(jobKeyList);
+			}
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return result;
+	}
+	
+	public static List<JobKey> getJobKeyByGroup(String groupName) {
+		List<JobKey> jobKeyList = new ArrayList<JobKey>();
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			GroupMatcher<JobKey> matcher = GroupMatcher.groupStartsWith(groupName);
+			Set<JobKey> jobKeySet = scheduler.getJobKeys(matcher);
+			jobKeyList = jobKeySet.stream().collect(Collectors.toList());
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+		return jobKeyList;
+	}
+	
+	/**
+	 * 创建一个B技能任务，如果存在同名任务，则根据接口返回值判断是否替换，否则直接创建
+	 */
+	public static void createBSkillJob(CreateSkillHandle createJobHandle, ReplaceHandle replaceHandle
+			, Hero attHero, Hero beAttHero, SkillTemplate skillTemplate) {
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			BSkillType bSkillType = BSkillType.getType(skillTemplate.getBid());
+			JobKey jobKey = generateJobKey(beAttHero, bSkillType);
+			// 如果有前置任务，则根据前置任务停止时间停止前置任务，否则创建当前任务
+			if (scheduler.checkExists(jobKey)) {
+				// 获取前置任务job
+				JobDetail JobDetail = scheduler.getJobDetail(jobKey);
+				// 获取前置任务数据
+				JobDataMap dataMap = JobDetail.getJobDataMap();
+				synchronized (beAttHero) {
+					// 调用函数式接口，如果符合替换条件（具体条件由实现这个接口中定义），则替换
+					if (replaceHandle.isReplace(dataMap, beAttHero)) {
+						scheduler.deleteJob(jobKey);
+						createJobHandle.createJob(jobKey, beAttHero, skillTemplate);
+					}
+				}
+	        } else {
+	        	createJobHandle.createJob(jobKey, beAttHero, skillTemplate);
+	        }
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+	/**
+	 * 创建一个自身技能任务，如果存在同名任务，则根据接口返回值判断是否替换，否则直接创建
+	 */
+	public static void createSelfJob(CreateSelfSkillHandle createJobFunc
+			, Hero currHero, SelfSkill selfSkill) {
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			JobKey jobKey = JobScheduler.generateJobKey(currHero, selfSkill);
+			// 如果有前置任务，则停止前置任务
+			if (scheduler.checkExists(jobKey)) {
+				scheduler.deleteJob(jobKey);
+	        }
+			createJobFunc.createJob(currHero, selfSkill);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+	/**
+	 * 创建停止减速任务
+	 */
+	public static void createSpeedJob(Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate) {
+		beAttHero.buffSpeed = new Buff(effectId, skillTemplate, attHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+	        JobManager.createSpeedJob(jobKey1, beAttHero1, skillTemplate1);
+		};
+		// 如果没有处于缓速状态，则减速
+		JobKey jobKey = generateJobKey(beAttHero, BSkillType.Speed);
+		if (!isHasJob(jobKey)) {
+			beAttHero.speed -= HeroConstant.default_speed * skillTemplate.getValue() / 100.0f;
+		}
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			long currStopTime = role.buffSpeed.begin + role.buffSpeed.length;
+			long preStopTime = jobDataMap.getLong("stopTime");
+			return currStopTime > preStopTime;
+		};
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	/**
+	 * 创建停止护盾任务
+	 */
+	public static void createShieldJob(Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate) {
+		beAttHero.buffShield = new Buff(effectId, skillTemplate, attHero);
+		beAttHero.extraHp = (int)((skillTemplate.getHurt() + beAttHero.addHp) * skillTemplate.getValue() / 100.0f);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+	        JobManager.createShieldJob(jobKey1, beAttHero1, skillTemplate1);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			long currStopTime = role.buffShield.begin + role.buffShield.length;
+			long preStopTime = jobDataMap.getLong("stopTime");
+			return currStopTime > preStopTime;
+		};
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	/**
+	 * 创建停止致盲任务
+	 */
+	public static void createBlindJob(Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate) {
+		beAttHero.buffBlind = new Buff(effectId, skillTemplate, attHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+			JobManager.createBlindJob(jobKey1, beAttHero1, skillTemplate1);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			long currStopTime = role.buffBlind.begin + role.buffBlind.length;
+			long preStopTime = jobDataMap.getLong("stopTime");
+			return currStopTime > preStopTime;
+		};
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	/**
+	 * 创建停止沉默任务
+	 */
+	public static void createSilentJob(Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate) {
+		beAttHero.buffSilent = new Buff(effectId, skillTemplate, attHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+			JobManager.createSilentJob(jobKey1, beAttHero1, skillTemplate1);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			long currStopTime = role.buffSilent.begin + role.buffSilent.length;
+			long preStopTime = jobDataMap.getLong("stopTime");
+			return currStopTime > preStopTime;
+		};
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	/**
+	 * 创建停止禁步任务
+	 */
+	public static void createStopJob(Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate) {
+		beAttHero.buffStop = new Buff(effectId, skillTemplate, attHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+			JobManager.createStopJob(jobKey1, beAttHero1, skillTemplate1);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			long currStopTime = role.buffStop.begin + role.buffStop.length;
+			long preStopTime = jobDataMap.getLong("stopTime");
+			return currStopTime > preStopTime;
+		};
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	/**
+	 * 创建停止晕眩任务
+	 */
+	public static void createDizzyJob(Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate) {
+		beAttHero.buffDizzy = new Buff(effectId, skillTemplate, attHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+			JobManager.createDizzyJob(jobKey1, beAttHero1, skillTemplate1);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			long currStopTime = role.buffDizzy.begin + role.buffDizzy.length;
+			long preStopTime = jobDataMap.getLong("stopTime");
+			return currStopTime > preStopTime;
+		};
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	/**
+	 * 创建停止剧毒任务
+	 */
+	public static void createDotJob(Room room, Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate, Integer cycleHurt) {
+		beAttHero.buffDot = new Buff(effectId, skillTemplate, attHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+	        JobManager.createDotJob(jobKey1, room, attHero, beAttHero1, skillTemplate1, cycleHurt);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			long currStopTime = role.buffDot.begin + role.buffDot.length;
+			long preStopTime = jobDataMap.getLong("stopTime");
+			int preValue = jobDataMap.getInt("preValue");
+			int currValue = skillTemplate.getValue();
+			return currStopTime > preStopTime && currValue > preValue;
+		};
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	/**
+	 * 创建停止伤害加深任务
+	 */
+	public static void createHurtJob(Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate) {
+		if (!JobScheduler.isHasJob(beAttHero, SelfSkill.Unmatch)) {
+			beAttHero.buffHurt = new Buff(effectId, skillTemplate, attHero);
+			// 实现创建Job接口
+			CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+				JobManager.createHurtJob(jobKey1, beAttHero1, skillTemplate1);
+			};
+			// 实现接口，用来判断如果存在同名Job，是否替换
+			ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+				long currStopTime = role.buffHurt.begin + role.buffHurt.length;
+				long preStopTime = jobDataMap.getLong("stopTime");
+				return currStopTime > preStopTime;
+			};
+			createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+		}
+	}
+
+	/**
+	 * 创建停止净化任务
+	 */
+	public static void createClearJob(Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate) {
+		beAttHero.buffClear = new Buff(effectId, skillTemplate, attHero);
+		if (isHasJob(beAttHero, BSkillType.Speed)) {
+			SkillTemplate speedSkillTemplate = SkillConfig.map.get(beAttHero.buffSpeed.skillTemplateId);
+			beAttHero.speed += HeroConstant.default_speed * speedSkillTemplate.getValue() / 100.0f;
+			logger.info(String.format("玩家%s净化减速speed=%s", beAttHero.accountId, beAttHero.speed));
+		}
+		beAttHero.buffSpeed = new Buff();
+		beAttHero.buffDot = new Buff();
+		beAttHero.buffNear = new Buff();
+		beAttHero.buffPush = new Buff();
+		beAttHero.buffBlind = new Buff();
+		beAttHero.buffHurt = new Buff();
+		beAttHero.buffVal = new Buff();
+		beAttHero.buffSilent = new Buff();
+		beAttHero.buffStop = new Buff();
+		beAttHero.buffDizzy = new Buff();
+		beAttHero.buffTreat = new Buff();
+		beAttHero.buffRecovers = new Buff();
+		beAttHero.buffShield = new Buff();
+		beAttHero.buffLink = new Buff();
+		beAttHero.extraHp = 0;
+		BSkillType bSkillType = BSkillType.getType(skillTemplate.getBid());
+		JobKey jobKey = generateJobKey(beAttHero, bSkillType);
+		try {
+			Scheduler scheduler = factory.getScheduler();
+			GroupMatcher<JobKey> matcher = GroupMatcher.groupEquals(jobKey.getGroup());
+			Set<JobKey> jobKeySet = scheduler.getJobKeys(matcher);
+			List<JobKey> jobKeyList = new ArrayList<JobKey>(jobKeySet);
+			// 删除所有任务，包括净化
+			scheduler.deleteJobs(jobKeyList);
+			// 创建净化任务
+			JobManager.createClearJob(jobKey, beAttHero, skillTemplate);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+	/**
+	 *  创建停止狂暴任务
+	 */
+	public static void createValJob(Room room, Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate, Integer cycleHurt) {
+		if (!JobScheduler.isHasJob(beAttHero, SelfSkill.Unmatch)) {
+			beAttHero.buffVal = new Buff(effectId, skillTemplate, attHero);
+			JobKey jobKey = generateJobKey(beAttHero, BSkillType.Val);
+			Map<String, Object> dataMap = new HashMap<String, Object>();
+			dataMap.put("room", room);
+			dataMap.put("beAttHero", beAttHero);
+			dataMap.put("cycleHurt", cycleHurt);
+			long delayMilliseconds = 300;
+			long IntervalInMilliseconds = 300;
+			JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, ValBuffJob.class);
+		}
+	}
+	
+	/**
+	 *  创建停止回复任务
+	 */
+	public static void createRecoversJob(Hero attHero, Room room, Hero beAttHero, int effectId, SkillTemplate skillTemplate, Integer cycleHurt) {
+		beAttHero.buffRecovers = new Buff(effectId, skillTemplate, attHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+	        JobManager.createRecoversJob(jobKey1, room, attHero, beAttHero1, skillTemplate1, cycleHurt);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			long currStopTime = role.buffRecovers.begin + role.buffRecovers.length;
+			long preStopTime = jobDataMap.getLong("stopTime");
+			int preValue = jobDataMap.getInt("preValue");
+			int currValue = skillTemplate.getValue();
+			return currStopTime > preStopTime && currValue > preValue;
+		};
+		// 创建任务
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	/**
+	 * 创建停止治疗任务
+	 */
+	public static void createTreatJob(Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate) {
+		beAttHero.buffTreat = new Buff(effectId, skillTemplate, attHero);
+		int addHp = (int)((skillTemplate.getHurt() + beAttHero.addHp) * skillTemplate.getValue() / 100.0f);
+		// 治疗补血
+		beAttHero.hp += addHp;
+		if (beAttHero.hp > beAttHero.maxhp) {
+			beAttHero.hp = beAttHero.maxhp;
+		}
+		if (attHero.isNpc) {
+			attHero.treatHp += addHp;
+		}
+		// 广播伤害
+		MsgHelper.broadcastHurt(attHero, beAttHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+	        JobManager.createTreatJob(jobKey1, attHero, beAttHero1, skillTemplate1);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			long currStopTime = role.buffTreat.begin + role.buffTreat.length;
+			long preStopTime = jobDataMap.getLong("stopTime");
+			return currStopTime > preStopTime;
+		};
+		// 创建任务
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	public static void createLinkJob(Room room, Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate) {
+		Link link = room.linkMap.get(effectId);
+		// 当物理碰撞的第一个玩家计算伤害时link为空，此时需要创建link对象
+		if (link == null) {
+			link = new Link(effectId, attHero, beAttHero, skillTemplate.getId(), TimeHelper.getTime());
+			ASkillType aSkillType = ASkillType.getType(skillTemplate.getAid());
+			room.linkMap.put(effectId, link);
+			logger.info(String.format("linkMap.put effectId=%s", effectId));
+			// 如果是穿云箭，则把施法玩家和伤害玩家链接在一起
+			if (aSkillType == ASkillType.Arrow) {
+				// 如果伤害玩家已经有链接，则先断链
+				if (room.linkMap.values().stream().anyMatch(lk -> lk.heroList.contains(beAttHero))) {
+					disconnLink(room, attHero);
+				}
+				link.heroList.add(attHero);
+				// 生成deBuff
+				attHero.buffLink = new Buff(effectId, skillTemplate, attHero);
+				// 实现创建Job接口
+				CreateSkillHandle createJobFunc = (jobKey1, attHero1, skillTemplate1) -> {
+					JobManager.createLinkJob(jobKey1, attHero1, skillTemplate1);
+				};
+				// 实现接口，用来判断如果存在同名Job，是否替换
+				ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+					long currStopTime = role.buffLink.begin + role.buffLink.length;
+					long preStopTime = jobDataMap.getLong("stopTime");
+					return currStopTime > preStopTime;
+				};
+				createBSkillJob(createJobFunc, replaceHandle, attHero, attHero, skillTemplate);
+			}
+		}
+		// 如果被链接的玩家已经在另外一个链接里，则先解除另外一个链接
+		if (room.linkMap.values().stream().anyMatch(lk -> lk.heroList.contains(beAttHero))) {
+			disconnLink(room, beAttHero);
+		}
+		link.heroList.add(beAttHero);
+		// 生成deBuff
+		beAttHero.buffLink = new Buff(effectId, skillTemplate, attHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+			JobManager.createLinkJob(jobKey1, beAttHero1, skillTemplate1);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			long currStopTime = role.buffLink.begin + role.buffLink.length;
+			long preStopTime = jobDataMap.getLong("stopTime");
+			return currStopTime > preStopTime;
+		};
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+
+	private static void disconnLink(Room room, Hero role) {
+		List<Link> linkList = room.linkMap.values().stream().filter(lk -> lk.heroList.contains(role)).collect(Collectors.toList());
+		for (Link lk : linkList) {
+			lk.heroList.remove(role);
+		}
+	}
+	
+	/**
+	 * 创建停止牵引任务
+	 */
+	public static void createNearJob(Room room, Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate, Location skillLocation) {
+		beAttHero.buffNear = new Buff(effectId, skillTemplate, attHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey1, beAttHero1, skillTemplate1) -> {
+			JobManager.createNearJob(jobKey1, room, attHero, beAttHero1, skillTemplate1, skillLocation);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			return false;
+		};
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	/**
+	 * 创建停止抗拒任务
+	 */
+	public static void createPushJob(Room room, Hero attHero, Hero beAttHero, int effectId, SkillTemplate skillTemplate, Location skillLocation) {
+		beAttHero.buffPush = new Buff(effectId, skillTemplate, attHero);
+		// 实现创建Job接口
+		CreateSkillHandle createJobFunc = (jobKey, role, skillTemplate1) -> {
+			JobManager.createPushJob(jobKey, room, attHero, beAttHero, skillTemplate, skillLocation);
+		};
+		// 实现接口，用来判断如果存在同名Job，是否替换
+		ReplaceHandle replaceHandle = (jobDataMap, role) -> {
+			return false;
+		};
+		createBSkillJob(createJobFunc, replaceHandle, attHero, beAttHero, skillTemplate);
+	}
+	
+	public static void createUpdateVisionBookJob(Room room, Hero currHero, int vision) {
+		String jobName = String.format("%s_%s_updateVisionBook", currHero.roomId, currHero.accountId);
+		String groupName = String.format("%s_%s", currHero.roomId, currHero.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("currHero", currHero);
+		dataMap.put("vision", vision);
+		long delayMilliseconds = HeroConstant.update_book_time;
+		long IntervalInMilliseconds = HeroConstant.update_book_time;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, JobManager.max_count, dataMap, UpdateBookVisionJob.class);
+	}
+	
+	public static void createUpdateVisionBoxJob(Room room, Hero currHero, int vision) {
+		String jobName = String.format("%s_%s_updateVisionBox", currHero.roomId, currHero.accountId);
+		String groupName = String.format("%s_%s", currHero.roomId, currHero.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("currHero", currHero);
+		dataMap.put("vision", vision);
+		long delayMilliseconds = HeroConstant.update_box_time;
+		long IntervalInMilliseconds = HeroConstant.update_box_time;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, JobManager.max_count, dataMap, UpdateBoxVisionJob.class);
+	}
+	
+	public static void createUpdateVisionHeroJob(Room room, Hero currHero, int vision) {
+		String jobName = String.format("%s_%s_updateVisionHero", currHero.roomId, currHero.accountId);
+		String groupName = String.format("%s_%s", currHero.roomId, currHero.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("currHero", currHero);
+		dataMap.put("vision", vision);
+		long delayMilliseconds = HeroConstant.update_role_time;
+		long IntervalInMilliseconds = HeroConstant.update_role_time;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, JobManager.max_count, dataMap, UpdateHeroVisionJob.class);
+	}
+	
+	public static void createAttackGeneralJob(Room room, Hero attHero, Target target) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = String.format("%s_%s", attHero.roomId, attHero.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("target", target);
+		long targetId;
+		if (target.type == TargetType.Box) {
+			Box box = (Box)target.entity;
+			targetId = box.id;
+		} else {
+			Hero role = (Hero)target.entity;
+			targetId = role.accountId;
+		}
+		long delayMilliseconds = 500;
+		long IntervalInMilliseconds = 500;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, AttackGeneralJob.class);
+		MsgHelper.broadcastGeneralEffect(attHero, target.type, targetId);
+	}
+	
+	public static void createSeaJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, Integer cycleHurt, List<Box> hitBoxList) {
+		
+		
+	}
+	
+	public static void createContinueSingSeaJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, List<Box> hitBoxList) {
+		
+		
+	}
+	
+	public static void createWaveJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, Integer cycleHurt, List<Box> hitBoxList) {
+		
+		// 开始播放特效
+		MsgHelper.broadcastStartEffect(idx, skillDirection, attHero.location, attHero, TemplateConstant.template_id_10300, effectId);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("cycleHurt", cycleHurt);
+		dataMap.put("fps", fps);
+		dataMap.put("effectId", effectId);
+		dataMap.put("skillLocation", skillLocation);
+		dataMap.put("skillDirection", skillDirection);
+		dataMap.put("hitBoxList", hitBoxList);
+		long delayMilliseconds = fps;
+		long IntervalInMilliseconds = fps;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, WaveJob.class);
+	}
+	
+	public static void createContinueSingWaveJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, List<Box> hitBoxList) {
+		
+		
+	}
+	
+	public static void createArrowJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, Integer cycleHurt) {
+		
+		
+	}
+	
+	public static void createSnowJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, Integer cycleHurt, List<Box> hitBoxList) {
+		
+		
+	}
+	
+	public static void createContinueSingSnowJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, List<Box> hitBoxList) {
+		
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("fps", fps);
+		dataMap.put("effectId", effectId);
+		dataMap.put("hitBoxList", hitBoxList);
+		dataMap.put("skillLocation", skillLocation);
+		dataMap.put("skillDirection", skillDirection);
+		dataMap.put("idx", idx);
+		// 周期数
+		int cycleCount = skillTemplate.getContime() / skillTemplate.getHurtcycle();
+		// 周期伤害量
+		int cycleHurt = skillTemplate.getHurt() / cycleCount;
+		dataMap.put("cycleHurt", cycleHurt);
+		long delayMilliseconds = 100;
+		long IntervalInMilliseconds = skillTemplate.getHurtcycle();
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, cycleCount, dataMap, SingSnowJob.class);
+	}
+	
+	public static void createShockJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, Integer cycleHurt, List<Box> hitBoxList) {
+		
+		// 开始播放特效
+		MsgHelper.broadcastStartEffect(idx, skillDirection, attHero.location, attHero, TemplateConstant.template_id_10600, effectId);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("cycleHurt", cycleHurt);
+		dataMap.put("fps", fps);
+		dataMap.put("effectId", effectId);
+		dataMap.put("hitBoxList", hitBoxList);
+		dataMap.put("skillLocation", skillLocation);
+		long delayMilliseconds = fps;
+		long IntervalInMilliseconds = fps;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, ShockJob.class);
+	}
+	
+	public static void createContinueSingShockJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, List<Box> hitBoxList) {
+		
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("fps", fps);
+		dataMap.put("effectId", effectId);
+		dataMap.put("hitBoxList", hitBoxList);
+		dataMap.put("skillLocation", skillLocation);
+		dataMap.put("skillDirection", skillDirection);
+		dataMap.put("idx", idx);
+		// 周期数
+		int cycleCount = skillTemplate.getContime() / skillTemplate.getHurtcycle();
+		// 周期伤害量
+		int cycleHurt = skillTemplate.getHurt() / cycleCount;
+		dataMap.put("cycleHurt", cycleHurt);
+		long delayMilliseconds = fps;
+		long IntervalInMilliseconds = fps;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, SingShockJob.class);
+	}
+	
+	public static void createWallJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, Integer cycleHurt, List<Box> hitBoxList) {
+		
+	}
+	
+	public static void createContinueSingWallJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, List<Box> hitBoxList) {
+		
+	}
+	
+	public static void createInstantSingSeaJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, List<Box> hitBoxList) {
+		createContinueSingSeaJob(jobKey, room, attHero, skillTemplate, fps, effectId, idx
+			, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	public static void createInstantSingWaveJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, List<Box> hitBoxList) {
+		createContinueSingWaveJob(jobKey, room, attHero, skillTemplate, fps, effectId, idx
+			, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	public static void createInstantSingWallJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, List<Box> hitBoxList) {
+		createContinueSingWallJob(jobKey, room, attHero, skillTemplate, fps, effectId, idx
+			, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	public static void createInstantSingSnowJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, List<Box> hitBoxList) {
+		createContinueSingSnowJob(jobKey, room, attHero, skillTemplate, fps, effectId, idx
+			, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	public static void createInstantSingShockJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, List<Box> hitBoxList) {
+		createContinueSingShockJob(jobKey, room, attHero, skillTemplate, fps, effectId, idx
+				, skillDirection, skillLocation, hitBoxList);
+	}
+	
+	public static void createStopRoomJob(JobKey jobKey, StopRoomJobHandle stopRoomJobHandle, Room room, Boolean isDeath, Integer cnt, Integer IntervalInMilliseconds) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("stopRoomJobHandle", stopRoomJobHandle);
+		dataMap.put("room", room);
+		dataMap.put("isDeath", isDeath);
+		dataMap.put("cnt", cnt);
+		long delayMilliseconds = 100;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, StopRoomJob.class);
+	}
+	
+	public static JobKey generateMainTaskKey(Hero currHero) {
+		String jobName = String.format("%s_%s_main_task", currHero.roomId, currHero.accountId);
+		String groupName = String.format("%s_%s", currHero.roomId, currHero.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		return jobKey;
+	}
+	
+	public static JobKey createMainTask(Room room, Hero currHero) {
+		synchronized(currHero) {
+			currHero.path.clear();
+			JobKey jobKey = generateMainTaskKey(currHero);
+			Map<String, Object> dataMap = new HashMap<String, Object>();
+			dataMap.put("room", room);
+			dataMap.put("currHero", currHero);
+			JobManager.createJob(jobKey, HeroConstant.move_interval, HeroConstant.move_interval, JobManager.max_count, dataMap, MainTaskJob.class);
+			return jobKey;
+		}
+	}
+	
+	public static void createChangeTask(Room room, Hero currHero) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = String.format("%s_%s", currHero.roomId, currHero.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("currHero", currHero);
+		JobManager.createJob(jobKey, HeroConstant.move_interval, 1000, JobManager.max_count, dataMap, ChangeTaskJob.class);
+	}
+	
+	public static JobKey generateAttackHeroKey(Hero currHero) {
+		String jobName = String.format("%s_%s_attack_role", currHero.roomId, currHero.accountId);
+		String groupName = String.format("%s_%s", currHero.roomId, currHero.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		return jobKey;
+	}
+	
+	public static void createAttackHeroJob(Room room, Hero currHero, Hero beAttHero) {
+		JobKey jobKey = generateAttackHeroKey(currHero);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("currHero", currHero);
+		dataMap.put("beAttHero", beAttHero);
+		JobManager.createJob(jobKey, 1000, 500, JobManager.max_count, dataMap, AttackHeroJob.class);
+	}
+	
+	public static JobKey generateAttackBoxKey(Hero currHero) {
+		String jobName = String.format("%s_%s_attack_box", currHero.roomId, currHero.accountId);
+		String groupName = String.format("%s_%s", currHero.roomId, currHero.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		return jobKey;
+	}
+	
+	public static void createAttackBoxJob(Room room, Hero currHero, Box box, Integer interval) {
+		JobKey jobKey = generateAttackBoxKey(currHero);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("currHero", currHero);
+		dataMap.put("box", box);
+		JobManager.createJob(jobKey, 1500, interval, JobManager.max_count, dataMap, AttackBoxJob.class);
+	}
+	
+	public static void createCancelTrapJob(Room room, Hero attHero, Trap trap, Integer effectId, Integer interval) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = String.format("%s_%s", attHero.roomId, attHero.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("trap", trap);
+		dataMap.put("effectId", effectId);
+		JobManager.createJob(jobKey, interval, interval, 1, dataMap, CancelTrapJob.class);
+	}
+	
+	public static void createStartGameJob(Room room, Integer interval) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = String.format("%s_%s", room.id, 0);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		JobManager.createJob(jobKey, interval, interval, 1, dataMap, StartGameJob.class);
+	}
+	
+	public static void createMarryHeroJob(Room room, Integer interval) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = String.format("%s_%s", room.id, 0);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		JobManager.createJob(jobKey, interval, interval, JobManager.max_count, dataMap, MarryRoomJob.class);
+	}
+	
+	public static JobKey generateSendEnterJobKey(Room room) {
+		String jobName = String.format("%s_%s", room.id, "sendEnter");
+		String groupName = String.format("%s_%s", room.id, 0);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static void createSendEnterJob(Room room, Integer interval) {
+		JobKey jobKey = generateSendEnterJobKey(room);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		JobManager.createJob(jobKey, interval, interval, 1, dataMap, SendEnterJob.class);
+	}
+	
+	public static void createJoinRobotJob(Room room, Integer count, Integer delaySeconds) {
+		int interval = RandomHelper.getRandom(20, 30);
+		long delayMilliseconds = (delaySeconds + interval) * 1000;
+		String jobName = UuidHelper.getUuid();
+		String groupName = String.format("%s_%s", room.id, 0);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("count", count);
+		JobManager.createJob(jobKey, delayMilliseconds, 0, 1, dataMap, CreateRobotJob.class);
+	}
+	
+	public static void createJoinAiJob(Room room, Integer count, Integer delaySeconds) {
+		int interval = RandomHelper.getRandom(20, 30);
+		long delayMilliseconds = (delaySeconds + interval) * 1000;
+		String jobName = UuidHelper.getUuid();
+		String groupName = String.format("%s_%s", room.id, 0);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("count", count);
+		JobManager.createJob(jobKey, delayMilliseconds, 0, 1, dataMap, CreateAiJob.class);
+	}
+	
+	public static JobKey generateKotlKey(Hero currHero) {
+		String jobName = String.format("%s_%s_%s", currHero.roomId, currHero.accountId, ASkillType.Kotl.getIndex());
+		String groupName = String.format("%s_%s", currHero.roomId, currHero.accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		return jobKey;
+	}
+	
+	public static void createKotlJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, Integer cycleHurt, List<Box> hitBoxList, long delayMilliseconds) {
+		
+		// 开始播放特效
+		MsgHelper.broadcastStartEffect(idx, skillDirection, attHero.location, attHero, TemplateConstant.template_id_11800, effectId);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("cycleHurt", cycleHurt);
+		dataMap.put("fps", fps);
+		dataMap.put("skillTemplate", skillTemplate);
+		List<Hero> hitHeroList = new ArrayList<Hero>();
+		dataMap.put("hitHeroList", hitHeroList);
+		dataMap.put("hitBoxList", hitBoxList);
+		dataMap.put("effectId", effectId);
+		dataMap.put("skillLocation", skillLocation);
+		dataMap.put("skillDirection", skillDirection);
+		dataMap.put("createTime", TimeHelper.getTime());
+		long IntervalInMilliseconds = fps;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, JobManager.max_count, dataMap, KotlJob.class);
+	}
+	
+	public static JobKey generaterReSingJobKey(Hero beAttHero, ASkillType aSkillType) {
+		String jobName = String.format("%s_%s_askill_%s", beAttHero.roomId, beAttHero.accountId, aSkillType.getIndex());
+		String groupName = String.format("%s_%s", beAttHero.roomId, beAttHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static void createLldJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, Integer cycleHurt, List<Box> hitBoxList, long delayMilliseconds) {
+		
+		// 开始播放特效
+		MsgHelper.broadcastStartEffect(idx, skillDirection, attHero.location, attHero, TemplateConstant.template_id_11900, effectId);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("cycleHurt", cycleHurt);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("hitBoxList", hitBoxList);
+		dataMap.put("effectId", effectId);
+		dataMap.put("skillLocation", skillLocation);
+		dataMap.put("createTime", TimeHelper.getTime());
+		long IntervalInMilliseconds = fps;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, 1, dataMap, LLdJob.class);
+	}
+	
+	public static void createPokeJob(JobKey jobKey, Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, Integer cycleHurt, List<Box> hitBoxList, long delayMilliseconds) {
+		
+		float distance = skillTemplate.getLen();
+		double radians = GameUtil.angle(skillLocation, attHero.location);
+		float distancex = (float)(distance * Math.cos(radians));
+		float distancez = (float)(distance * Math.sin(radians));
+		Location endLocation = new Location(attHero.location.x + distancex, 0f, attHero.location.z + distancez);
+		List<Location> path = JobManager.getBeMovePath(attHero.location, endLocation, skillTemplate.getSpeed());
+		int count = path.size();
+		// 开始播放特效
+		MsgHelper.broadcastStartEffect(idx, skillDirection, attHero.location, attHero, TemplateConstant.template_id_12000, effectId);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("cycleHurt", cycleHurt);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("hitBoxList", hitBoxList);
+		dataMap.put("effectId", effectId);
+		dataMap.put("skillLocation", skillLocation);
+		dataMap.put("path", path);
+		dataMap.put("index", 0);
+		long IntervalInMilliseconds = fps;
+		JobManager.createJob(jobKey, delayMilliseconds, IntervalInMilliseconds, count, dataMap, PokeJob.class);
+	}
+	
+	/**
+	 * 生成瞎子技能第一段Job
+	 */
+	public static JobKey generaterLeesinArrowJobKey(Hero attHero) {
+		String jobName = String.format("%s_%s_leesin1_%s", attHero.roomId, attHero.accountId, ASkillType.Leesin.getIndex());
+		String groupName = String.format("%s_%s", attHero.roomId, attHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static void createLeesinArrowJob(Room room, Hero attHero, SkillTemplate skillTemplate, Integer fps, Integer effectId, Byte idx
+			, Vector3 skillDirection, Location skillLocation, Integer cycleHurt, List<Box> hitBoxList, long delayMilliseconds) {
+		
+	}
+	
+	/**
+	 * 生成瞎子技能第二段Job
+	 */
+	public static JobKey generaterLeesinWaitJobKey(Hero attHero) {
+		String jobName = String.format("%s_%s_leesin_wait_%s", attHero.roomId, attHero.accountId, ASkillType.Leesin.getIndex());
+		String groupName = String.format("%s_%s", attHero.roomId, attHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static void createLeesinWaitJob(JobKey jobKey, Hero attHero, SkillTemplate skillTemplate, Hero beAttHero, long IntervalInMilliseconds) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		JobManager.createJob(jobKey, 0, IntervalInMilliseconds, 1, dataMap, LeesinWaitJob.class);
+	}
+	
+	public static void createLeesinBumpJob(Hero attHero, Hero beAttHero, SkillTemplate skillTemplate) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		List<Location> path = JobManager.getBeMovePath(beAttHero.location, beAttHero.location, skillTemplate.getValue());
+		int count = path.size();
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("path", path);
+		dataMap.put("attHero", attHero);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("beAttHero", beAttHero);
+		dataMap.put("index", 0);
+		JobManager.createJob(jobKey, 0, 50, count, dataMap, LeesinBumpJob.class);
+	}
+	
+	public static void updateJob(JobKey jobKey) {
+		try {
+			Scheduler scheduler = JobScheduler.getScheduler();
+			TriggerKey triggerKey = new TriggerKey(jobKey.getName(), jobKey.getGroup());
+			Trigger oldTrigger = scheduler.getTrigger(triggerKey);
+			TriggerBuilder<? extends Trigger> tb = oldTrigger.getTriggerBuilder();
+			Trigger trigger = tb.startNow().build();
+			scheduler.rescheduleJob(triggerKey, trigger);
+		} catch (SchedulerException e) {
+			logger.error(e.toString());
+		}
+	}
+	
+	public static void createShutdownJob(String content) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("content", content);
+		int count = 3;
+		dataMap.put("index", count);
+		JobManager.createJob(jobKey, 0, 60 * 1000, count + 1, dataMap, ShutdownJob.class);
+	}
+	
+	public static JobKey generaterInviteTradeJobKey(Long accountId, Long beAccountId) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = String.format("request_trade_%s", accountId);
+		JobKey jobKey = new JobKey(jobName, groupName);
+		return jobKey;
+	}
+	
+	public static void createInviteTradeJob(JobKey jobKey, Long accountId, Long beAccountId) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("accountId", accountId);
+		dataMap.put("beAccountId", beAccountId);
+		JobManager.createJob(jobKey, 60 * 1000, 60 * 1000, 1, dataMap, InviteTradeJob.class);
+	}
+	
+	public static JobKey generaterTestOperationTradeJob(Long tradeId) {
+		String jobName = String.format("operation_trade_%s", tradeId);
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		return jobKey;
+	}
+	
+	public static void createTestOperationTradeJob(JobKey jobKey, Long tradeId, Map<Long, Integer> accountMap) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("accountMap", accountMap);
+		dataMap.put("tradeId", tradeId);
+		JobManager.createJob(jobKey, 0, 20 * 1000, 0, dataMap, TestOperationTradeJob.class);
+	}
+	
+	public static JobKey generaterTestEnterTradeJob(Long tradeId) {
+		String jobName = String.format("enter_trade_%s", tradeId);
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		return jobKey;
+	}
+	
+	public static void createTestEnterTradeJob(JobKey jobKey, Long tradeId) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("tradeId", tradeId);
+		JobManager.createJob(jobKey, 0, 20 * 1000, 0, dataMap, TestEnterTradeJob.class);
+	}
+	
+	public static void createTossJob(Room room, Hero attHero, Hero tossHero, Hero targetHero
+			, SkillTemplate skillTemplate, Integer effectId, Location skillLocation) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("tossHero", tossHero);
+		dataMap.put("targetHero", targetHero);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("effectId", effectId);
+		dataMap.put("skillLocation", skillLocation);
+		JobManager.createJob(jobKey, 0, 2 * 1000, 1, dataMap, TossJob.class);
+	}
+	
+	/**
+	 * 生成三连斩Job
+	 */
+	public static JobKey generaterThreeChopsJobKey(Hero attHero) {
+		String jobName = String.format("%s_%s_threechops_%s", attHero.roomId, attHero.accountId, ASkillType.ThreeChops.getIndex());
+		String groupName = String.format("%s_%s", attHero.roomId, attHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static void createThreeChopsJob(JobKey jobKey, Hero attHero, SkillTemplate skillTemplate, Vector3 skillDirection, Location skillLocation) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("attHero", attHero);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("skillDirection", skillDirection);
+		dataMap.put("skillLocation", skillLocation);
+		dataMap.put("index", 0);			// 第index斩
+		dataMap.put("isActive", true);		// 是否激活
+		JobManager.createJob(jobKey, 0, 3000, 3, dataMap, ThreeChopsJob.class);
+	}
+	
+	public static void createLeblancMoveJob(Room room, Hero attHero, SkillTemplate skillTemplate, Location targetLocation) {
+		List<Location> path = JobManager.getBeMovePath(attHero.location, targetLocation, skillTemplate.getValue());
+		int count = path.size();
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("room", room);
+		dataMap.put("attHero", attHero);
+		dataMap.put("path", path);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("index", 0);
+		Location sourceLocation = new Location(attHero.location.x, attHero.location.y, attHero.location.z);
+		dataMap.put("sourceLocation", sourceLocation);
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		JobManager.createJob(jobKey, 0, 50, count, dataMap, LeblancMoveJob.class);
+	}
+	
+	/**
+	 * 生成乐芙兰waitJobKey
+	 */
+	public static JobKey generaterLeblancWaitJobKey(Hero attHero) {
+		String jobName = String.format("%s_%s_leblancwait_%s", attHero.roomId, attHero.accountId, ASkillType.Leblanc.getIndex());
+		String groupName = String.format("%s_%s", attHero.roomId, attHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static void createLeblancWaitJob(JobKey jobKey, Hero attHero, Location sourceLocation) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("attHero", attHero);
+		dataMap.put("sourceLocation", sourceLocation);
+		JobManager.createJob(jobKey, 0, 4000, 1, dataMap, LeblancWaitJob.class);
+	}
+	
+	public static void createYasuoMoveJob(Room room, Hero attHero, Location targetLocation, Integer effectId, SkillTemplate skillTemplate, Skill skill) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		List<Location> path = JobManager.getBeMovePath(attHero.location, targetLocation, skillTemplate.getValue());
+		int count = path.size();
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("path", path);
+		dataMap.put("attHero", attHero);
+		dataMap.put("index", 0);
+		dataMap.put("effectId", effectId);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("isHit", false);
+		dataMap.put("room", room);
+		dataMap.put("skill", skill);
+		JobManager.createJob(jobKey, 0, 50, count, dataMap, YasuoMoveJob.class);
+	}
+	
+	/**
+	 * 生成亚索waitJobKey
+	 */
+	public static JobKey generaterYasuoWaitJobKey(Hero attHero) {
+		String jobName = String.format("%s_%s_yasuocwait_%s", attHero.roomId, attHero.accountId, ASkillType.Yasuo.getIndex());
+		String groupName = String.format("%s_%s", attHero.roomId, attHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static void createYasuoWaitJob(JobKey jobKey, Hero attHero, Skill skill) {
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("attHero", attHero);
+		dataMap.put("skill", skill);
+		JobManager.createJob(jobKey, 0, 4000, 1, dataMap, YasuoWaitJob.class);
+	}
+	
+	public static void createSwordsmanJumpJob(Room room, Hero attHero, Location targetLocation, Integer effectId, SkillTemplate skillTemplate) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		// 玩家向空中跃起
+		attHero.location.y = 100.0f;
+		dataMap.put("attHero", attHero);
+		dataMap.put("targetLocation", targetLocation);
+		dataMap.put("room", room);
+		dataMap.put("effectId", effectId);
+		dataMap.put("skillTemplate", skillTemplate);
+		JobManager.createJob(jobKey, 0, 4000, 1, dataMap, SwordsmanJumpJob.class);
+	}
+	
+	/**
+	 * 生成潘森蓄力JobKey
+	 */
+	public static JobKey generaterPantheonSavingJobKey(Hero attHero) {
+		String jobName = String.format("%s_%s_pantheonsaving_%s", attHero.roomId, attHero.accountId, ASkillType.Pantheon.getIndex());
+		String groupName = String.format("%s_%s", attHero.roomId, attHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static void createPantheonSavingJob(Room room, Hero attHero, Location targetLocation, Integer effectId, SkillTemplate skillTemplate) {
+		JobKey jobKey = generaterPantheonSavingJobKey(attHero);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		// 玩家向空中跃起
+		attHero.location.y = 100.0f;
+		dataMap.put("attHero", attHero);
+		dataMap.put("targetLocation", targetLocation);
+		dataMap.put("room", room);
+		dataMap.put("effectId", effectId);
+		dataMap.put("skillTemplate", skillTemplate);
+		JobManager.createJob(jobKey, 0, 3000, 1, dataMap, PantheonSavingJob.class);
+	}
+	
+	public static void createPantheonJumpJob(Room room, Hero attHero, Location targetLocation, Integer effectId, SkillTemplate skillTemplate, int hurt) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		// 玩家向空中跃起
+		attHero.location.y = 100.0f;
+		dataMap.put("attHero", attHero);
+		dataMap.put("targetLocation", targetLocation);
+		dataMap.put("room", room);
+		dataMap.put("effectId", effectId);
+		dataMap.put("skillTemplate", skillTemplate);
+		dataMap.put("hurt", hurt);
+		JobManager.createJob(jobKey, 0, 4000, 1, dataMap, PantheonJumpJob.class);
+	}
+	
+	/**
+	 * 生成龙龟JobKey
+	 */
+	public static JobKey generaterRammusJobKey(Hero attHero) {
+		String jobName = String.format("%s_%s_rammus_%s", attHero.roomId, attHero.accountId, ASkillType.Rammus.getIndex());
+		String groupName = String.format("%s_%s", attHero.roomId, attHero.accountId);
+		return new JobKey(jobName, groupName);
+	}
+	
+	public static void createRammusJob(Hero attHero, Skill skill) {
+		String jobName = UuidHelper.getUuid();
+		String groupName = UuidHelper.getUuid();
+		JobKey jobKey = new JobKey(jobName, groupName);
+		Map<String, Object> dataMap = new HashMap<String, Object>();
+		dataMap.put("attHero", attHero);
+		dataMap.put("skill", skill);
+		attHero.rammusStatus = TaskStatus.On;
+		attHero.speed += HeroConstant.default_speed * 0.3f;
+		JobManager.createJob(jobKey, 0, 5000, 1, dataMap, RammusJob.class);
+	}
+}

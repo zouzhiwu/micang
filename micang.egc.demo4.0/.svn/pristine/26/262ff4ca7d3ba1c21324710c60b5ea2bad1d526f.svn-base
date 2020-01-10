@@ -1,0 +1,253 @@
+package com.game.entity;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import org.quartz.JobKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.common.entity.OperateStep;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.enumerate.RoomState;
+import com.common.enumerate.WorkType;
+import com.game.job.JobScheduler;
+import com.game.model.Model;
+import com.game.node.AbsAttackNode;
+import com.game.node.AbsMoveNode;
+import com.game.node.BaseNode;
+import com.game.node.HeroNode;
+import com.game.node.HomeNode;
+
+public class Room {
+	private static final Logger logger = LoggerFactory.getLogger(Room.class);
+	/** 房间Id */
+	public int id;
+	
+	/** 被挑战者，蓝方 */
+	public Player bluePlayer;
+	
+	/** 挑战者，红方 */
+	public Player redPlayer;
+	
+	/** 房间状态，0-准备，1-开始，2-结算*/
+	public RoomState state;
+	
+	/** 操作步骤列表*/
+	public List<OperateStep> operateStepList;
+	
+	/** 第index步骤，从0开始*/
+	public Byte stepIndex;
+	
+	/** 选择队员JobKey*/
+	public JobKey chooseMemberJobKey;
+	
+	/** 自动操作JobKey*/
+	public JobKey autoOperationJobKey;
+	
+	/** 开始游戏JobKey*/
+	public JobKey beginGameJobKey;
+	
+	/** 自动出兵控制JobKey*/
+	public JobKey arsenalContrallerJobKey;
+	
+	/** 自动出兵JobKey*/
+	public JobKey arsenalJobKey;
+	
+	/** 显示战斗力JobKey*/
+	public JobKey showFightPowerJobKey;
+	
+	/** 显示阵容JobKey*/
+	public JobKey showLayoutJobKey;
+	
+	private Map<Short, BaseNode> nodeMap = new HashMap<Short, BaseNode>();
+	
+	private Lock lock = new ReentrantLock();
+	
+	/** 小兵，炮兵，超级兵的nodeId*/
+	public short troopsNodeId = 70;
+	
+	public HomeNode getBuleHome() {
+		return (HomeNode)getNode((short)1);
+	}
+	
+	public HomeNode getRedHome() {
+		return (HomeNode)getNode((short)2);
+	}
+	
+	public HeroNode getHero(short nodeId) {
+		return (HeroNode)nodeMap.get(nodeId);
+	}
+	
+	public HeroNode getHero(CampType camp, WorkType workType) {
+		List<HeroNode> heroList = getHeroList(camp);
+		for (HeroNode heroNode : heroList) {
+			if (heroNode.heroTemplate.getWork() == workType.getIndex()) {
+				return heroNode;
+			}
+		}
+		return null;
+	}
+	
+	public BaseNode getNode(short nodeId) {
+		return (BaseNode)nodeMap.get(nodeId);
+	}
+	
+	public List<BaseNode> getAllList() {
+		return getNodeList(null, null);
+	}
+	
+	public List<HeroNode> getHeroList() {
+		return getNodeList(NodeType.Hero, null);
+	}
+	
+	public List<HeroNode> getHeroList(CampType camp) {
+		return getNodeList(NodeType.Hero, camp);
+	}
+	
+	public List<HeroNode> getHeroList(CampType camp, boolean isSortByWork) {
+		List<HeroNode> heroNodeList = getNodeList(NodeType.Hero, camp);
+		if (isSortByWork) {
+			Collections.sort(heroNodeList, new Comparator<HeroNode>() {
+				@Override
+				public int compare(HeroNode heroNode1, HeroNode heroNode2) {
+					int diff = heroNode1.heroTemplate.getWork() - heroNode2.heroTemplate.getWork();
+					if (diff > 0) {
+						return 1;
+					} else if (diff < 0) {
+						return -1;
+					} else {
+						return 0;
+					}
+				}
+			});
+		}
+		return heroNodeList;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T extends BaseNode> List<T> getNodeList(CampType camp) {
+		return (List<T>)getNodeList(null, camp);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T extends BaseNode> List<T> getNodeList(NodeType nodeType) {
+		return (List<T>)getNodeList(nodeType, null);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public <T extends BaseNode> List<T> getNodeList(NodeType nodeType, CampType camp) {
+		List<BaseNode> nodeList = new ArrayList<BaseNode>();
+		lock.lock();
+		try {
+			nodeMap.forEach((nodeId, node) -> {
+				if (nodeType == null && camp == null) {
+					nodeList.add(node);
+				} else if (nodeType == null && camp != null) {
+					if (camp == node.selfCamp) {
+						nodeList.add(node);
+					}
+				} else if (nodeType != null && camp == null) {
+					if (nodeType == node.getNodeType()) {
+						nodeList.add(node);
+					}
+				} else {
+					if (nodeType == node.getNodeType() && camp == node.selfCamp) {
+						nodeList.add(node);
+					}
+				}
+			});
+		} catch(Exception e){
+			logger.error(e.toString());
+        } finally {
+            lock.unlock();
+        }
+		return (List<T>)nodeList;
+	}
+	
+	public void putNode(BaseNode node) {
+		lock.lock();
+		try {
+			nodeMap.put(node.nodeId, node);
+		} catch(Exception e){
+			logger.error(e.toString());
+        } finally {
+            lock.unlock();
+        }
+	}
+	
+	public BaseNode remove(short nodeId) {
+		lock.lock();
+		BaseNode node = null;
+		try {
+			node = nodeMap.remove(nodeId);
+		} catch(Exception e){
+			logger.error(e.toString());
+        } finally {
+            lock.unlock();
+        }
+		return node;
+	}
+	
+	public void gameOver() {
+		// 关闭选择队员Job
+		if (JobScheduler.isHasJob(chooseMemberJobKey)) {
+			JobScheduler.stopJob(chooseMemberJobKey);
+		}
+		// 关闭选择英雄Job
+		if (JobScheduler.isHasJob(autoOperationJobKey)) {
+			JobScheduler.stopJob(autoOperationJobKey);
+		}
+		// 关闭开始游戏Job
+		if (JobScheduler.isHasJob(beginGameJobKey)) {
+			JobScheduler.stopJob(beginGameJobKey);
+		}
+		// 关闭出兵控制Job
+		if (JobScheduler.isHasJob(arsenalContrallerJobKey)) {
+			JobScheduler.stopJob(arsenalContrallerJobKey);
+		}
+		// 关闭出兵Job
+		if (JobScheduler.isHasJob(arsenalJobKey)) {
+			JobScheduler.stopJob(arsenalJobKey);
+		}
+		// 关闭显示战斗力Job
+		if (JobScheduler.isHasJob(showFightPowerJobKey)) {
+			JobScheduler.stopJob(showFightPowerJobKey);
+		}
+		// 关闭显示阵容Job
+		if (JobScheduler.isHasJob(showLayoutJobKey)) {
+			JobScheduler.stopJob(showLayoutJobKey);
+		}
+		
+		List<BaseNode> nodeList = getAllList();
+		for (BaseNode baseNode : nodeList) {
+			if (AbsAttackNode.class.isAssignableFrom(baseNode.getClass())) {
+				AbsAttackNode baseAttackNode = (AbsAttackNode)baseNode;
+				if (JobScheduler.isHasJob(baseAttackNode.updateVisionJobKey)) {
+					JobScheduler.stopJob(baseAttackNode.updateVisionJobKey);
+				}
+				if (JobScheduler.isHasJob(baseAttackNode.attackJobKey)) {
+					JobScheduler.stopJob(baseAttackNode.attackJobKey);
+				}
+			}
+			if (AbsMoveNode.class.isAssignableFrom(baseNode.getClass())) {
+				AbsMoveNode absMoveNode = (AbsMoveNode)baseNode;
+				if (JobScheduler.isHasJob(absMoveNode.moveJobKey)) {
+					JobScheduler.stopJob(absMoveNode.moveJobKey);
+				}
+			}
+		}
+	}
+	
+	public void destroy() {
+		Model.getInstance().roomMap.remove(this.id);
+		gameOver();
+	}
+}

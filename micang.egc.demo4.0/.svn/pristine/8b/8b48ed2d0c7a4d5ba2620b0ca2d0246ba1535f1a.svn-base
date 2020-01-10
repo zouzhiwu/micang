@@ -1,0 +1,51 @@
+package com.game.action;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.cb.msg.Action;
+import com.cb.msg.Message;
+import com.game.common.MessageCode;
+import com.game.service.MailService;
+
+import io.netty.channel.Channel;
+
+@Service
+public class MailAction {
+
+	private static final Logger logger = LoggerFactory.getLogger(MailAction.class);
+
+	@Autowired
+	private MailService mailService;
+	
+	@Action(MessageCode.msg_mail_list)
+	public void getMailList(Message message, Channel channel) throws Exception {
+		Integer pageIndex = message.getInt();
+		Integer pageSize = message.getInt();
+		logger.info(String.format("RESV %d from accountId=%s, pageIndex=%d, pageSize=%d", message.getMsgcd(), message.getAccountId(), pageIndex, pageSize));
+		mailService.getMailList(message.getAccountId(), pageIndex, pageSize);
+	}
+	
+	@Action(MessageCode.msg_mail_open)
+	public void openMail(Message message, Channel channel) throws Exception {
+		Long mailId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		mailService.openMail(message.getAccountId(), mailId);
+	}
+	
+	@Action(MessageCode.msg_mail_open_attachment)
+	public void openAttachment(Message message, Channel channel) throws Exception {
+		Long mailId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		mailService.openAttachment(message.getAccountId(), mailId);
+	}
+	
+	@Action(MessageCode.msg_mail_delete)
+	public void deleteMail(Message message, Channel channel) throws Exception {
+		Long mailId = message.getLong();
+		logger.info(String.format("RESV %d from accountId=%s", message.getMsgcd(), message.getAccountId()));
+		mailService.deleteMail(message.getAccountId(), mailId);
+	}
+}

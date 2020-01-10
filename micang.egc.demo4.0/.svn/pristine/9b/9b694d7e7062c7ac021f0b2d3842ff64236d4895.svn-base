@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.game.dao.GuildItemDao">	
+	
+	<insert id="create" parameterType="com.common.entity.GuildItem" useGeneratedKeys="true" keyProperty="id">
+		insert into guild_item ( id
+			<if test="null != guildId">
+				, guildId
+			</if>
+			<if test="null != sellerId">
+				, sellerId
+			</if>
+			<if test="null != itemTemplateId">
+				, itemTemplateId
+			</if>
+			<if test="null != createTime">
+				, createTime
+			</if>
+		) values ( #{id}
+			<if test="null != guildId">
+				, #{guildId}
+			</if>
+			<if test="null != sellerId">
+				, #{sellerId}
+			</if>
+			<if test="null != itemTemplateId">
+				, #{itemTemplateId}
+			</if>
+			<if test="null != createTime">
+				, #{createTime}
+			</if>
+		)
+	</insert>
+	
+	<select id="getList" resultType="com.common.entity.GuildItem">
+		select * from guild_item where guildId = #{guildId}
+		limit #{recordIndex}, #{pageSize}
+	</select>
+	
+	<select id="getById" resultType="com.common.entity.GuildItem">
+		select * from guild_item where id = #{id}
+	</select>
+	
+	<select id="getListSize" resultType="Integer">
+		select count(1) from guild_item where guildId = #{guildId}
+	</select>
+	
+	<delete id="delete" parameterType="Long">
+		delete from guild_item where id = #{id}
+	</delete>
+	
+</mapper>

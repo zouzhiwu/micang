@@ -1,0 +1,57 @@
+package com.game.node;
+
+import com.common.entity.Location;
+import com.common.enumerate.CampType;
+import com.common.enumerate.NodeType;
+import com.common.template.NodeTemplate;
+import com.game.job.FightJobManager;
+import com.game.job.JobScheduler;
+
+public class TroopsNode extends BaseMoveNode {
+	public TroopsNode(short nodeId, NodeTemplate template, CampType camp) {
+		this.nodeId = nodeId;
+		this.template = template;
+		this.location = new Location(template.getX(), template.getY());
+		this.selfCamp = camp;
+		setEnemyCamp();
+	}
+	
+	public NodeType getNodeType() {
+		return NodeType.Troops;
+	}
+	
+	@Override
+	public void die(BaseNode node) {
+    	// TODO 把这个节点从所有节点视野中删除，从Room列表删除
+    }
+
+	@Override
+	public void startMove() {
+		FightJobManager.createMoveJob(this, template.getAoe());
+	}
+
+	@Override
+	public void stopMove() {
+		JobScheduler.stopJob(this.moveJobKey);
+	}
+
+	@Override
+	public void startUpdateVision() {
+		FightJobManager.createUpdateVisionJob(room, this, template.getVr());
+	}
+
+	@Override
+	public void stopUpdateVision() {
+		JobScheduler.stopJob(this.updateVisionJobKey);
+	}
+
+	@Override
+	public void startAttack() {
+		FightJobManager.createAttackJob(this, template.getVr());
+	}
+
+	@Override
+	public void stopAttack() {
+		JobScheduler.stopJob(this.attackJobKey);
+	}
+}
